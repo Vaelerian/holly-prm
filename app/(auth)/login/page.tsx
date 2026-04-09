@@ -12,7 +12,7 @@ export default function LoginPage() {
     e.preventDefault()
     const res = await signIn("credentials", { email, password, redirect: false })
     if (res?.error) setError("Invalid email or password")
-    else window.location.href = "/"
+    else window.location.href = "/contacts"
   }
 
   return (
