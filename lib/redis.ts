@@ -9,4 +9,8 @@ export const redis =
     lazyConnect: true,
   })
 
+redis.on("error", (err) => {
+  if (process.env.NODE_ENV !== "production") console.error("[redis]", err)
+})
+
 if (process.env.NODE_ENV !== "production") globalForRedis.redis = redis
