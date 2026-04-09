@@ -94,6 +94,8 @@ model Contact {
   interactions        Interaction[]
   createdAt           DateTime      @default(now())
   updatedAt           DateTime      @updatedAt
+
+  @@index([name])
 }
 
 model Interaction {
@@ -114,6 +116,10 @@ model Interaction {
   occurredAt        DateTime
   actionItems       ActionItem[]
   createdAt         DateTime        @default(now())
+
+  @@index([contactId])
+  @@index([occurredAt])
+  @@index([followUpRequired, followUpDate])
 }
 
 model ActionItem {
@@ -128,6 +134,9 @@ model ActionItem {
   assignedTo    Actor
   dueDate       DateTime?
   createdAt     DateTime     @default(now())
+
+  @@index([interactionId])
+  @@index([status, assignedTo])
 }
 
 model Project {
@@ -167,6 +176,9 @@ model AuditLog {
   actor      Actor
   diff       Json?
   occurredAt DateTime    @default(now())
+
+  @@index([entity, entityId])
+  @@index([occurredAt])
 }
 
 model KnowledgeItem {
@@ -179,6 +191,8 @@ model KnowledgeItem {
   obsidianReady    Boolean             @default(false)
   exported         Boolean             @default(false)
   createdAt        DateTime            @default(now())
+
+  @@index([sourceId, sourceType])
 }
 
 model HollyApiKey {
@@ -186,5 +200,6 @@ model HollyApiKey {
   name      String
   keyHash   String    @unique
   lastUsed  DateTime?
+  revokedAt DateTime?
   createdAt DateTime  @default(now())
 }
