@@ -2,6 +2,7 @@
 
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
+import { z } from "zod"
 import { CreateContactSchema, type CreateContactInput } from "@/lib/validations/contact"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -18,7 +19,7 @@ export function ContactForm({ defaultValues, contactId }: ContactFormProps) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
 
-  const { register, handleSubmit, formState: { errors } } = useForm<CreateContactInput>({
+  const { register, handleSubmit, formState: { errors } } = useForm<z.input<typeof CreateContactSchema>, unknown, CreateContactInput>({
     resolver: zodResolver(CreateContactSchema),
     defaultValues: {
       name: "",
