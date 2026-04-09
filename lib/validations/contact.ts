@@ -11,7 +11,7 @@ export const CreateContactSchema = z.object({
   isFamilyMember: z.boolean().default(false),
   tags: z.array(z.string()).default([]),
   notes: z.string().default(""),
-  preferences: z.record(z.unknown()).default({}),
+  preferences: z.record(z.string(), z.unknown()).default({}),
 })
 
 export const UpdateContactSchema = CreateContactSchema.partial()
