@@ -27,7 +27,8 @@ export async function getContact(id: string) {
 }
 
 export async function createContact(data: CreateContactInput, actor: Actor) {
-  const contact = await prisma.contact.create({ data })
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const contact = await prisma.contact.create({ data: data as any })
   await prisma.auditLog.create({
     data: { entity: "Contact", entityId: contact.id, action: "create", actor },
   })
@@ -36,7 +37,8 @@ export async function createContact(data: CreateContactInput, actor: Actor) {
 
 export async function updateContact(id: string, data: UpdateContactInput, actor: Actor) {
   const before = await prisma.contact.findUnique({ where: { id } })
-  const contact = await prisma.contact.update({ where: { id }, data })
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const contact = await prisma.contact.update({ where: { id }, data: data as any })
   await prisma.auditLog.create({
     data: { entity: "Contact", entityId: id, action: "update", actor, diff: { before, after: contact } },
   })

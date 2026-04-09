@@ -2,6 +2,7 @@
 
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
+import { z } from "zod"
 import { CreateInteractionSchema, type CreateInteractionInput } from "@/lib/validations/interaction"
 import { Button } from "@/components/ui/button"
 import { useState, useEffect } from "react"
@@ -18,7 +19,7 @@ export function InteractionForm({ onSuccess, defaultContactId }: InteractionForm
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
 
-  const { register, handleSubmit, formState: { errors } } = useForm<CreateInteractionInput>({
+  const { register, handleSubmit, formState: { errors } } = useForm<z.input<typeof CreateInteractionSchema>, unknown, CreateInteractionInput>({
     resolver: zodResolver(CreateInteractionSchema),
     defaultValues: {
       contactId: defaultContactId ?? "",
