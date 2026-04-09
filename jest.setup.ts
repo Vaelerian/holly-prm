@@ -1,1 +1,1 @@
-// Empty for now -- add global mocks here as needed
+import "@testing-library/jest-dom"
