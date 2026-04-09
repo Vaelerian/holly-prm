@@ -46,7 +46,10 @@ describe("listContacts", () => {
     await listContacts({ overdue: true })
     expect(mockPrisma.contact.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({ healthScore: { lt: 100 }, interactionFreqDays: { not: null } }),
+        where: expect.objectContaining({
+          interactionFreqDays: { not: null },
+          OR: [{ healthScore: { lt: 100 } }, { lastInteraction: null }],
+        }),
       })
     )
   })

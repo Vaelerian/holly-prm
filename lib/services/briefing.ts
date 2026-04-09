@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db"
 export async function getBriefing() {
   const [overdueContacts, pendingFollowUps, openActionItems] = await Promise.all([
     prisma.contact.findMany({
-      where: { healthScore: { lt: 100 }, interactionFreqDays: { not: null } },
+      where: { interactionFreqDays: { not: null }, OR: [{ healthScore: { lt: 100 } }, { lastInteraction: null }] },
       orderBy: { healthScore: "asc" },
       take: 10,
     }),

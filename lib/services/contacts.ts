@@ -13,8 +13,8 @@ export async function listContacts(opts: ListContactsOptions) {
   if (opts.q) where.name = { contains: opts.q, mode: "insensitive" }
   if (opts.type) where.type = opts.type
   if (opts.overdue) {
-    where.healthScore = { lt: 100 }
     where.interactionFreqDays = { not: null }
+    where.OR = [{ healthScore: { lt: 100 } }, { lastInteraction: null }]
   }
   return prisma.contact.findMany({ where, orderBy: { name: "asc" } })
 }
