@@ -1,0 +1,99 @@
+<h2>Section 1 of 5: System Architecture</h2>
+<p class="subtitle">How all the pieces fit together in the Next.js approach</p>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:8px">
+
+  <!-- Left: Layer diagram -->
+  <div>
+    <h3>Layers</h3>
+
+    <div style="display:flex;flex-direction:column;gap:8px">
+
+      <div style="background:#E3F2FD;border:1px solid #90CAF9;border-radius:6px;padding:12px">
+        <div style="font-size:11px;font-weight:700;color:#1565C0;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Client</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <span style="background:white;border:1px solid #90CAF9;border-radius:4px;padding:4px 10px;font-size:13px">Browser PWA (Ian)</span>
+          <span style="background:white;border:1px solid #90CAF9;border-radius:4px;padding:4px 10px;font-size:13px">Holly (Openclaw AI)</span>
+        </div>
+      </div>
+
+      <div style="text-align:center;font-size:20px;color:#90CAF9">&#8595;</div>
+
+      <div style="background:#E8F5E9;border:1px solid #A5D6A7;border-radius:6px;padding:12px">
+        <div style="font-size:11px;font-weight:700;color:#2E7D32;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Next.js Application (1 container)</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+          <span style="background:white;border:1px solid #A5D6A7;border-radius:4px;padding:6px 10px;font-size:12px">React UI<br><span style="color:#888;font-size:11px">App Router, RSC</span></span>
+          <span style="background:white;border:1px solid #A5D6A7;border-radius:4px;padding:6px 10px;font-size:12px">API Routes<br><span style="color:#888;font-size:11px">/api/v1/*</span></span>
+          <span style="background:white;border:1px solid #A5D6A7;border-radius:4px;padding:6px 10px;font-size:12px">Holly API<br><span style="color:#888;font-size:11px">/api/holly/*</span></span>
+          <span style="background:white;border:1px solid #A5D6A7;border-radius:4px;padding:6px 10px;font-size:12px">Auth<br><span style="color:#888;font-size:11px">NextAuth.js</span></span>
+        </div>
+      </div>
+
+      <div style="text-align:center;font-size:20px;color:#90CAF9">&#8595;</div>
+
+      <div style="background:#FFF3E0;border:1px solid #FFCC80;border-radius:6px;padding:12px">
+        <div style="font-size:11px;font-weight:700;color:#E65100;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Data (Coolify-managed)</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <span style="background:white;border:1px solid #FFCC80;border-radius:4px;padding:4px 10px;font-size:13px">PostgreSQL</span>
+          <span style="background:white;border:1px solid #FFCC80;border-radius:4px;padding:4px 10px;font-size:13px">Redis (cache + sessions)</span>
+        </div>
+      </div>
+
+      <div style="text-align:center;font-size:20px;color:#90CAF9">&#8595;</div>
+
+      <div style="background:#F3E5F5;border:1px solid #CE93D8;border-radius:6px;padding:12px">
+        <div style="font-size:11px;font-weight:700;color:#6A1B9A;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">External Services (later phases)</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <span style="background:white;border:1px solid #CE93D8;border-radius:4px;padding:4px 10px;font-size:13px">Gmail API</span>
+          <span style="background:white;border:1px solid #CE93D8;border-radius:4px;padding:4px 10px;font-size:13px">Google Calendar</span>
+          <span style="background:white;border:1px solid #CE93D8;border-radius:4px;padding:4px 10px;font-size:13px">Obsidian</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Right: Key decisions -->
+  <div>
+    <h3>Key Decisions</h3>
+
+    <div style="display:flex;flex-direction:column;gap:10px">
+
+      <div style="border-left:3px solid #2196F3;padding:10px 12px;background:rgba(33,150,243,0.05);border-radius:0 6px 6px 0">
+        <div style="font-size:13px;font-weight:600;margin-bottom:4px">ORM: Prisma</div>
+        <div style="font-size:12px;color:#555">Type-safe schema, auto-generated types, migrations. Schema is the single source of truth for DB + TypeScript types.</div>
+      </div>
+
+      <div style="border-left:3px solid #4CAF50;padding:10px 12px;background:rgba(76,175,80,0.05);border-radius:0 6px 6px 0">
+        <div style="font-size:13px;font-weight:600;margin-bottom:4px">Auth: NextAuth.js (Auth.js v5)</div>
+        <div style="font-size:12px;color:#555">Google OAuth + credentials (email/password). Session stored in Redis. Holly gets a separate long-lived API key, not a session.</div>
+      </div>
+
+      <div style="border-left:3px solid #FF9800;padding:10px 12px;background:rgba(255,152,0,0.05);border-radius:0 6px 6px 0">
+        <div style="font-size:13px;font-weight:600;margin-bottom:4px">Holly API: Separate route group</div>
+        <div style="font-size:12px;color:#555">/api/holly/* routes use API key middleware. Rate limited. Fully documented. Versioned from day one (/api/holly/v1/*).</div>
+      </div>
+
+      <div style="border-left:3px solid #9C27B0;padding:10px 12px;background:rgba(156,39,176,0.05);border-radius:0 6px 6px 0">
+        <div style="font-size:13px;font-weight:600;margin-bottom:4px">Real-time: Server-Sent Events</div>
+        <div style="font-size:12px;color:#555">SSE over WebSocket — simpler, works through proxies, sufficient for push notifications. No separate WebSocket server needed.</div>
+      </div>
+
+      <div style="border-left:3px solid #F44336;padding:10px 12px;background:rgba(244,67,54,0.05);border-radius:0 6px 6px 0">
+        <div style="font-size:13px;font-weight:600;margin-bottom:4px">PWA: next-pwa</div>
+        <div style="font-size:12px;color:#555">Service worker for offline caching. Background sync for entries made offline. Web push for reminders.</div>
+      </div>
+
+      <div style="border-left:3px solid #607D8B;padding:10px 12px;background:rgba(96,125,139,0.05);border-radius:0 6px 6px 0">
+        <div style="font-size:13px;font-weight:600;margin-bottom:4px">Deployment: Single Coolify service</div>
+        <div style="font-size:12px;color:#555">Dockerfile builds the Next.js app. Coolify manages PostgreSQL + Redis as separate services. Environment variables injected at runtime.</div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<div style="margin-top:20px;padding:14px;background:rgba(33,150,243,0.08);border-left:4px solid #2196F3;border-radius:4px">
+  <strong>Does this architecture look right to you?</strong> Note: SSE instead of WebSocket is the main deviation from your original spec — it's simpler and sufficient for this use case. Happy to switch to WebSocket if you have a specific reason to need it.
+</div>

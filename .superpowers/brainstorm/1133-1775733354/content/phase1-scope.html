@@ -1,0 +1,143 @@
+<h2>Section 5 of 5: Phase 1 Scope</h2>
+<p class="subtitle">What we build first — the smallest useful version of Holly</p>
+
+<div style="margin-bottom:12px;padding:12px;background:rgba(33,150,243,0.08);border-left:4px solid #2196F3;border-radius:4px;font-size:13px">
+  Foundation and PRM Core are merged into a single Phase 1. Foundation alone is not useful to anyone — the first thing you ship should let you actually log a contact and an interaction.
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+
+  <!-- In scope -->
+  <div>
+    <h3 style="color:#2E7D32">Phase 1 — In Scope</h3>
+    <div style="display:flex;flex-direction:column;gap:6px">
+
+      <div style="font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:0.5px">Foundation</div>
+      <div style="display:flex;gap:8px;align-items:flex-start;font-size:13px">
+        <span style="color:#4CAF50;font-size:16px;line-height:1.2">&#10003;</span>
+        <span>Next.js 15 project, TypeScript, Tailwind CSS</span>
+      </div>
+      <div style="display:flex;gap:8px;align-items:flex-start;font-size:13px">
+        <span style="color:#4CAF50;font-size:16px;line-height:1.2">&#10003;</span>
+        <span>Prisma + PostgreSQL schema (all 6 tables)</span>
+      </div>
+      <div style="display:flex;gap:8px;align-items:flex-start;font-size:13px">
+        <span style="color:#4CAF50;font-size:16px;line-height:1.2">&#10003;</span>
+        <span>Auth.js — Google OAuth + email/password</span>
+      </div>
+      <div style="display:flex;gap:8px;align-items:flex-start;font-size:13px">
+        <span style="color:#4CAF50;font-size:16px;line-height:1.2">&#10003;</span>
+        <span>Redis session store</span>
+      </div>
+      <div style="display:flex;gap:8px;align-items:flex-start;font-size:13px">
+        <span style="color:#4CAF50;font-size:16px;line-height:1.2">&#10003;</span>
+        <span>Dockerfile + Coolify deployment config</span>
+      </div>
+      <div style="display:flex;gap:8px;align-items:flex-start;font-size:13px">
+        <span style="color:#4CAF50;font-size:16px;line-height:1.2">&#10003;</span>
+        <span>PWA manifest + service worker (offline shell)</span>
+      </div>
+
+      <div style="font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin-top:10px">PRM Core</div>
+      <div style="display:flex;gap:8px;align-items:flex-start;font-size:13px">
+        <span style="color:#4CAF50;font-size:16px;line-height:1.2">&#10003;</span>
+        <span>Contact list, search, create, edit, view</span>
+      </div>
+      <div style="display:flex;gap:8px;align-items:flex-start;font-size:13px">
+        <span style="color:#4CAF50;font-size:16px;line-height:1.2">&#10003;</span>
+        <span>Log Interaction — quick-entry modal (under 30s)</span>
+      </div>
+      <div style="display:flex;gap:8px;align-items:flex-start;font-size:13px">
+        <span style="color:#4CAF50;font-size:16px;line-height:1.2">&#10003;</span>
+        <span>Interaction history per contact</span>
+      </div>
+      <div style="display:flex;gap:8px;align-items:flex-start;font-size:13px">
+        <span style="color:#4CAF50;font-size:16px;line-height:1.2">&#10003;</span>
+        <span>Follow-up flags + pending follow-ups list</span>
+      </div>
+      <div style="display:flex;gap:8px;align-items:flex-start;font-size:13px">
+        <span style="color:#4CAF50;font-size:16px;line-height:1.2">&#10003;</span>
+        <span>Relationship health alerts (overdue contacts)</span>
+      </div>
+      <div style="display:flex;gap:8px;align-items:flex-start;font-size:13px">
+        <span style="color:#4CAF50;font-size:16px;line-height:1.2">&#10003;</span>
+        <span>Dashboard with summary stats</span>
+      </div>
+      <div style="display:flex;gap:8px;align-items:flex-start;font-size:13px">
+        <span style="color:#4CAF50;font-size:16px;line-height:1.2">&#10003;</span>
+        <span>Holly API — interactions, contacts, briefing, follow-ups</span>
+      </div>
+      <div style="display:flex;gap:8px;align-items:flex-start;font-size:13px">
+        <span style="color:#4CAF50;font-size:16px;line-height:1.2">&#10003;</span>
+        <span>API key management in Settings</span>
+      </div>
+      <div style="display:flex;gap:8px;align-items:flex-start;font-size:13px">
+        <span style="color:#4CAF50;font-size:16px;line-height:1.2">&#10003;</span>
+        <span>Offline entry with background sync</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Out of scope -->
+  <div>
+    <h3 style="color:#C62828">Phase 1 — Deferred</h3>
+    <div style="display:flex;flex-direction:column;gap:6px">
+
+      <div style="font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:0.5px">Phase 2 — PPM Core</div>
+      <div style="display:flex;gap:8px;align-items:flex-start;font-size:13px;color:#888">
+        <span style="font-size:16px;line-height:1.2">&#8680;</span>
+        <span>Projects, Tasks, Milestones</span>
+      </div>
+      <div style="display:flex;gap:8px;align-items:flex-start;font-size:13px;color:#888">
+        <span style="font-size:16px;line-height:1.2">&#8680;</span>
+        <span>Action item extraction from interactions</span>
+      </div>
+
+      <div style="font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin-top:10px">Phase 3 — Holly API Extended</div>
+      <div style="display:flex;gap:8px;align-items:flex-start;font-size:13px;color:#888">
+        <span style="font-size:16px;line-height:1.2">&#8680;</span>
+        <span>SSE event stream</span>
+      </div>
+      <div style="display:flex;gap:8px;align-items:flex-start;font-size:13px;color:#888">
+        <span style="font-size:16px;line-height:1.2">&#8680;</span>
+        <span>Bulk operations, project/task API endpoints</span>
+      </div>
+
+      <div style="font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin-top:10px">Phase 4 — Calendar & Email</div>
+      <div style="display:flex;gap:8px;align-items:flex-start;font-size:13px;color:#888">
+        <span style="font-size:16px;line-height:1.2">&#8680;</span>
+        <span>Gmail API integration</span>
+      </div>
+      <div style="display:flex;gap:8px;align-items:flex-start;font-size:13px;color:#888">
+        <span style="font-size:16px;line-height:1.2">&#8680;</span>
+        <span>Google Calendar sync</span>
+      </div>
+
+      <div style="font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin-top:10px">Phase 5 — Knowledge Synthesis</div>
+      <div style="display:flex;gap:8px;align-items:flex-start;font-size:13px;color:#888">
+        <span style="font-size:16px;line-height:1.2">&#8680;</span>
+        <span>Obsidian bridge, markdown export</span>
+      </div>
+      <div style="display:flex;gap:8px;align-items:flex-start;font-size:13px;color:#888">
+        <span style="font-size:16px;line-height:1.2">&#8680;</span>
+        <span>Knowledge queue UI</span>
+      </div>
+
+      <div style="font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin-top:10px">Electron desktop app</div>
+      <div style="display:flex;gap:8px;align-items:flex-start;font-size:13px;color:#888">
+        <span style="font-size:16px;line-height:1.2">&#8680;</span>
+        <span>Deferred — revisit after PWA is stable</span>
+      </div>
+
+    </div>
+
+    <div style="margin-top:20px;padding:12px;background:rgba(76,175,80,0.1);border:1px solid #A5D6A7;border-radius:6px;font-size:13px">
+      <strong>Phase 1 deliverable:</strong> A working PWA deployed to vaelerian.uk where Ian can manage contacts, log interactions, track follow-ups, and Holly can read and write data via API. Fully usable as a standalone PRM from day one.
+    </div>
+  </div>
+
+</div>
+
+<div style="margin-top:16px;padding:12px;background:rgba(255,152,0,0.08);border-left:4px solid #FF9800;border-radius:4px;font-size:13px">
+  <strong>Does this scope feel right for Phase 1?</strong> This is the spec we'll write the design doc from. Any changes before we commit to it?
+</div>

@@ -1,0 +1,138 @@
+<h2>Section 2 of 5: Data Models</h2>
+<p class="subtitle">Core database schema — all 6 phases, so nothing needs to be bolted on later</p>
+
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:8px">
+
+  <!-- Contact -->
+  <div style="border:2px solid #2196F3;border-radius:8px;overflow:hidden">
+    <div style="background:#2196F3;color:white;padding:8px 12px;font-weight:700;font-size:13px">Contact</div>
+    <div style="padding:10px 12px;font-size:12px">
+      <div style="color:#888;margin-bottom:6px">Core relationship record</div>
+      <div style="display:flex;flex-direction:column;gap:3px">
+        <div><span style="color:#E91E63;font-family:monospace">id</span> <span style="color:#888">uuid PK</span></div>
+        <div><span style="color:#333;font-family:monospace">name</span></div>
+        <div><span style="color:#333;font-family:monospace">type</span> <span style="color:#888">personal|work|family|volunteer</span></div>
+        <div><span style="color:#333;font-family:monospace">emails</span> <span style="color:#888">json[]</span></div>
+        <div><span style="color:#333;font-family:monospace">phones</span> <span style="color:#888">json[]</span></div>
+        <div><span style="color:#333;font-family:monospace">healthScore</span> <span style="color:#888">int 0-100</span></div>
+        <div><span style="color:#333;font-family:monospace">lastInteraction</span> <span style="color:#888">date?</span></div>
+        <div><span style="color:#333;font-family:monospace">interactionFreqDays</span> <span style="color:#888">int?</span></div>
+        <div><span style="color:#333;font-family:monospace">isFamilyMember</span> <span style="color:#888">bool</span></div>
+        <div><span style="color:#333;font-family:monospace">tags</span> <span style="color:#888">string[]</span></div>
+        <div><span style="color:#333;font-family:monospace">notes</span> <span style="color:#888">text</span></div>
+        <div><span style="color:#333;font-family:monospace">preferences</span> <span style="color:#888">json</span></div>
+        <div><span style="color:#333;font-family:monospace">createdAt / updatedAt</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Interaction -->
+  <div style="border:2px solid #4CAF50;border-radius:8px;overflow:hidden">
+    <div style="background:#4CAF50;color:white;padding:8px 12px;font-weight:700;font-size:13px">Interaction</div>
+    <div style="padding:10px 12px;font-size:12px">
+      <div style="color:#888;margin-bottom:6px">Every conversation/event with a contact</div>
+      <div style="display:flex;flex-direction:column;gap:3px">
+        <div><span style="color:#E91E63;font-family:monospace">id</span> <span style="color:#888">uuid PK</span></div>
+        <div><span style="color:#9C27B0;font-family:monospace">contactId</span> <span style="color:#888">FK → Contact</span></div>
+        <div><span style="color:#333;font-family:monospace">type</span> <span style="color:#888">call|meeting|email|message|event</span></div>
+        <div><span style="color:#333;font-family:monospace">direction</span> <span style="color:#888">inbound|outbound</span></div>
+        <div><span style="color:#333;font-family:monospace">summary</span></div>
+        <div><span style="color:#333;font-family:monospace">outcome</span> <span style="color:#888">text?</span></div>
+        <div><span style="color:#333;font-family:monospace">followUpRequired</span> <span style="color:#888">bool</span></div>
+        <div><span style="color:#333;font-family:monospace">followUpDate</span> <span style="color:#888">date?</span></div>
+        <div><span style="color:#333;font-family:monospace">followUpCompleted</span> <span style="color:#888">bool</span></div>
+        <div><span style="color:#333;font-family:monospace">callbackExpected</span> <span style="color:#888">bool</span></div>
+        <div><span style="color:#333;font-family:monospace">createdByHolly</span> <span style="color:#888">bool</span></div>
+        <div><span style="color:#333;font-family:monospace">location</span> <span style="color:#888">text?</span></div>
+        <div><span style="color:#333;font-family:monospace">duration</span> <span style="color:#888">int? (mins)</span></div>
+        <div><span style="color:#333;font-family:monospace">occurredAt</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ActionItem -->
+  <div style="border:2px solid #FF9800;border-radius:8px;overflow:hidden">
+    <div style="background:#FF9800;color:white;padding:8px 12px;font-weight:700;font-size:13px">ActionItem</div>
+    <div style="padding:10px 12px;font-size:12px">
+      <div style="color:#888;margin-bottom:6px">Short-term tasks from interactions</div>
+      <div style="display:flex;flex-direction:column;gap:3px">
+        <div><span style="color:#E91E63;font-family:monospace">id</span> <span style="color:#888">uuid PK</span></div>
+        <div><span style="color:#9C27B0;font-family:monospace">interactionId</span> <span style="color:#888">FK? → Interaction</span></div>
+        <div><span style="color:#9C27B0;font-family:monospace">taskId</span> <span style="color:#888">FK? → Task</span></div>
+        <div><span style="color:#333;font-family:monospace">title</span></div>
+        <div><span style="color:#333;font-family:monospace">status</span> <span style="color:#888">todo|done|cancelled</span></div>
+        <div><span style="color:#333;font-family:monospace">priority</span> <span style="color:#888">low|medium|high|critical</span></div>
+        <div><span style="color:#333;font-family:monospace">assignedTo</span> <span style="color:#888">ian|holly</span></div>
+        <div><span style="color:#333;font-family:monospace">dueDate</span> <span style="color:#888">date?</span></div>
+        <div><span style="color:#333;font-family:monospace">createdAt</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Project -->
+  <div style="border:2px solid #9C27B0;border-radius:8px;overflow:hidden">
+    <div style="background:#9C27B0;color:white;padding:8px 12px;font-weight:700;font-size:13px">Project</div>
+    <div style="padding:10px 12px;font-size:12px">
+      <div style="color:#888;margin-bottom:6px">Work and personal initiatives</div>
+      <div style="display:flex;flex-direction:column;gap:3px">
+        <div><span style="color:#E91E63;font-family:monospace">id</span> <span style="color:#888">uuid PK</span></div>
+        <div><span style="color:#333;font-family:monospace">title</span></div>
+        <div><span style="color:#333;font-family:monospace">description</span></div>
+        <div><span style="color:#333;font-family:monospace">category</span> <span style="color:#888">personal|work|volunteer</span></div>
+        <div><span style="color:#333;font-family:monospace">status</span> <span style="color:#888">planning|active|on-hold|done|cancelled</span></div>
+        <div><span style="color:#333;font-family:monospace">priority</span> <span style="color:#888">low|medium|high|critical</span></div>
+        <div><span style="color:#333;font-family:monospace">targetDate</span> <span style="color:#888">date?</span></div>
+        <div><span style="color:#333;font-family:monospace">notes</span></div>
+        <div><span style="color:#333;font-family:monospace">createdAt / updatedAt</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Task -->
+  <div style="border:2px solid #607D8B;border-radius:8px;overflow:hidden">
+    <div style="background:#607D8B;color:white;padding:8px 12px;font-weight:700;font-size:13px">Task</div>
+    <div style="padding:10px 12px;font-size:12px">
+      <div style="color:#888;margin-bottom:6px">Project subtasks and milestones</div>
+      <div style="display:flex;flex-direction:column;gap:3px">
+        <div><span style="color:#E91E63;font-family:monospace">id</span> <span style="color:#888">uuid PK</span></div>
+        <div><span style="color:#9C27B0;font-family:monospace">projectId</span> <span style="color:#888">FK → Project</span></div>
+        <div><span style="color:#333;font-family:monospace">title</span></div>
+        <div><span style="color:#333;font-family:monospace">description</span></div>
+        <div><span style="color:#333;font-family:monospace">status</span> <span style="color:#888">todo|in-progress|done|cancelled</span></div>
+        <div><span style="color:#333;font-family:monospace">priority</span> <span style="color:#888">low|medium|high|critical</span></div>
+        <div><span style="color:#333;font-family:monospace">assignedTo</span> <span style="color:#888">ian|holly</span></div>
+        <div><span style="color:#333;font-family:monospace">dueDate</span> <span style="color:#888">date?</span></div>
+        <div><span style="color:#333;font-family:monospace">isMilestone</span> <span style="color:#888">bool</span></div>
+        <div><span style="color:#333;font-family:monospace">createdAt</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- KnowledgeItem -->
+  <div style="border:2px solid #795548;border-radius:8px;overflow:hidden">
+    <div style="background:#795548;color:white;padding:8px 12px;font-weight:700;font-size:13px">KnowledgeItem</div>
+    <div style="padding:10px 12px;font-size:12px">
+      <div style="color:#888;margin-bottom:6px">Insights queued for Obsidian export</div>
+      <div style="display:flex;flex-direction:column;gap:3px">
+        <div><span style="color:#E91E63;font-family:monospace">id</span> <span style="color:#888">uuid PK</span></div>
+        <div><span style="color:#9C27B0;font-family:monospace">sourceId</span> <span style="color:#888">FK (polymorphic)</span></div>
+        <div><span style="color:#333;font-family:monospace">sourceType</span> <span style="color:#888">interaction|project|contact</span></div>
+        <div><span style="color:#333;font-family:monospace">content</span> <span style="color:#888">markdown text</span></div>
+        <div><span style="color:#333;font-family:monospace">proposedCategory</span></div>
+        <div><span style="color:#333;font-family:monospace">tags</span> <span style="color:#888">string[]</span></div>
+        <div><span style="color:#333;font-family:monospace">obsidianReady</span> <span style="color:#888">bool</span></div>
+        <div><span style="color:#333;font-family:monospace">exported</span> <span style="color:#888">bool</span></div>
+        <div><span style="color:#333;font-family:monospace">createdAt</span></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div style="margin-top:16px;padding:12px;background:rgba(33,150,243,0.08);border-left:4px solid #2196F3;border-radius:4px;font-size:13px">
+  <strong>Relationships:</strong> Contact 1-to-many Interaction. Interaction 1-to-many ActionItem. Project 1-to-many Task. ActionItem optionally links to Task (when an action grows into a project task). KnowledgeItem polymorphically references any source entity.
+</div>
+
+<div style="margin-top:10px;padding:12px;background:rgba(255,152,0,0.08);border-left:4px solid #FF9800;border-radius:4px;font-size:13px">
+  <strong>Does this schema cover everything?</strong> Note there is no separate User table since this is a single-user app - auth is handled by NextAuth.js with no need to store multiple user records. Holly is identified by API key, not a user row.
+</div>

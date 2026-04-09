@@ -1,0 +1,139 @@
+<h2>Section 3 of 5: UI Structure</h2>
+<p class="subtitle">Main navigation and key screens for the PWA</p>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:8px">
+
+  <!-- Nav structure -->
+  <div>
+    <h3>Navigation</h3>
+    <div class="mockup">
+      <div class="mockup-header">Holly PRM — App Shell</div>
+      <div class="mockup-body" style="padding:0">
+
+        <!-- Top bar (desktop) -->
+        <div style="background:#1a1a2e;color:white;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;font-size:13px">
+          <span style="font-weight:700;font-size:15px">Holly</span>
+          <div style="display:flex;gap:16px">
+            <span style="opacity:0.6;font-size:11px">Ian Openclaw</span>
+            <span style="background:#4CAF50;border-radius:50%;width:8px;height:8px;display:inline-block;margin-top:3px" title="Connected"></span>
+          </div>
+        </div>
+
+        <div style="display:flex;min-height:300px">
+          <!-- Sidebar -->
+          <div style="width:160px;background:#f8f9fa;border-right:1px solid #e0e0e0;padding:8px 0;flex-shrink:0">
+            <div style="padding:6px 14px;background:#E3F2FD;border-right:3px solid #2196F3;font-size:13px;font-weight:600;color:#1565C0">Dashboard</div>
+            <div style="padding:6px 14px;font-size:13px;color:#555">Contacts</div>
+            <div style="padding:6px 14px;font-size:13px;color:#555">Interactions</div>
+            <div style="padding:6px 14px;font-size:13px;color:#555">Projects</div>
+            <div style="padding:6px 14px;font-size:13px;color:#555">Tasks</div>
+            <div style="margin:8px 14px;height:1px;background:#e0e0e0"></div>
+            <div style="padding:6px 14px;font-size:13px;color:#555">Knowledge</div>
+            <div style="padding:6px 14px;font-size:13px;color:#555">Settings</div>
+          </div>
+
+          <!-- Main content area -->
+          <div style="flex:1;padding:14px;background:white">
+            <div style="font-size:13px;font-weight:600;margin-bottom:10px">Good morning, Ian</div>
+
+            <!-- Alerts row -->
+            <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+              <div style="background:#FFEBEE;border:1px solid #FFCDD2;border-radius:4px;padding:6px 10px;font-size:11px;color:#C62828">
+                <strong>3</strong> contacts overdue
+              </div>
+              <div style="background:#FFF8E1;border:1px solid #FFE082;border-radius:4px;padding:6px 10px;font-size:11px;color:#F57F17">
+                <strong>5</strong> follow-ups pending
+              </div>
+              <div style="background:#E8F5E9;border:1px solid #A5D6A7;border-radius:4px;padding:6px 10px;font-size:11px;color:#2E7D32">
+                <strong>2</strong> projects active
+              </div>
+            </div>
+
+            <!-- Quick log button -->
+            <div style="background:#2196F3;color:white;text-align:center;padding:8px;border-radius:6px;font-size:12px;font-weight:600;margin-bottom:10px;cursor:pointer">
+              + Log Interaction
+            </div>
+
+            <!-- Recent interactions -->
+            <div style="font-size:11px;color:#888;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px">Recent</div>
+            <div style="display:flex;flex-direction:column;gap:4px">
+              <div style="padding:7px 10px;background:#f8f9fa;border-radius:4px;font-size:12px;display:flex;justify-content:space-between">
+                <span>Call — Katie</span><span style="color:#888">today</span>
+              </div>
+              <div style="padding:7px 10px;background:#f8f9fa;border-radius:4px;font-size:12px;display:flex;justify-content:space-between">
+                <span>Meeting — Wolves Foundation</span><span style="color:#888">yesterday</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Mobile bottom nav -->
+        <div style="background:#1a1a2e;display:flex;justify-content:space-around;padding:10px 0;border-top:1px solid #333">
+          <div style="text-align:center;color:#2196F3;font-size:10px">
+            <div style="font-size:16px">&#9776;</div>
+            <div>Home</div>
+          </div>
+          <div style="text-align:center;color:#888;font-size:10px">
+            <div style="font-size:16px">&#128100;</div>
+            <div>Contacts</div>
+          </div>
+          <div style="text-align:center;color:#888;font-size:10px">
+            <div style="font-size:16px;background:#2196F3;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;margin:0 auto 2px">+</div>
+            <div>Log</div>
+          </div>
+          <div style="text-align:center;color:#888;font-size:10px">
+            <div style="font-size:16px">&#128203;</div>
+            <div>Projects</div>
+          </div>
+          <div style="text-align:center;color:#888;font-size:10px">
+            <div style="font-size:16px">&#10003;</div>
+            <div>Tasks</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+    <p style="font-size:12px;color:#888;margin-top:6px">Desktop: sidebar nav. Mobile: bottom tab bar. Central + button is the quick log shortcut.</p>
+  </div>
+
+  <!-- Key screens list -->
+  <div>
+    <h3>Key Screens</h3>
+
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <div style="border:1px solid #e0e0e0;border-radius:6px;padding:12px">
+        <div style="font-size:13px;font-weight:600;margin-bottom:4px">Dashboard</div>
+        <div style="font-size:12px;color:#555">Relationship health alerts, pending follow-ups, active project status, today's Holly briefing. Read-only overview.</div>
+      </div>
+      <div style="border:1px solid #e0e0e0;border-radius:6px;padding:12px">
+        <div style="font-size:13px;font-weight:600;margin-bottom:4px">Contacts</div>
+        <div style="font-size:12px;color:#555">Searchable list. Click into a contact for full profile + interaction history. Quick-add form in under 30 seconds.</div>
+      </div>
+      <div style="border:1px solid #e0e0e0;border-radius:6px;padding:12px">
+        <div style="font-size:13px;font-weight:600;margin-bottom:4px">Log Interaction (modal/sheet)</div>
+        <div style="font-size:12px;color:#555">Accessible from anywhere via the + button. Type, outcome, follow-up flag, action items. Supports offline entry. Target: completable in under 30 seconds.</div>
+      </div>
+      <div style="border:1px solid #e0e0e0;border-radius:6px;padding:12px">
+        <div style="font-size:13px;font-weight:600;margin-bottom:4px">Projects</div>
+        <div style="font-size:12px;color:#555">Card grid by category (work / personal / volunteer). Click through to task list. Status badge prominent.</div>
+      </div>
+      <div style="border:1px solid #e0e0e0;border-radius:6px;padding:12px">
+        <div style="font-size:13px;font-weight:600;margin-bottom:4px">Tasks</div>
+        <div style="font-size:12px;color:#555">Flat prioritised list across all projects. Filter by assigned-to (ian / holly), due date, priority. Mobile-friendly check-off.</div>
+      </div>
+      <div style="border:1px solid #e0e0e0;border-radius:6px;padding:12px">
+        <div style="font-size:13px;font-weight:600;margin-bottom:4px">Knowledge Queue</div>
+        <div style="font-size:12px;color:#555">Items Holly or the system have flagged for Obsidian. Review, edit, mark ready, export as markdown. (Phase 6)</div>
+      </div>
+      <div style="border:1px solid #e0e0e0;border-radius:6px;padding:12px">
+        <div style="font-size:13px;font-weight:600;margin-bottom:4px">Settings</div>
+        <div style="font-size:12px;color:#555">Relationship health thresholds, Holly API key management, notification preferences, integration config.</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div style="margin-top:16px;padding:12px;background:rgba(255,152,0,0.08);border-left:4px solid #FF9800;border-radius:4px;font-size:13px">
+  <strong>Does this screen structure work for you?</strong> The dashboard and Log Interaction are the two highest-priority screens to get right — they'll be used dozens of times a day.
+</div>
