@@ -6,14 +6,22 @@ interface PageProps { searchParams: Promise<{ q?: string; type?: string; overdue
 
 export default async function ContactsPage({ searchParams }: PageProps) {
   const { q, type, overdue } = await searchParams
-  const contacts = await listContacts({
-    q,
-    type,
-    overdue: overdue === "true",
-  })
+  let contacts: Awaited<ReturnType<typeof listContacts>> = []
+  let dbError = false
+  try {
+    contacts = await listContacts({ q, type, overdue: overdue === "true" })
+  } catch (e) {
+    console.error("[contacts page]", e)
+    dbError = true
+  }
 
   return (
     <div className="p-6 space-y-4 max-w-2xl">
+      {dbError && (
+        <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">
+          Database unavailable. Check server logs.
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold text-gray-900">Contacts</h1>
         <Link href="/contacts/new" className="bg-blue-600 text-white text-sm font-medium px-3 py-1.5 rounded-lg hover:bg-blue-700">
