@@ -3,7 +3,11 @@ import Google from "next-auth/providers/google"
 import Credentials from "next-auth/providers/credentials"
 import bcrypt from "bcryptjs"
 
+const secret = process.env.AUTH_SECRET
+if (!secret) throw new Error("AUTH_SECRET environment variable is not set")
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  secret,
   providers: [
     Google({
       clientId: process.env.GOOGLE_CLIENT_ID!,
@@ -15,8 +19,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const adminEmail = process.env.ADMIN_EMAIL
         const adminHash = process.env.ADMIN_PASSWORD_HASH
         if (!adminEmail || !adminHash) return null
-        if (credentials.email !== adminEmail) return null
-        const valid = await bcrypt.compare(credentials.password as string, adminHash)
+        const email = credentials?.email
+        const password = credentials?.password
+        if (typeof email !== "string" || typeof password !== "string") return null
+        if (email !== adminEmail) return null
+        const valid = await bcrypt.compare(password, adminHash)
         if (!valid) return null
         return { id: "ian", email: adminEmail, name: "Ian" }
       },
