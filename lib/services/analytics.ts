@@ -69,14 +69,19 @@ export async function getVelocityAnalytics(days: number) {
     orderBy: { createdAt: "desc" },
   })
 
-  // Tasks that transitioned to "done" within the window
+  // Tasks that transitioned to "done" within the window (track last status to handle reverts)
   const taskLogs = await prisma.auditLog.findMany({
     where: { entity: "Task", action: "update", occurredAt: { gte: windowStart } },
+    orderBy: { occurredAt: "asc" },
   })
   const completedInWindowIds = new Set<string>()
   for (const log of taskLogs) {
     const diff = log.diff as { after?: { status?: string } } | null
-    if (diff?.after?.status === "done") completedInWindowIds.add(log.entityId)
+    if (diff?.after?.status === "done") {
+      completedInWindowIds.add(log.entityId)
+    } else if (diff?.after?.status !== undefined) {
+      completedInWindowIds.delete(log.entityId)
+    }
   }
 
   const weeksInWindow = days / 7
@@ -138,7 +143,7 @@ export async function getCompletionAnalytics(days: number) {
   const assigneeMap = new Map(completedItems.map(i => [i.id, i.assignedTo]))
 
   const overdueItems = await prisma.actionItem.findMany({
-    where: { status: "todo", dueDate: { gte: windowStart, lt: new Date() } },
+    where: { status: "todo", dueDate: { lt: new Date() } },
     select: { id: true, assignedTo: true },
   })
 
@@ -149,8 +154,9 @@ export async function getCompletionAnalytics(days: number) {
   const totalIan = doneIan + overdueIan
   const totalHolly = doneHolly + overdueHolly
 
-  // 8 weeks, most recent first
-  const byWeek = Array.from({ length: 8 }, (_, i) => {
+  // up to 8 weeks, most recent first
+  const weeksInWindow = Math.min(Math.ceil(days / 7), 8)
+  const byWeek = Array.from({ length: weeksInWindow }, (_, i) => {
     const weekEnd = new Date()
     weekEnd.setDate(weekEnd.getDate() - i * 7)
     weekEnd.setHours(23, 59, 59, 999)
