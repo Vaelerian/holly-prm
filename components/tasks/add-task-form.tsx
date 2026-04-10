@@ -19,17 +19,20 @@ export function AddTaskForm({ projectId }: AddTaskFormProps) {
   async function handleAdd() {
     if (!title.trim()) return
     setSaving(true)
-    const res = await fetch("/api/v1/tasks", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ projectId, title: title.trim(), assignedTo, priority, isMilestone }),
-    })
-    if (res.ok) {
-      setTitle("")
-      setOpen(false)
-      router.refresh()
+    try {
+      const res = await fetch("/api/v1/tasks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId, title: title.trim(), assignedTo, priority, isMilestone }),
+      })
+      if (res.ok) {
+        setTitle("")
+        setOpen(false)
+        router.refresh()
+      }
+    } finally {
+      setSaving(false)
     }
-    setSaving(false)
   }
 
   if (!open) {

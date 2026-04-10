@@ -80,7 +80,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
                 status={t.status}
                 priority={t.priority}
                 assignedTo={t.assignedTo}
-                dueDate={t.dueDate}
+                dueDate={t.dueDate ? t.dueDate.toISOString() : null}
                 isMilestone={t.isMilestone}
               />
             ))}

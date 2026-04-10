@@ -9,7 +9,7 @@ interface TaskRowProps {
   status: string
   priority: string
   assignedTo: string
-  dueDate: Date | null
+  dueDate: string | null
   isMilestone: boolean
   onStatusChange?: (id: string, newStatus: string) => void
 }
@@ -42,16 +42,19 @@ export function TaskRow({ id, title, status: initialStatus, priority, assignedTo
   async function cycleStatus() {
     const next = STATUS_CYCLE[status] ?? "todo"
     setSaving(true)
-    const res = await fetch(`/api/v1/tasks/${id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: next }),
-    })
-    if (res.ok) {
-      setStatus(next)
-      onStatusChange?.(id, next)
+    try {
+      const res = await fetch(`/api/v1/tasks/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: next }),
+      })
+      if (res.ok) {
+        setStatus(next)
+        onStatusChange?.(id, next)
+      }
+    } finally {
+      setSaving(false)
     }
-    setSaving(false)
   }
 
   return (

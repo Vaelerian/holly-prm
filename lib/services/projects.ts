@@ -14,7 +14,7 @@ export async function listProjects(opts: ListProjectsOptions) {
     orderBy: { createdAt: "desc" },
     include: {
       _count: { select: { tasks: true } },
-      tasks: { select: { status: true } },
+      tasks: { select: { status: true, isMilestone: true } },
     },
   })
 }

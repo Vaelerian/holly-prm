@@ -46,7 +46,8 @@ export default async function ProjectsPage({ searchParams }: PageProps) {
       ) : (
         <div className="space-y-2">
           {projects.map(p => {
-            const taskDoneCount = p.tasks.filter(t => t.status === "done").length
+            const regularTasks = p.tasks.filter(t => !t.isMilestone)
+            const taskDoneCount = regularTasks.filter(t => t.status === "done").length
             return (
               <ProjectCard
                 key={p.id}
@@ -57,7 +58,7 @@ export default async function ProjectsPage({ searchParams }: PageProps) {
                 priority={p.priority}
                 targetDate={p.targetDate}
                 taskDoneCount={taskDoneCount}
-                taskTotalCount={p.tasks.length}
+                taskTotalCount={regularTasks.length}
               />
             )
           })}
