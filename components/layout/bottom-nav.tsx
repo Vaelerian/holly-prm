@@ -9,6 +9,7 @@ const tabs = [
   { href: "/log", label: "Log", icon: "+" },
   { href: "/projects", label: "Projects", icon: "📋" },
   { href: "/tasks", label: "Tasks", icon: "✓" },
+  { href: "/calendar", label: "Cal", icon: "▦" },
   { href: "/reports", label: "Reports", icon: "◈" },
 ]
 
