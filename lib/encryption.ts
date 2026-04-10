@@ -2,7 +2,7 @@ import { createCipheriv, createDecipheriv, randomBytes } from "crypto"
 
 function getKey(): Buffer {
   const hex = process.env.ENCRYPTION_KEY
-  if (!hex || hex.length !== 64) {
+  if (!hex || hex.length !== 64 || !/^[0-9a-fA-F]{64}$/.test(hex)) {
     throw new Error("ENCRYPTION_KEY must be a 64-character hex string (32 bytes)")
   }
   return Buffer.from(hex, "hex")
@@ -23,6 +23,9 @@ export function decrypt(ciphertext: string): string {
   if (!ivHex || !tagHex || !encryptedHex) throw new Error("Invalid ciphertext format")
   const iv = Buffer.from(ivHex, "hex")
   const tag = Buffer.from(tagHex, "hex")
+  if (iv.length !== 12 || tag.length !== 16) {
+    throw new Error("Invalid ciphertext: malformed IV or tag length")
+  }
   const encrypted = Buffer.from(encryptedHex, "hex")
   const decipher = createDecipheriv("aes-256-gcm", key, iv)
   decipher.setAuthTag(tag)
