@@ -4,9 +4,13 @@ const vapidPublicKey = process.env.VAPID_PUBLIC_KEY
 const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY
 const vapidEmail = process.env.VAPID_EMAIL
 
-if (vapidPublicKey && vapidPrivateKey && vapidEmail) {
-  webpush.setVapidDetails(vapidEmail, vapidPublicKey, vapidPrivateKey)
-}
+// Only valid if the public key looks like a URL-safe base64 string (not a placeholder command)
+const isValidBase64Url = (s: string) => /^[A-Za-z0-9\-_]+$/.test(s)
+
+export const isPushConfigured = Boolean(
+  vapidPublicKey && vapidPrivateKey && vapidEmail &&
+  isValidBase64Url(vapidPublicKey) && isValidBase64Url(vapidPrivateKey)
+)
 
 export interface PushPayload {
   title: string
@@ -24,9 +28,10 @@ export async function sendPushNotification(
   subscription: PushSubscriptionData,
   payload: PushPayload
 ): Promise<void> {
-  if (!vapidPublicKey || !vapidPrivateKey || !vapidEmail) {
+  if (!isPushConfigured || !vapidPublicKey || !vapidPrivateKey || !vapidEmail) {
     throw new Error("Push notifications not configured")
   }
+  webpush.setVapidDetails(vapidEmail, vapidPublicKey, vapidPrivateKey)
   await webpush.sendNotification(
     {
       endpoint: subscription.endpoint,
@@ -35,5 +40,3 @@ export async function sendPushNotification(
     JSON.stringify(payload)
   )
 }
-
-export const isPushConfigured = Boolean(vapidPublicKey && vapidPrivateKey && vapidEmail)
