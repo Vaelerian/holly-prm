@@ -37,8 +37,8 @@ export default async function CalendarPage() {
         id: t.id,
         type: t.isMilestone ? "milestone" : "task",
         title: t.title,
-        date: t.dueDate!.toISOString().split("T")[0],
-        href: `/projects/${t.projectId}`,
+        date: t.dueDate!.toLocaleDateString("en-CA"),
+        href: t.projectId ? `/projects/${t.projectId}` : undefined,
       })
     }
     for (const p of projects) {
@@ -46,7 +46,7 @@ export default async function CalendarPage() {
         id: p.id,
         type: "project",
         title: p.title,
-        date: p.targetDate!.toISOString().split("T")[0],
+        date: p.targetDate!.toLocaleDateString("en-CA"),
         href: `/projects/${p.id}`,
       })
     }
@@ -55,7 +55,7 @@ export default async function CalendarPage() {
         id: f.id,
         type: "follow_up",
         title: `Follow-up: ${f.contact.name}`,
-        date: f.followUpDate!.toISOString().split("T")[0],
+        date: f.followUpDate!.toLocaleDateString("en-CA"),
         href: `/contacts/${f.contactId}`,
       })
     }
@@ -64,7 +64,7 @@ export default async function CalendarPage() {
         id: a.id,
         type: "action_item",
         title: a.title,
-        date: a.dueDate!.toISOString().split("T")[0],
+        date: a.dueDate!.toLocaleDateString("en-CA"),
       })
     }
     for (const g of googleEvents) {

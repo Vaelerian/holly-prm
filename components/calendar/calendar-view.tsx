@@ -57,7 +57,7 @@ function addDays(date: Date, days: number): Date {
 }
 
 function toDateStr(date: Date): string {
-  return date.toISOString().split("T")[0]
+  return date.toLocaleDateString("en-CA")
 }
 
 function MonthView({ items, currentDate, setCurrentDate }: { items: CalendarItem[]; currentDate: Date; setCurrentDate: (d: Date) => void }) {
