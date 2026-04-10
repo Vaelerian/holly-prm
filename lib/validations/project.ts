@@ -1,12 +1,13 @@
 import { z } from "zod"
+import { PrioritySchema } from "@/lib/validations/action-item"
 
 export const CreateProjectSchema = z.object({
-  title: z.string().min(1).max(200),
+  title: z.string().min(1, "Title is required").max(200),
   description: z.string().default(""),
   category: z.enum(["personal", "work", "volunteer"]),
   status: z.enum(["planning", "active", "on_hold", "done", "cancelled"]).default("planning"),
-  priority: z.enum(["low", "medium", "high", "critical"]).default("medium"),
-  targetDate: z.string().datetime().nullable().default(null),
+  priority: PrioritySchema.default("medium"),
+  targetDate: z.string().date().nullable().default(null),
   notes: z.string().default(""),
 })
 

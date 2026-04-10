@@ -1,13 +1,14 @@
 import { z } from "zod"
+import { PrioritySchema, ActorSchema } from "@/lib/validations/action-item"
 
 export const CreateTaskSchema = z.object({
   projectId: z.string().uuid(),
-  title: z.string().min(1).max(200),
+  title: z.string().min(1, "Title is required").max(200),
   description: z.string().default(""),
   status: z.enum(["todo", "in_progress", "done", "cancelled"]).default("todo"),
-  priority: z.enum(["low", "medium", "high", "critical"]).default("medium"),
-  assignedTo: z.enum(["ian", "holly"]),
-  dueDate: z.string().datetime().nullable().default(null),
+  priority: PrioritySchema.default("medium"),
+  assignedTo: ActorSchema,
+  dueDate: z.string().date().nullable().default(null),
   isMilestone: z.boolean().default(false),
 })
 
