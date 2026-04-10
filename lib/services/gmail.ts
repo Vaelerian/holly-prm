@@ -28,9 +28,29 @@ function extractHeader(headers: Array<{ name?: string | null; value?: string | n
   return headers.find(h => h.name?.toLowerCase() === name.toLowerCase())?.value ?? ""
 }
 
-function decodeBody(part: { mimeType?: string | null; body?: { data?: string | null } | null; parts?: unknown[] | null }): string {
+interface GmailPart {
+  mimeType?: string | null
+  body?: { data?: string | null } | null
+  parts?: GmailPart[] | null
+}
+
+function decodeBody(part: GmailPart): string {
+  // Prefer plain text, fall back to html
+  if (part.mimeType === "text/plain" && part.body?.data) {
+    return Buffer.from(part.body.data, "base64url").toString("utf8")
+  }
+  if (part.parts) {
+    // Walk multipart/* recursively, prefer text/plain
+    const plain = part.parts.find(p => p.mimeType === "text/plain")
+    if (plain) return decodeBody(plain)
+    // Fall back to first part
+    for (const child of part.parts) {
+      const decoded = decodeBody(child)
+      if (decoded) return decoded
+    }
+  }
   if (part.body?.data) {
-    return Buffer.from(part.body.data, "base64").toString("utf8")
+    return Buffer.from(part.body.data, "base64url").toString("utf8")
   }
   return ""
 }
@@ -121,7 +141,7 @@ export async function getEmailThread(threadId: string): Promise<GmailThread | nu
         from: extractHeader(headers, "From"),
         to: extractHeader(headers, "To"),
         date: extractHeader(headers, "Date"),
-        body: decodeBody(msg.payload as any),
+        body: decodeBody(msg.payload as GmailPart),
       }
     })
 
