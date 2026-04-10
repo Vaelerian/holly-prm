@@ -193,13 +193,10 @@ export default function SettingsPage() {
             </p>
           </div>
           {googleStatus.connected ? (
-            <form action="/api/v1/google/disconnect" method="POST" onSubmit={async (e) => {
-              e.preventDefault()
+            <Button variant="danger" onClick={async () => {
               await fetch("/api/v1/google/disconnect", { method: "DELETE" })
               setGoogleStatus({ connected: false, email: null })
-            }}>
-              <Button variant="danger" type="submit">Disconnect</Button>
-            </form>
+            }}>Disconnect</Button>
           ) : (
             <Button onClick={() => { window.location.href = "/api/v1/google/connect" }}>Connect Google</Button>
           )}
