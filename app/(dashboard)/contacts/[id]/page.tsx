@@ -66,7 +66,7 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
           <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Interactions</h2>
         </div>
         <InteractionList interactions={contact.interactions as any} />
-        <AddActionItemForm interactionId={contact.interactions[0]?.id} />
+        <AddActionItemForm />
       </div>
     </div>
   )
