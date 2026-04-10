@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db"
-import { Actor } from "@/app/generated/prisma/enums"
+import { Actor } from "@/app/generated/prisma/client"
 
 export async function getBriefing() {
   const todayStart = new Date()
