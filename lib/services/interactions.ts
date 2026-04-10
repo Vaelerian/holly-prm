@@ -42,7 +42,7 @@ export async function createInteraction(data: CreateInteractionInput, actor: Act
 
   const contact = await prisma.contact.findUnique({
     where: { id: data.contactId },
-    select: { interactionFreqDays: true, name: true },
+    select: { interactionFreqDays: true },
   })
   const healthScore = computeHealthScore(interaction.occurredAt, contact?.interactionFreqDays ?? null)
   await prisma.contact.update({
@@ -56,7 +56,7 @@ export async function createInteraction(data: CreateInteractionInput, actor: Act
 
   await publishSseEvent("interaction.created", {
     contactId: data.contactId,
-    contactName: contact?.name ?? "",
+    contactName: interaction.contact?.name ?? "",
     type: data.type,
     summary: data.summary,
     createdByHolly: actor === "holly",

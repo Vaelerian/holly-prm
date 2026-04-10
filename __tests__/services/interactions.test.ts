@@ -39,9 +39,9 @@ describe("createInteraction", () => {
       transcript: null,
       occurredAt: "2026-04-09T10:00:00Z",
     }
-    const created = { id: "int-1", ...input, occurredAt: new Date(input.occurredAt) }
+    const created = { id: "int-1", ...input, occurredAt: new Date(input.occurredAt), contact: { id: "contact-1", name: "Alice" } }
     mockPrisma.interaction.create.mockResolvedValue(created as any)
-    mockPrisma.contact.findUnique.mockResolvedValue({ interactionFreqDays: 30, name: "Alice" } as any)
+    mockPrisma.contact.findUnique.mockResolvedValue({ interactionFreqDays: 30 } as any)
     mockPrisma.contact.update.mockResolvedValue({} as any)
     mockPrisma.auditLog.create.mockResolvedValue({} as any)
 
@@ -70,9 +70,9 @@ describe("createInteraction", () => {
       transcript: "Ian: Hey\nHolly: Hi",
       occurredAt: "2026-04-09T10:00:00Z",
     }
-    const created = { id: "int-2", ...input, occurredAt: new Date(input.occurredAt) }
+    const created = { id: "int-2", ...input, occurredAt: new Date(input.occurredAt), contact: { id: "contact-1", name: "Alice" } }
     mockPrisma.interaction.create.mockResolvedValue(created as any)
-    mockPrisma.contact.findUnique.mockResolvedValue({ interactionFreqDays: null, name: "Alice" } as any)
+    mockPrisma.contact.findUnique.mockResolvedValue({ interactionFreqDays: null } as any)
     mockPrisma.contact.update.mockResolvedValue({} as any)
     mockPrisma.auditLog.create.mockResolvedValue({} as any)
 
@@ -97,8 +97,8 @@ describe("createInteraction", () => {
       transcript: null,
       occurredAt: "2026-04-09T10:00:00Z",
     }
-    mockPrisma.interaction.create.mockResolvedValue({ id: "int-3", ...input, createdByHolly: false, occurredAt: new Date(input.occurredAt) } as any)
-    mockPrisma.contact.findUnique.mockResolvedValue({ interactionFreqDays: null, name: "Alice" } as any)
+    mockPrisma.interaction.create.mockResolvedValue({ id: "int-3", ...input, createdByHolly: false, occurredAt: new Date(input.occurredAt), contact: { id: "contact-1", name: "Alice" } } as any)
+    mockPrisma.contact.findUnique.mockResolvedValue({ interactionFreqDays: null } as any)
     mockPrisma.contact.update.mockResolvedValue({} as any)
     mockPrisma.auditLog.create.mockResolvedValue({} as any)
 
