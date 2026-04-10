@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db"
 import { Actor } from "@/app/generated/prisma/client"
+import { redis } from "@/lib/redis"
 
 export async function getBriefing() {
   const todayStart = new Date()
@@ -92,6 +93,15 @@ export async function getBriefing() {
     }),
   ])
 
+  // Read Gmail cache (populated by cron)
+  let recentEmails: unknown[] = []
+  try {
+    const cached = await redis.get("gmail:recent")
+    if (cached) recentEmails = JSON.parse(cached)
+  } catch {
+    // Redis unavailable or invalid JSON - proceed with empty array
+  }
+
   const now = new Date()
   const followUpCandidates = candidateContacts.filter(c => {
     const daysSince = (now.getTime() - c.lastInteraction!.getTime()) / (1000 * 60 * 60 * 24)
@@ -121,6 +131,7 @@ export async function getBriefing() {
     followUpCandidates,
     recentInteractions,
     projectHealth,
+    recentEmails,
     generatedAt: new Date(),
   }
 }

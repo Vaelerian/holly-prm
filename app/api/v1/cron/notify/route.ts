@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db"
 import { redis } from "@/lib/redis"
 import { sendPushNotification, isPushConfigured } from "@/lib/push"
 import { publishSseEvent } from "@/lib/sse-events"
+import { fetchRecentEmails } from "@/lib/services/gmail"
 
 const MAX_NOTIFICATIONS_PER_RUN = 5
 
@@ -44,6 +45,14 @@ export async function POST(req: NextRequest) {
         await redis.set(sseKey, "1", "EX", 86400).catch(() => {})
       }
     }
+  }
+
+  // 3. Gmail poll - cache recent emails for briefing
+  try {
+    const recentEmails = await fetchRecentEmails({ hours: 24 })
+    await redis.set("gmail:recent", JSON.stringify(recentEmails), "EX", 3600)
+  } catch (e) {
+    console.error("[cron/notify] gmail poll failed", e)
   }
 
   if (!isPushConfigured) {
