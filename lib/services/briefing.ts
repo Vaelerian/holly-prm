@@ -6,6 +6,8 @@ export async function getBriefing() {
   todayStart.setHours(0, 0, 0, 0)
   const todayEnd = new Date()
   todayEnd.setHours(23, 59, 59, 999)
+  const fourteenDaysFromNow = new Date()
+  fourteenDaysFromNow.setDate(fourteenDaysFromNow.getDate() + 14)
 
   const [
     overdueContacts,
@@ -15,6 +17,9 @@ export async function getBriefing() {
     tasksDueTodayCount,
     upcomingMilestones,
     myActionItems,
+    candidateContacts,
+    recentInteractions,
+    activeProjects,
   ] = await Promise.all([
     prisma.contact.findMany({
       where: { interactionFreqDays: { not: null }, OR: [{ healthScore: { lt: 100 } }, { lastInteraction: null }] },
@@ -45,10 +50,10 @@ export async function getBriefing() {
       where: {
         isMilestone: true,
         status: { notIn: ["done", "cancelled"] },
-        dueDate: { gte: todayStart },
+        dueDate: { gte: todayStart, lte: fourteenDaysFromNow },
       },
       orderBy: { dueDate: "asc" },
-      take: 3,
+      take: 5,
       include: { project: { select: { id: true, title: true } } },
     }),
     prisma.actionItem.findMany({
@@ -64,7 +69,46 @@ export async function getBriefing() {
         },
       },
     }),
+    // Contacts with a frequency target and full health (not yet overdue), for candidate filtering
+    prisma.contact.findMany({
+      where: { interactionFreqDays: { not: null }, healthScore: 100, lastInteraction: { not: null } },
+      select: { id: true, name: true, lastInteraction: true, interactionFreqDays: true },
+    }),
+    // Last 5 interactions with full text
+    prisma.interaction.findMany({
+      orderBy: { occurredAt: "desc" },
+      take: 5,
+      include: { contact: { select: { id: true, name: true } } },
+    }),
+    // Active projects with task status breakdown
+    prisma.project.findMany({
+      where: { status: { in: ["planning", "active"] } },
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        tasks: { select: { status: true } },
+      },
+    }),
   ])
+
+  const now = new Date()
+  const followUpCandidates = candidateContacts.filter(c => {
+    const daysSince = (now.getTime() - c.lastInteraction!.getTime()) / (1000 * 60 * 60 * 24)
+    return daysSince > c.interactionFreqDays! * 0.8
+  })
+
+  const projectHealth = activeProjects.map(p => ({
+    id: p.id,
+    title: p.title,
+    status: p.status,
+    tasksTotal: p.tasks.length,
+    tasksCompleted: p.tasks.filter(t => t.status === "done").length,
+    percentComplete:
+      p.tasks.length > 0
+        ? Math.round((p.tasks.filter(t => t.status === "done").length / p.tasks.length) * 100)
+        : 0,
+  }))
 
   return {
     overdueContacts,
@@ -74,6 +118,9 @@ export async function getBriefing() {
     tasksDueTodayCount,
     upcomingMilestones,
     myActionItems,
+    followUpCandidates,
+    recentInteractions,
+    projectHealth,
     generatedAt: new Date(),
   }
 }

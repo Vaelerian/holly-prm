@@ -6,7 +6,7 @@ jest.mock("@/lib/db", () => ({
     contact: { findMany: jest.fn() },
     interaction: { findMany: jest.fn() },
     actionItem: { findMany: jest.fn() },
-    project: { count: jest.fn() },
+    project: { count: jest.fn(), findMany: jest.fn() },
     task: { count: jest.fn(), findMany: jest.fn() },
   },
 }))
@@ -15,13 +15,23 @@ const mockPrisma = prisma as jest.Mocked<typeof prisma>
 
 beforeEach(() => jest.clearAllMocks())
 
-it("getBriefing returns overdue contacts, pending follow-ups, open action items, projects, tasks, milestones, and my action items", async () => {
-  mockPrisma.contact.findMany.mockResolvedValue([{ id: "c1", name: "Alice", healthScore: 40 }] as any)
-  mockPrisma.interaction.findMany.mockResolvedValue([{ id: "i1", followUpRequired: true }] as any)
+it("getBriefing returns all expected fields including new Phase 3 fields", async () => {
+  // overdueContacts + followUpCandidates both use contact.findMany
+  mockPrisma.contact.findMany
+    .mockResolvedValueOnce([{ id: "c1", name: "Alice", healthScore: 40 }] as any)
+    .mockResolvedValueOnce([
+      { id: "c2", name: "Bob", healthScore: 100, lastInteraction: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000), interactionFreqDays: 21 },
+    ] as any)
+  mockPrisma.interaction.findMany
+    .mockResolvedValueOnce([{ id: "i1", followUpRequired: true }] as any) // pendingFollowUps
+    .mockResolvedValueOnce([{ id: "i2", summary: "Chat", transcript: null }] as any) // recentInteractions
   mockPrisma.actionItem.findMany
-    .mockResolvedValueOnce([{ id: "a1", status: "todo" }] as any)
-    .mockResolvedValueOnce([{ id: "a2", status: "todo", assignedTo: "ian" }] as any)
+    .mockResolvedValueOnce([{ id: "a1", status: "todo" }] as any) // openActionItems
+    .mockResolvedValueOnce([{ id: "a2", status: "todo", assignedTo: "ian" }] as any) // myActionItems
   mockPrisma.project.count.mockResolvedValue(3 as any)
+  mockPrisma.project.findMany.mockResolvedValue([
+    { id: "p1", title: "Project A", status: "active", tasks: [{ status: "done" }, { status: "todo" }] },
+  ] as any)
   mockPrisma.task.count.mockResolvedValue(2 as any)
   mockPrisma.task.findMany.mockResolvedValue([{ id: "t1", title: "Milestone 1", isMilestone: true }] as any)
 
@@ -34,5 +44,31 @@ it("getBriefing returns overdue contacts, pending follow-ups, open action items,
   expect(result.tasksDueTodayCount).toBe(2)
   expect(result.upcomingMilestones).toHaveLength(1)
   expect(result.myActionItems).toHaveLength(1)
+  expect(result.recentInteractions).toHaveLength(1)
+  expect(result.projectHealth).toHaveLength(1)
+  expect(result.projectHealth[0]).toMatchObject({ id: "p1", tasksTotal: 2, tasksCompleted: 1, percentComplete: 50 })
   expect(result.generatedAt).toBeInstanceOf(Date)
+})
+
+it("followUpCandidates filters contacts approaching overdue threshold", async () => {
+  const now = Date.now()
+  // Contact with 21-day freq, last contact 18 days ago (> 80% of 21 = 16.8 days) - SHOULD appear
+  const approaching = { id: "c3", name: "Carol", healthScore: 100, lastInteraction: new Date(now - 18 * 24 * 60 * 60 * 1000), interactionFreqDays: 21 }
+  // Contact with 21-day freq, last contact 10 days ago (< 80%) - should NOT appear
+  const notYet = { id: "c4", name: "Dave", healthScore: 100, lastInteraction: new Date(now - 10 * 24 * 60 * 60 * 1000), interactionFreqDays: 21 }
+
+  mockPrisma.contact.findMany
+    .mockResolvedValueOnce([]) // overdueContacts
+    .mockResolvedValueOnce([approaching, notYet] as any) // candidates pool
+  mockPrisma.interaction.findMany.mockResolvedValue([])
+  mockPrisma.actionItem.findMany.mockResolvedValue([]).mockResolvedValue([])
+  mockPrisma.project.count.mockResolvedValue(0 as any)
+  mockPrisma.project.findMany.mockResolvedValue([])
+  mockPrisma.task.count.mockResolvedValue(0 as any)
+  mockPrisma.task.findMany.mockResolvedValue([])
+
+  const result = await getBriefing()
+
+  expect(result.followUpCandidates).toHaveLength(1)
+  expect(result.followUpCandidates[0].id).toBe("c3")
 })
