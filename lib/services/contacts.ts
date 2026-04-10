@@ -22,7 +22,13 @@ export async function listContacts(opts: ListContactsOptions) {
 export async function getContact(id: string) {
   return prisma.contact.findUnique({
     where: { id },
-    include: { interactions: { orderBy: { occurredAt: "desc" }, take: 20 } },
+    include: {
+      interactions: {
+        orderBy: { occurredAt: "desc" },
+        take: 20,
+        include: { actionItems: { orderBy: { createdAt: "asc" } } },
+      },
+    },
   })
 }
 

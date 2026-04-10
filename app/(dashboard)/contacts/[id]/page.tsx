@@ -1,5 +1,7 @@
 import { getContact } from "@/lib/services/contacts"
 import { InteractionList } from "@/components/interactions/interaction-list"
+import { ActionItemRow } from "@/components/action-items/action-item-row"
+import { AddActionItemForm } from "@/components/action-items/add-action-item-form"
 import { HealthScoreBadge } from "@/components/contacts/health-score-badge"
 import { Badge } from "@/components/ui/badge"
 import Link from "next/link"
@@ -9,6 +11,12 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
   const { id } = await params
   const contact = await getContact(id)
   if (!contact) notFound()
+
+  // Flatten all action items from all interactions for this contact
+  const allActionItems = contact.interactions.flatMap(i =>
+    (i.actionItems ?? []).map(ai => ({ ...ai, interactionId: i.id }))
+  )
+  const openActionItems = allActionItems.filter(ai => ai.status === "todo")
 
   return (
     <div className="p-6 max-w-2xl space-y-6">
@@ -31,11 +39,34 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
         </div>
       )}
 
+      {openActionItems.length > 0 && (
+        <div>
+          <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-2">Action items</h2>
+          <div className="space-y-2">
+            {openActionItems.map(item => (
+              <ActionItemRow
+                key={item.id}
+                id={item.id}
+                title={item.title}
+                status={item.status}
+                priority={item.priority}
+                assignedTo={item.assignedTo}
+                dueDate={item.dueDate ? item.dueDate.toISOString() : null}
+                interactionId={item.interactionId}
+                taskId={item.taskId}
+                contactId={id}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
       <div>
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Interactions</h2>
         </div>
         <InteractionList interactions={contact.interactions as any} />
+        <AddActionItemForm interactionId={contact.interactions[0]?.id} />
       </div>
     </div>
   )
