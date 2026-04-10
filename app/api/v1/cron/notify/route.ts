@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
       OR: [{ healthScore: { lt: 100 } }, { lastInteraction: null }],
     },
     orderBy: { healthScore: "asc" },
-    take: MAX_NOTIFICATIONS_PER_RUN,
+    take: 50,
   })
 
   for (const contact of overdueContacts) {
@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
     },
     include: { contact: { select: { id: true, name: true } } },
     orderBy: { followUpDate: "asc" },
-    take: MAX_NOTIFICATIONS_PER_RUN,
+    take: 50,
   })
 
   for (const interaction of pendingFollowUps) {
