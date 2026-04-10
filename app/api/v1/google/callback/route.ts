@@ -38,8 +38,13 @@ export async function GET(req: NextRequest) {
 
   // Get the email address from the id_token
   client.setCredentials(tokens)
-  const tokenInfo = await client.getTokenInfo(tokens.access_token)
-  const email = tokenInfo.email ?? "unknown"
+  let email = "unknown"
+  try {
+    const tokenInfo = await client.getTokenInfo(tokens.access_token)
+    email = tokenInfo.email ?? "unknown"
+  } catch {
+    // Non-fatal: token is still valid, email is cosmetic display only
+  }
 
   const scopes = Array.isArray(tokens.scope) ? tokens.scope : (tokens.scope ?? "").split(" ")
 
