@@ -10,6 +10,8 @@ COPY package*.json ./
 RUN npm ci
 COPY . .
 RUN npx prisma generate
+ARG NEXT_PUBLIC_VAPID_PUBLIC_KEY
+ENV NEXT_PUBLIC_VAPID_PUBLIC_KEY=$NEXT_PUBLIC_VAPID_PUBLIC_KEY
 RUN npm run build
 
 FROM base AS runner
