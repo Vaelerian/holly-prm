@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db"
 import { Actor } from "@/app/generated/prisma/client"
 import { computeHealthScore } from "@/lib/health-score"
 import { publishSseEvent } from "@/lib/sse-events"
+import { upsertCalendarEvent, deleteCalendarEvent } from "@/lib/services/calendar-sync"
 import type { CreateInteractionInput, UpdateInteractionInput } from "@/lib/validations/interaction"
 
 interface ListInteractionsOptions {
@@ -70,6 +71,15 @@ export async function updateInteraction(id: string, data: UpdateInteractionInput
   await prisma.auditLog.create({
     data: { entity: "Interaction", entityId: id, action: "update", actor },
   })
+  if (interaction.followUpDate) {
+    const contact = await prisma.contact.findUnique({ where: { id: interaction.contactId }, select: { name: true } })
+    void upsertCalendarEvent("follow_up", id, {
+      title: `Follow-up: ${contact?.name ?? "Contact"}`,
+      date: interaction.followUpDate,
+    })
+  } else if (data.followUpDate === null) {
+    void deleteCalendarEvent("follow_up", id)
+  }
   return interaction
 }
 

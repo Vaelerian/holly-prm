@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db"
 import { Actor } from "@/app/generated/prisma/client"
 import { publishSseEvent } from "@/lib/sse-events"
+import { upsertCalendarEvent } from "@/lib/services/calendar-sync"
 import type { CreateActionItemInput, UpdateActionItemInput } from "@/lib/validations/action-item"
 
 export async function listActionItems(opts: { assignedTo?: Actor; status?: string } = {}) {
@@ -24,6 +25,9 @@ export async function createActionItem(data: CreateActionItemInput, actor: Actor
     priority: item.priority,
     dueDate: item.dueDate ? item.dueDate.toISOString() : null,
   })
+  if (item.dueDate) {
+    void upsertCalendarEvent("action_item", item.id, { title: item.title, date: item.dueDate })
+  }
   return item
 }
 

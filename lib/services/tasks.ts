@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db"
 import { Actor } from "@/app/generated/prisma/client"
+import { upsertCalendarEvent, deleteCalendarEvent } from "@/lib/services/calendar-sync"
 import type { CreateTaskInput, UpdateTaskInput } from "@/lib/validations/task"
 
 interface ListTasksOptions {
@@ -42,6 +43,9 @@ export async function createTask(data: CreateTaskInput, actor: Actor) {
   await prisma.auditLog.create({
     data: { entity: "Task", entityId: task.id, action: "create", actor },
   })
+  if (task.dueDate) {
+    void upsertCalendarEvent("task", task.id, { title: task.title, date: task.dueDate })
+  }
   return task
 }
 
@@ -57,6 +61,11 @@ export async function updateTask(id: string, data: UpdateTaskInput, actor: Actor
   await prisma.auditLog.create({
     data: { entity: "Task", entityId: id, action: "update", actor, diff: { before, after: task } },
   })
+  if (task.dueDate) {
+    void upsertCalendarEvent("task", task.id, { title: task.title, date: task.dueDate })
+  } else if (data.dueDate === null) {
+    void deleteCalendarEvent("task", task.id)
+  }
   return task
 }
 
@@ -64,5 +73,6 @@ export async function deleteTask(id: string, actor: Actor) {
   await prisma.auditLog.create({
     data: { entity: "Task", entityId: id, action: "delete", actor },
   })
+  void deleteCalendarEvent("task", id)
   return prisma.task.delete({ where: { id } })
 }
