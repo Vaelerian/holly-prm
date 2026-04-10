@@ -17,6 +17,8 @@
     "@prisma/adapter-pg": "^7.7.0",
     "@prisma/client": "^7.7.0",
     "bcryptjs": "^3.0.3",
+    "google-auth-library": "^10.6.2",
+    "googleapis": "^171.4.0",
     "ioredis": "^5.10.1",
     "nanoid": "^5.1.7",
     "next": "16.2.3",
