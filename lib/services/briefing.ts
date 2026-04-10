@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db"
+import { Actor } from "@/app/generated/prisma/enums"
 
 export async function getBriefing() {
   const todayStart = new Date()
@@ -44,14 +45,14 @@ export async function getBriefing() {
       where: {
         isMilestone: true,
         status: { notIn: ["done", "cancelled"] },
-        dueDate: { not: null },
+        dueDate: { gte: todayStart },
       },
       orderBy: { dueDate: "asc" },
       take: 3,
       include: { project: { select: { id: true, title: true } } },
     }),
     prisma.actionItem.findMany({
-      where: { assignedTo: "ian", status: "todo" },
+      where: { assignedTo: Actor.ian, status: "todo" },
       orderBy: [{ dueDate: "asc" }, { priority: "desc" }],
       take: 10,
       include: {
