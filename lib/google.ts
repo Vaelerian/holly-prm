@@ -35,6 +35,7 @@ export async function getGoogleClient(): Promise<OAuth2Client> {
         data: {
           accessToken: encrypt(credentials.access_token),
           expiresAt: new Date(credentials.expiry_date),
+          ...(credentials.refresh_token ? { refreshToken: encrypt(credentials.refresh_token) } : {}),
         },
       })
       client.setCredentials(credentials)
