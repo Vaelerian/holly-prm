@@ -16,16 +16,17 @@ Phase 1 delivers the foundation and PRM core: a working contact manager, interac
 
 ## Project Decomposition
 
-The full system is divided into 6 phases, each independently shippable:
+The full system is divided into 7 phases, each independently shippable:
 
 | Phase | Name | Description |
 |-------|------|-------------|
 | 1 (this spec) | Foundation + PRM Core | Auth, DB, contacts, interactions, Holly API basics |
 | 2 | PPM Core | Projects, tasks, milestones, action item extraction |
-| 3 | Holly API Extended | SSE stream, bulk operations, project/task endpoints |
-| 4 | Calendar and Email | Gmail API, Google Calendar sync |
+| 3 | Holly API Extended + AI + Reporting | SSE stream, project/task Holly endpoints, AI enhancements (smarter briefing, NL logging, suggested follow-ups), in-app reporting and health trends |
+| 4 | Calendar and Email | In-app calendar view (due dates, milestones), Gmail API, Google Calendar sync |
 | 5 | Knowledge Synthesis | Obsidian bridge, markdown export, knowledge queue |
-| 6 | Electron Desktop App | Deferred until PWA is stable |
+| 6 | Multi-user + Mobile PWA | Holly's own login, shared contacts/projects, separate assignment views, enhanced offline support, native-feeling mobile UX |
+| 7 | Electron Desktop App | Deferred until PWA is stable |
 
 ---
 
