@@ -45,6 +45,7 @@ export async function createProject(data: CreateProjectInput, actor: Actor) {
 }
 
 export async function updateProject(id: string, data: UpdateProjectInput, actor: Actor) {
+  const before = await prisma.project.findUnique({ where: { id } })
   const project = await prisma.project.update({
     where: { id },
     data: {
@@ -53,7 +54,7 @@ export async function updateProject(id: string, data: UpdateProjectInput, actor:
     },
   })
   await prisma.auditLog.create({
-    data: { entity: "Project", entityId: id, action: "update", actor },
+    data: { entity: "Project", entityId: id, action: "update", actor, diff: { before, after: project } },
   })
   return project
 }
