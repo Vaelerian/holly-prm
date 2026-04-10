@@ -14,6 +14,7 @@ export const CreateInteractionSchema = z.object({
   callbackExpected: z.boolean().default(false),
   location: z.string().max(200).nullable().default(null),
   duration: z.number().int().positive().nullable().default(null),
+  transcript: z.string().nullable().default(null),
   occurredAt: z.string().datetime(),
 })
 

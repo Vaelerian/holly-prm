@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db"
 import { Actor } from "@/app/generated/prisma/client"
 import { computeHealthScore } from "@/lib/health-score"
+import { publishSseEvent } from "@/lib/sse-events"
 import type { CreateInteractionInput, UpdateInteractionInput } from "@/lib/validations/interaction"
 
 interface ListInteractionsOptions {
@@ -36,11 +37,12 @@ export async function createInteraction(data: CreateInteractionInput, actor: Act
       followUpDate: data.followUpDate ? new Date(data.followUpDate) : null,
       createdByHolly: actor === "holly",
     },
+    include: { contact: { select: { id: true, name: true } } },
   })
 
   const contact = await prisma.contact.findUnique({
     where: { id: data.contactId },
-    select: { interactionFreqDays: true },
+    select: { interactionFreqDays: true, name: true },
   })
   const healthScore = computeHealthScore(interaction.occurredAt, contact?.interactionFreqDays ?? null)
   await prisma.contact.update({
@@ -50,6 +52,14 @@ export async function createInteraction(data: CreateInteractionInput, actor: Act
 
   await prisma.auditLog.create({
     data: { entity: "Interaction", entityId: interaction.id, action: "create", actor },
+  })
+
+  await publishSseEvent("interaction.created", {
+    contactId: data.contactId,
+    contactName: contact?.name ?? "",
+    type: data.type,
+    summary: data.summary,
+    createdByHolly: actor === "holly",
   })
 
   return interaction
