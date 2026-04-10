@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db"
 import { Actor } from "@/app/generated/prisma/client"
+import { publishSseEvent } from "@/lib/sse-events"
 import type { CreateActionItemInput, UpdateActionItemInput } from "@/lib/validations/action-item"
 
 export async function listActionItems(opts: { assignedTo?: Actor; status?: string } = {}) {
@@ -16,13 +17,28 @@ export async function createActionItem(data: CreateActionItemInput, actor: Actor
   await prisma.auditLog.create({
     data: { entity: "ActionItem", entityId: item.id, action: "create", actor },
   })
+  await publishSseEvent("action_item.created", {
+    id: item.id,
+    title: item.title,
+    assignedTo: item.assignedTo,
+    priority: item.priority,
+    dueDate: item.dueDate ? item.dueDate.toISOString() : null,
+  })
   return item
 }
 
 export async function updateActionItemStatus(id: string, data: UpdateActionItemInput, actor: Actor) {
+  const before = await prisma.actionItem.findUnique({ where: { id } })
   const item = await prisma.actionItem.update({ where: { id }, data })
   await prisma.auditLog.create({
-    data: { entity: "ActionItem", entityId: id, action: "update", actor },
+    data: { entity: "ActionItem", entityId: id, action: "update", actor, diff: { before, after: item } },
   })
+  if (data.status === "done" && before?.status !== "done") {
+    await publishSseEvent("action_item.completed", {
+      id: item.id,
+      title: item.title,
+      assignedTo: item.assignedTo,
+    })
+  }
   return item
 }
