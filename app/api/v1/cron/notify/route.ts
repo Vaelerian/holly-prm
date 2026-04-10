@@ -2,11 +2,12 @@ import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
 import { redis } from "@/lib/redis"
 import { sendPushNotification, isPushConfigured } from "@/lib/push"
+import { publishSseEvent } from "@/lib/sse-events"
 
 const MAX_NOTIFICATIONS_PER_RUN = 5
 
 function todayKey(): string {
-  return new Date().toISOString().slice(0, 10) // "2026-04-10"
+  return new Date().toISOString().slice(0, 10)
 }
 
 export async function POST(req: NextRequest) {
@@ -14,15 +15,6 @@ export async function POST(req: NextRequest) {
   const cronSecret = process.env.CRON_SECRET
   if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
-
-  if (!isPushConfigured) {
-    return NextResponse.json({ error: "Push notifications not configured" }, { status: 503 })
-  }
-
-  const subscriptions = await prisma.pushSubscription.findMany()
-  if (subscriptions.length === 0) {
-    return NextResponse.json({ sent: 0 })
   }
 
   const today = todayKey()
@@ -37,6 +29,31 @@ export async function POST(req: NextRequest) {
     orderBy: { healthScore: "asc" },
     take: 50,
   })
+
+  // Publish SSE events for critically overdue contacts (healthScore < 40)
+  for (const contact of overdueContacts) {
+    if (contact.healthScore < 40) {
+      const sseKey = `sse:sent:overdue:${contact.id}:${today}`
+      const alreadySent = await redis.get(sseKey).catch(() => null)
+      if (!alreadySent) {
+        await publishSseEvent("contact.overdue", {
+          id: contact.id,
+          name: contact.name,
+          healthScore: contact.healthScore,
+        })
+        await redis.set(sseKey, "1", "EX", 86400).catch(() => {})
+      }
+    }
+  }
+
+  if (!isPushConfigured) {
+    return NextResponse.json({ sent: 0 })
+  }
+
+  const subscriptions = await prisma.pushSubscription.findMany()
+  if (subscriptions.length === 0) {
+    return NextResponse.json({ sent: 0 })
+  }
 
   for (const contact of overdueContacts) {
     if (sent >= MAX_NOTIFICATIONS_PER_RUN) break
