@@ -22,26 +22,26 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
     <div className="p-6 max-w-2xl space-y-6">
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-gray-900">{contact.name}</h1>
+          <h1 className="text-xl font-semibold text-[#c0c0d0]">{contact.name}</h1>
           <div className="flex items-center gap-2 mt-1">
             <Badge>{contact.type}</Badge>
             <HealthScoreBadge score={contact.healthScore} />
             {contact.isFamilyMember && <Badge variant="info">Family</Badge>}
           </div>
         </div>
-        <Link href={`/contacts/${contact.id}/edit`} className="text-sm text-blue-600 hover:text-blue-700">Edit</Link>
+        <Link href={`/contacts/${contact.id}/edit`} className="text-sm text-[#00ff88] hover:text-[#00cc6f]">Edit</Link>
       </div>
 
       {contact.notes && (
         <div>
-          <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-2">Notes</h2>
-          <p className="text-sm text-gray-700 whitespace-pre-wrap">{contact.notes}</p>
+          <h2 className="text-xs font-semibold text-[#666688] uppercase tracking-wide mb-2">Notes</h2>
+          <p className="text-sm text-[#c0c0d0] whitespace-pre-wrap">{contact.notes}</p>
         </div>
       )}
 
       {openActionItems.length > 0 && (
         <div>
-          <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-2">Action items</h2>
+          <h2 className="text-xs font-semibold text-[#666688] uppercase tracking-wide mb-2">Action items</h2>
           <div className="space-y-2">
             {openActionItems.map(item => (
               <ActionItemRow
@@ -63,7 +63,7 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
 
       <div>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Interactions</h2>
+          <h2 className="text-xs font-semibold text-[#666688] uppercase tracking-wide">Interactions</h2>
         </div>
         <InteractionList interactions={contact.interactions as any} />
         <AddActionItemForm />

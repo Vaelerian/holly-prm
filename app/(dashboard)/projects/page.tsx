@@ -18,19 +18,19 @@ export default async function ProjectsPage({ searchParams }: PageProps) {
   return (
     <div className="p-6 space-y-4 max-w-2xl">
       {dbError && (
-        <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">
+        <div className="bg-[rgba(255,60,60,0.1)] border border-[rgba(255,60,60,0.25)] rounded-lg px-4 py-3 text-sm text-red-400">
           Database unavailable. Check server logs.
         </div>
       )}
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-gray-900">Projects</h1>
-        <Link href="/projects/new" className="bg-blue-600 text-white text-sm font-medium px-3 py-1.5 rounded-lg hover:bg-blue-700">
+        <h1 className="text-xl font-semibold text-[#c0c0d0]">Projects</h1>
+        <Link href="/projects/new" className="bg-[#00ff88] text-[#0a0a1a] text-sm font-medium px-3 py-1.5 rounded-lg hover:bg-[#00cc6f]">
           + New project
         </Link>
       </div>
 
       <form className="flex gap-2">
-        <select name="status" defaultValue={status ?? ""} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+        <select name="status" defaultValue={status ?? ""} className="border border-[rgba(0,255,136,0.2)] rounded-lg px-3 py-2 text-sm bg-[#0a0a1a] text-[#c0c0d0] focus:outline-none focus:ring-2 focus:ring-[#00ff88]">
           <option value="">All statuses</option>
           <option value="planning">Planning</option>
           <option value="active">Active</option>
@@ -38,11 +38,11 @@ export default async function ProjectsPage({ searchParams }: PageProps) {
           <option value="done">Done</option>
           <option value="cancelled">Cancelled</option>
         </select>
-        <button type="submit" className="bg-gray-100 border border-gray-300 text-sm px-3 py-2 rounded-lg hover:bg-gray-200">Filter</button>
+        <button type="submit" className="bg-[rgba(0,255,136,0.05)] border border-[rgba(0,255,136,0.2)] text-[#c0c0d0] text-sm px-3 py-2 rounded-lg hover:bg-[rgba(0,255,136,0.08)]">Filter</button>
       </form>
 
       {projects.length === 0 ? (
-        <p className="text-sm text-gray-500">No projects yet. Create your first project.</p>
+        <p className="text-sm text-[#666688]">No projects yet. Create your first project.</p>
       ) : (
         <div className="space-y-2">
           {projects.map(p => {

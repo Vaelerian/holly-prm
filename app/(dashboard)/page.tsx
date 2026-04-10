@@ -16,10 +16,10 @@ export default async function DashboardPage() {
 
   return (
     <div className="p-6 space-y-6 max-w-2xl">
-      <h1 className="text-xl font-semibold text-gray-900">Dashboard</h1>
+      <h1 className="text-xl font-semibold text-[#c0c0d0]">Dashboard</h1>
 
       {dbError && (
-        <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">
+        <div className="bg-[rgba(255,60,60,0.1)] border border-[rgba(255,60,60,0.25)] rounded-lg px-4 py-3 text-sm text-red-400">
           Database unavailable. Check server logs.
         </div>
       )}
@@ -36,12 +36,12 @@ export default async function DashboardPage() {
 
           {data.overdueContacts.length > 0 && (
             <section>
-              <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">Overdue contacts</h2>
+              <h2 className="text-xs font-semibold text-[#666688] uppercase tracking-wide mb-3">Overdue contacts</h2>
               <div className="space-y-2">
                 {data.overdueContacts.map(c => (
-                  <Link key={c.id} href={`/contacts/${c.id}`} className="flex items-center justify-between bg-white border border-red-200 rounded-lg px-4 py-2.5 hover:border-red-400 transition-colors">
-                    <span className="text-sm font-medium text-gray-900">{c.name}</span>
-                    <span className="text-xs text-red-600">Score: {c.healthScore}</span>
+                  <Link key={c.id} href={`/contacts/${c.id}`} className="flex items-center justify-between bg-[#111125] border border-[rgba(255,60,60,0.25)] rounded-lg px-4 py-2.5 hover:border-red-400 transition-colors">
+                    <span className="text-sm font-medium text-[#c0c0d0]">{c.name}</span>
+                    <span className="text-xs text-red-400">Score: {c.healthScore}</span>
                   </Link>
                 ))}
               </div>
@@ -50,16 +50,16 @@ export default async function DashboardPage() {
 
           {data.pendingFollowUps.length > 0 && (
             <section>
-              <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">Pending follow-ups</h2>
+              <h2 className="text-xs font-semibold text-[#666688] uppercase tracking-wide mb-3">Pending follow-ups</h2>
               <div className="space-y-2">
                 {data.pendingFollowUps.map(i => (
-                  <Link key={i.id} href={`/contacts/${i.contact.id}`} className="flex items-center justify-between bg-white border border-yellow-200 rounded-lg px-4 py-2.5 hover:border-yellow-400 transition-colors">
+                  <Link key={i.id} href={`/contacts/${i.contact.id}`} className="flex items-center justify-between bg-[#111125] border border-[rgba(255,200,0,0.2)] rounded-lg px-4 py-2.5 hover:border-yellow-400 transition-colors">
                     <div>
-                      <p className="text-sm font-medium text-gray-900">{i.contact.name}</p>
-                      <p className="text-xs text-gray-500 truncate max-w-xs">{i.summary}</p>
+                      <p className="text-sm font-medium text-[#c0c0d0]">{i.contact.name}</p>
+                      <p className="text-xs text-[#666688] truncate max-w-xs">{i.summary}</p>
                     </div>
                     {i.followUpDate && (
-                      <span className="text-xs text-gray-400 flex-shrink-0">{new Date(i.followUpDate).toLocaleDateString("en-GB")}</span>
+                      <span className="text-xs text-[#666688] flex-shrink-0">{new Date(i.followUpDate).toLocaleDateString("en-GB")}</span>
                     )}
                   </Link>
                 ))}
@@ -69,17 +69,17 @@ export default async function DashboardPage() {
 
           {data.upcomingMilestones.length > 0 && (
             <section>
-              <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">Upcoming milestones</h2>
+              <h2 className="text-xs font-semibold text-[#666688] uppercase tracking-wide mb-3">Upcoming milestones</h2>
               <div className="space-y-2">
                 {data.upcomingMilestones.map(m => (
-                  <Link key={m.id} href={`/projects/${m.project.id}`} className="flex items-center justify-between bg-white border border-purple-200 rounded-lg px-4 py-2.5 hover:border-purple-400 transition-colors">
+                  <Link key={m.id} href={`/projects/${m.project.id}`} className="flex items-center justify-between bg-[#111125] border border-[rgba(160,0,255,0.2)] rounded-lg px-4 py-2.5 hover:border-purple-400 transition-colors">
                     <div>
-                      <p className="text-sm font-semibold text-gray-900">★ {m.title}</p>
-                      <p className="text-xs text-gray-500">{m.project.title}</p>
+                      <p className="text-sm font-semibold text-[#c0c0d0]">★ {m.title}</p>
+                      <p className="text-xs text-[#666688]">{m.project.title}</p>
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
                       <Badge variant={m.status === "in_progress" ? "info" : "default"}>{m.status.replace("_", " ")}</Badge>
-                      {m.dueDate && <span className="text-xs text-gray-400">{new Date(m.dueDate).toLocaleDateString("en-GB")}</span>}
+                      {m.dueDate && <span className="text-xs text-[#666688]">{new Date(m.dueDate).toLocaleDateString("en-GB")}</span>}
                     </div>
                   </Link>
                 ))}
@@ -89,7 +89,7 @@ export default async function DashboardPage() {
 
           {data.myActionItems.length > 0 && (
             <section>
-              <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">My action items</h2>
+              <h2 className="text-xs font-semibold text-[#666688] uppercase tracking-wide mb-3">My action items</h2>
               <div className="space-y-2">
                 {data.myActionItems.map(item => (
                   <ActionItemRow

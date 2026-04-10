@@ -61,8 +61,8 @@ export function ContactForm({ defaultValues, contactId }: ContactFormProps) {
       <Input label="Name *" error={errors.name?.message} {...register("name")} />
 
       <div className="space-y-1">
-        <label className="block text-sm font-medium text-gray-700">Relationship type</label>
-        <select {...register("type")} className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+        <label className="block text-sm font-medium text-[#c0c0d0]">Relationship type</label>
+        <select {...register("type")} className="block w-full border border-[rgba(0,255,136,0.2)] rounded-lg px-3 py-2 text-sm bg-[#0a0a1a] text-[#c0c0d0]">
           <option value="personal">Personal</option>
           <option value="work">Work</option>
           <option value="family">Family</option>
@@ -71,22 +71,22 @@ export function ContactForm({ defaultValues, contactId }: ContactFormProps) {
       </div>
 
       <div className="space-y-1">
-        <label className="block text-sm font-medium text-gray-700">Contact frequency (days)</label>
-        <input type="number" {...register("interactionFreqDays", { setValueAs: v => v === "" ? null : Number(v) })} placeholder="e.g. 30 - leave blank for no alert" className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
-        <p className="text-xs text-gray-400">Set how often to prompt a catch-up. Leave blank to disable alerts.</p>
+        <label className="block text-sm font-medium text-[#c0c0d0]">Contact frequency (days)</label>
+        <input type="number" {...register("interactionFreqDays", { setValueAs: v => v === "" ? null : Number(v) })} placeholder="e.g. 30 - leave blank for no alert" className="block w-full border border-[rgba(0,255,136,0.2)] rounded-lg px-3 py-2 text-sm bg-[#0a0a1a] text-[#c0c0d0]" />
+        <p className="text-xs text-[#666688]">Set how often to prompt a catch-up. Leave blank to disable alerts.</p>
       </div>
 
       <div className="flex items-center gap-2">
-        <input type="checkbox" {...register("isFamilyMember")} id="family" className="rounded border-gray-300" />
-        <label htmlFor="family" className="text-sm text-gray-700">Family member</label>
+        <input type="checkbox" {...register("isFamilyMember")} id="family" className="rounded border-[rgba(0,255,136,0.2)]" />
+        <label htmlFor="family" className="text-sm text-[#c0c0d0]">Family member</label>
       </div>
 
       <div className="space-y-1">
-        <label className="block text-sm font-medium text-gray-700">Notes</label>
-        <textarea {...register("notes")} rows={4} placeholder="Personal context, preferences, notes..." className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+        <label className="block text-sm font-medium text-[#c0c0d0]">Notes</label>
+        <textarea {...register("notes")} rows={4} placeholder="Personal context, preferences, notes..." className="block w-full border border-[rgba(0,255,136,0.2)] rounded-lg px-3 py-2 text-sm bg-[#0a0a1a] text-[#c0c0d0]" />
       </div>
 
-      {error && <p className="text-red-600 text-sm">{error}</p>}
+      {error && <p className="text-red-400 text-sm">{error}</p>}
 
       <div className="flex gap-3">
         <Button type="submit" disabled={saving}>{saving ? "Saving..." : contactId ? "Save changes" : "Create contact"}</Button>

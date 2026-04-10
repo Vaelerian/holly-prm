@@ -114,16 +114,16 @@ export default function SettingsPage() {
 
   return (
     <div className="p-6 max-w-2xl space-y-8">
-      <h1 className="text-xl font-semibold text-gray-900">Settings</h1>
+      <h1 className="text-xl font-semibold text-[#c0c0d0]">Settings</h1>
 
       <section>
-        <h2 className="text-base font-semibold text-gray-900 mb-1">Holly API Keys</h2>
-        <p className="text-sm text-gray-500 mb-4">API keys allow Holly (Openclaw) to access your data. Keys are shown once only.</p>
+        <h2 className="text-base font-semibold text-[#c0c0d0] mb-1">Holly API Keys</h2>
+        <p className="text-sm text-[#666688] mb-4">API keys allow Holly (Openclaw) to access your data. Keys are shown once only.</p>
 
         {newKeyPlaintext && (
-          <div className="bg-green-50 border border-green-300 rounded-lg p-4 mb-4">
-            <p className="text-sm font-medium text-green-800 mb-1">New API key (copy now - not shown again):</p>
-            <code className="text-sm font-mono text-green-900 break-all">{newKeyPlaintext}</code>
+          <div className="bg-[rgba(0,255,136,0.08)] border border-[rgba(0,255,136,0.25)] rounded-lg p-4 mb-4">
+            <p className="text-sm font-medium text-[#00ff88] mb-1">New API key (copy now - not shown again):</p>
+            <code className="text-sm font-mono text-[#00ff88] break-all">{newKeyPlaintext}</code>
           </div>
         )}
 
@@ -133,14 +133,14 @@ export default function SettingsPage() {
         </div>
 
         {keys.length === 0 ? (
-          <p className="text-sm text-gray-500">No API keys yet.</p>
+          <p className="text-sm text-[#666688]">No API keys yet.</p>
         ) : (
           <div className="space-y-2">
             {keys.map(k => (
-              <div key={k.id} className="flex items-center justify-between bg-white border border-gray-200 rounded-lg px-4 py-3">
+              <div key={k.id} className="flex items-center justify-between bg-[#111125] border border-[rgba(0,255,136,0.15)] rounded-lg px-4 py-3">
                 <div>
-                  <p className="text-sm font-medium">{k.name}</p>
-                  <p className="text-xs text-gray-400">
+                  <p className="text-sm font-medium text-[#c0c0d0]">{k.name}</p>
+                  <p className="text-xs text-[#666688]">
                     Last used: {k.lastUsed ? new Date(k.lastUsed).toLocaleDateString("en-GB") : "Never"}
                   </p>
                 </div>
@@ -152,13 +152,13 @@ export default function SettingsPage() {
       </section>
 
       <section>
-        <h2 className="text-base font-semibold text-gray-900 mb-1">Notifications</h2>
-        <p className="text-sm text-gray-500 mb-4">Receive push notifications for overdue contacts and pending follow-ups.</p>
+        <h2 className="text-base font-semibold text-[#c0c0d0] mb-1">Notifications</h2>
+        <p className="text-sm text-[#666688] mb-4">Receive push notifications for overdue contacts and pending follow-ups.</p>
 
-        <div className="bg-white border border-gray-200 rounded-lg px-4 py-3 flex items-center justify-between">
+        <div className="bg-[#111125] border border-[rgba(0,255,136,0.15)] rounded-lg px-4 py-3 flex items-center justify-between">
           <div>
-            <p className="text-sm font-medium text-gray-900">Push notifications</p>
-            <p className="text-xs text-gray-400">
+            <p className="text-sm font-medium text-[#c0c0d0]">Push notifications</p>
+            <p className="text-xs text-[#666688]">
               {pushStatus === "enabled" && "Enabled on this device"}
               {pushStatus === "disabled" && "Not enabled on this device"}
               {pushStatus === "unsupported" && "Not supported in this browser"}

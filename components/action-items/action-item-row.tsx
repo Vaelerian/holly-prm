@@ -47,21 +47,21 @@ export function ActionItemRow({ id, title, status, priority, assignedTo, dueDate
     : null
 
   return (
-    <div className={`flex items-center justify-between bg-white border border-gray-200 rounded-lg px-4 py-2.5 ${done ? "opacity-50" : ""}`}>
+    <div className={`flex items-center justify-between bg-[#111125] border border-[rgba(0,255,136,0.15)] rounded-lg px-4 py-2.5 ${done ? "opacity-50" : ""}`}>
       <div className="min-w-0">
-        <p className={`text-sm text-gray-900 ${done ? "line-through" : ""}`}>{title}</p>
+        <p className={`text-sm text-[#c0c0d0] ${done ? "line-through" : ""}`}>{title}</p>
         <div className="flex items-center gap-2 mt-0.5">
           {parentLink && (
-            <Link href={parentLink.href} className="text-xs text-blue-500 hover:text-blue-700">{parentLink.label}</Link>
+            <Link href={parentLink.href} className="text-xs text-[#00ff88] hover:text-[#00cc6f]">{parentLink.label}</Link>
           )}
-          {dueDate && <span className="text-xs text-gray-400">{new Date(dueDate).toLocaleDateString("en-GB")}</span>}
+          {dueDate && <span className="text-xs text-[#666688]">{new Date(dueDate).toLocaleDateString("en-GB")}</span>}
         </div>
       </div>
       <div className="flex items-center gap-2 flex-shrink-0">
         <Badge variant="default">{assignedTo}</Badge>
         <Badge variant={priority === "critical" ? "danger" : priority === "high" ? "warning" : "default"}>{priority}</Badge>
         {!done && (
-          <button onClick={markDone} disabled={marking} className="text-xs text-green-600 hover:text-green-800 border border-green-200 rounded px-2 py-0.5 disabled:opacity-50">
+          <button onClick={markDone} disabled={marking} className="text-xs text-[#00ff88] hover:text-[#00cc6f] border border-[rgba(0,255,136,0.25)] rounded px-2 py-0.5 disabled:opacity-50">
             {marking ? "..." : "Done"}
           </button>
         )}

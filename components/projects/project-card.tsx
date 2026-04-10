@@ -31,18 +31,18 @@ export function ProjectCard({ id, title, category, status, priority, targetDate,
   const progressPct = taskTotalCount > 0 ? Math.round((taskDoneCount / taskTotalCount) * 100) : 0
 
   return (
-    <Link href={`/projects/${id}`} className="block bg-white border border-gray-200 rounded-lg px-4 py-3 hover:border-blue-400 transition-colors">
+    <Link href={`/projects/${id}`} className="block bg-[#111125] border border-[rgba(0,255,136,0.15)] rounded-lg px-4 py-3 hover:border-[#00ff88] transition-colors">
       <div className="flex items-start justify-between gap-2">
-        <p className="text-sm font-medium text-gray-900">{title}</p>
+        <p className="text-sm font-medium text-[#c0c0d0]">{title}</p>
         <div className="flex items-center gap-1 flex-shrink-0">
           <Badge variant={statusVariant[status] ?? "default"}>{status.replace("_", " ")}</Badge>
           <Badge variant={priorityVariant[priority] ?? "default"}>{priority}</Badge>
         </div>
       </div>
       <div className="flex items-center gap-2 mt-1">
-        <span className="text-xs text-gray-400 capitalize">{category}</span>
+        <span className="text-xs text-[#666688] capitalize">{category}</span>
         {targetDate && (
-          <span className="text-xs text-gray-400">
+          <span className="text-xs text-[#666688]">
             Due {new Date(targetDate).toLocaleDateString("en-GB")}
           </span>
         )}
@@ -50,11 +50,11 @@ export function ProjectCard({ id, title, category, status, priority, targetDate,
       {taskTotalCount > 0 && (
         <div className="mt-2">
           <div className="flex items-center justify-between mb-0.5">
-            <span className="text-xs text-gray-500">{taskDoneCount} / {taskTotalCount} tasks</span>
-            <span className="text-xs text-gray-400">{progressPct}%</span>
+            <span className="text-xs text-[#666688]">{taskDoneCount} / {taskTotalCount} tasks</span>
+            <span className="text-xs text-[#666688]">{progressPct}%</span>
           </div>
-          <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-            <div className="h-full bg-blue-500 rounded-full" style={{ width: `${progressPct}%` }} />
+          <div className="h-1.5 bg-[rgba(0,255,136,0.05)] rounded-full overflow-hidden">
+            <div className="h-full bg-[#00ff88] rounded-full" style={{ width: `${progressPct}%` }} />
           </div>
         </div>
       )}

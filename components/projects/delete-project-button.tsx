@@ -17,17 +17,17 @@ export function DeleteProjectButton({ projectId }: { projectId: string }) {
 
   if (!confirming) {
     return (
-      <button onClick={() => setConfirming(true)} className="text-sm text-red-600 hover:text-red-700">Delete</button>
+      <button onClick={() => setConfirming(true)} className="text-sm text-red-400 hover:text-red-300">Delete</button>
     )
   }
 
   return (
     <div className="flex items-center gap-2">
-      <span className="text-xs text-gray-600">Delete project and all tasks?</span>
-      <button onClick={handleDelete} disabled={deleting} className="text-xs text-red-600 hover:text-red-800 font-medium disabled:opacity-50">
+      <span className="text-xs text-[#c0c0d0]">Delete project and all tasks?</span>
+      <button onClick={handleDelete} disabled={deleting} className="text-xs text-red-400 hover:text-red-300 font-medium disabled:opacity-50">
         {deleting ? "Deleting..." : "Yes, delete"}
       </button>
-      <button onClick={() => setConfirming(false)} className="text-xs text-gray-500 hover:text-gray-700">Cancel</button>
+      <button onClick={() => setConfirming(false)} className="text-xs text-[#666688] hover:text-[#c0c0d0]">Cancel</button>
     </div>
   )
 }

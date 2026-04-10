@@ -58,7 +58,7 @@ export function TaskRow({ id, title, status: initialStatus, priority, assignedTo
   }
 
   return (
-    <div className={`flex items-center gap-3 bg-white border border-gray-200 rounded-lg px-4 py-2.5 ${isMilestone ? "border-l-4 border-l-purple-400" : ""}`}>
+    <div className={`flex items-center gap-3 bg-[#111125] border border-[rgba(0,255,136,0.15)] rounded-lg px-4 py-2.5 ${isMilestone ? "border-l-4 border-l-purple-400" : ""}`}>
       <button
         onClick={cycleStatus}
         disabled={saving || status === "cancelled"}
@@ -69,7 +69,7 @@ export function TaskRow({ id, title, status: initialStatus, priority, assignedTo
           {status.replace("_", " ")}
         </Badge>
       </button>
-      <span className={`flex-1 text-sm ${status === "done" ? "line-through text-gray-400" : "text-gray-900"} ${isMilestone ? "font-semibold" : ""}`}>
+      <span className={`flex-1 text-sm ${status === "done" ? "line-through text-[#666688]" : "text-[#c0c0d0]"} ${isMilestone ? "font-semibold" : ""}`}>
         {isMilestone && <span className="mr-1">★</span>}
         {title}
       </span>
@@ -77,7 +77,7 @@ export function TaskRow({ id, title, status: initialStatus, priority, assignedTo
         <Badge variant={priorityVariant[priority] ?? "default"}>{priority}</Badge>
         <Badge variant="default">{assignedTo}</Badge>
         {dueDate && (
-          <span className="text-xs text-gray-400">{new Date(dueDate).toLocaleDateString("en-GB")}</span>
+          <span className="text-xs text-[#666688]">{new Date(dueDate).toLocaleDateString("en-GB")}</span>
         )}
       </div>
     </div>

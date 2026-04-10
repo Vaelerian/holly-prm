@@ -15,22 +15,22 @@ export function BottomNav({ onLogPress }: { onLogPress: () => void }) {
   const pathname = usePathname()
 
   return (
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-gray-900 border-t border-gray-700 flex">
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-[#111125] border-t border-[rgba(0,255,136,0.15)] flex">
       {tabs.map(({ href, label, icon }) =>
         label === "Log" ? (
           <button
             key="log"
             onClick={onLogPress}
-            className="flex-1 flex flex-col items-center py-2 text-blue-400"
+            className="flex-1 flex flex-col items-center py-2 text-[#00ff88]"
           >
-            <span className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center text-lg mb-0.5">+</span>
+            <span className="w-8 h-8 rounded-full bg-[#00ff88] text-[#0a0a1a] flex items-center justify-center text-lg font-bold mb-0.5">+</span>
             <span className="text-xs">Log</span>
           </button>
         ) : (
           <Link
             key={href}
             href={href}
-            className={`flex-1 flex flex-col items-center py-2 text-xs ${pathname === href ? "text-blue-400" : "text-gray-400"}`}
+            className={`flex-1 flex flex-col items-center py-2 text-xs transition-colors ${pathname === href ? "text-[#00ff88]" : "text-[#666688]"}`}
           >
             <span className="text-lg mb-0.5">{icon}</span>
             {label}

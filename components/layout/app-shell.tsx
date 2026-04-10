@@ -9,7 +9,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [logOpen, setLogOpen] = useState(false)
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div className="flex min-h-screen bg-[#0a0a1a]">
       <Sidebar />
       <main className="flex-1 pb-20 md:pb-0 overflow-y-auto">
         {children}
