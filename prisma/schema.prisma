@@ -113,6 +113,7 @@ model Interaction {
   createdByHolly    Boolean         @default(false)
   location          String?
   duration          Int?
+  transcript        String?
   occurredAt        DateTime
   actionItems       ActionItem[]
   createdAt         DateTime        @default(now())
