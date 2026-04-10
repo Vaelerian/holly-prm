@@ -6,18 +6,40 @@ import { Input } from "@/components/ui/input"
 
 interface ApiKey { id: string; name: string; lastUsed: string | null; createdAt: string }
 
+function urlBase64ToUint8Array(base64String: string): Uint8Array {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4)
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/")
+  const rawData = window.atob(base64)
+  return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)))
+}
+
 export default function SettingsPage() {
   const [keys, setKeys] = useState<ApiKey[]>([])
   const [newKeyName, setNewKeyName] = useState("")
   const [newKeyPlaintext, setNewKeyPlaintext] = useState("")
   const [loading, setLoading] = useState(false)
 
+  const [pushStatus, setPushStatus] = useState<"unknown" | "enabled" | "disabled" | "unsupported">("unknown")
+  const [pushWorking, setPushWorking] = useState(false)
+
   async function loadKeys() {
     const res = await fetch("/api/v1/settings/api-keys")
     if (res.ok) setKeys(await res.json())
   }
 
-  useEffect(() => { loadKeys() }, [])
+  useEffect(() => {
+    loadKeys()
+    // Check push status
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+      setPushStatus("unsupported")
+      return
+    }
+    navigator.serviceWorker.ready.then(reg => {
+      reg.pushManager.getSubscription().then(sub => {
+        setPushStatus(sub ? "enabled" : "disabled")
+      })
+    }).catch(() => setPushStatus("unsupported"))
+  }, [])
 
   async function generateKey() {
     if (!newKeyName.trim()) return
@@ -37,6 +59,57 @@ export default function SettingsPage() {
   async function deleteKey(id: string) {
     await fetch(`/api/v1/settings/api-keys/${id}`, { method: "DELETE" })
     await loadKeys()
+  }
+
+  async function enableNotifications() {
+    if (!("serviceWorker" in navigator)) return
+    setPushWorking(true)
+    try {
+      const permission = await Notification.requestPermission()
+      if (permission !== "granted") { setPushWorking(false); return }
+
+      const reg = await navigator.serviceWorker.ready
+      const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
+      if (!vapidPublicKey) { setPushWorking(false); return }
+
+      const subscription = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(vapidPublicKey) as BufferSource,
+      })
+      const { endpoint, keys: { p256dh, auth } } = subscription.toJSON() as { endpoint: string; keys: { p256dh: string; auth: string } }
+
+      await fetch("/api/v1/push/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ endpoint, p256dh, auth }),
+      })
+      setPushStatus("enabled")
+    } catch (e) {
+      console.error("[push] enable failed", e)
+    }
+    setPushWorking(false)
+  }
+
+  async function disableNotifications() {
+    if (!("serviceWorker" in navigator)) return
+    setPushWorking(true)
+    try {
+      const reg = await navigator.serviceWorker.ready
+      const sub = await reg.pushManager.getSubscription()
+      if (sub) {
+        const { endpoint } = sub.toJSON() as { endpoint: string }
+        await sub.unsubscribe()
+        await fetch("/api/v1/push/unsubscribe", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ endpoint }),
+        })
+      }
+      setPushStatus("disabled")
+    } catch (e) {
+      console.error("[push] disable failed", e)
+    }
+    setPushWorking(false)
   }
 
   return (
@@ -76,6 +149,33 @@ export default function SettingsPage() {
             ))}
           </div>
         )}
+      </section>
+
+      <section>
+        <h2 className="text-base font-semibold text-gray-900 mb-1">Notifications</h2>
+        <p className="text-sm text-gray-500 mb-4">Receive push notifications for overdue contacts and pending follow-ups.</p>
+
+        <div className="bg-white border border-gray-200 rounded-lg px-4 py-3 flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-gray-900">Push notifications</p>
+            <p className="text-xs text-gray-400">
+              {pushStatus === "enabled" && "Enabled on this device"}
+              {pushStatus === "disabled" && "Not enabled on this device"}
+              {pushStatus === "unsupported" && "Not supported in this browser"}
+              {pushStatus === "unknown" && "Checking..."}
+            </p>
+          </div>
+          {pushStatus === "disabled" && (
+            <Button onClick={enableNotifications} disabled={pushWorking}>
+              {pushWorking ? "Enabling..." : "Enable"}
+            </Button>
+          )}
+          {pushStatus === "enabled" && (
+            <Button variant="danger" onClick={disableNotifications} disabled={pushWorking}>
+              {pushWorking ? "Disabling..." : "Disable"}
+            </Button>
+          )}
+        </div>
       </section>
     </div>
   )
