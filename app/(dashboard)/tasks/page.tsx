@@ -1,5 +1,4 @@
 import { listTasks } from "@/lib/services/tasks"
-import { listProjects } from "@/lib/services/projects"
 import { TaskRow } from "@/components/tasks/task-row"
 
 interface PageProps { searchParams: Promise<{ status?: string; assignedTo?: string; milestoneOnly?: string }> }
@@ -7,24 +6,19 @@ interface PageProps { searchParams: Promise<{ status?: string; assignedTo?: stri
 export default async function TasksPage({ searchParams }: PageProps) {
   const { status, assignedTo, milestoneOnly } = await searchParams
   let tasks: Awaited<ReturnType<typeof listTasks>> = []
-  let projects: Awaited<ReturnType<typeof listProjects>> = []
   let dbError = false
 
   try {
-    [tasks, projects] = await Promise.all([
-      listTasks({ status, assignedTo, milestoneOnly: milestoneOnly === "true" }),
-      listProjects({}),
-    ])
+    tasks = await listTasks({ status, assignedTo, milestoneOnly: milestoneOnly === "true" })
   } catch (e) {
     console.error("[tasks page]", e)
     dbError = true
   }
 
-  // Group tasks by project
-  const projectMap = new Map(projects.map(p => [p.id, p.title]))
+  // Group tasks by project (project relation already included in listTasks)
   const grouped = new Map<string, typeof tasks>()
   for (const task of tasks) {
-    const projectTitle = projectMap.get(task.projectId) ?? task.projectId
+    const projectTitle = task.project.title
     if (!grouped.has(projectTitle)) grouped.set(projectTitle, [])
     grouped.get(projectTitle)!.push(task)
   }
@@ -44,6 +38,7 @@ export default async function TasksPage({ searchParams }: PageProps) {
           <option value="todo">Todo</option>
           <option value="in_progress">In progress</option>
           <option value="done">Done</option>
+          <option value="cancelled">Cancelled</option>
         </select>
         <select name="assignedTo" defaultValue={assignedTo ?? ""} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none">
           <option value="">All assignees</option>
