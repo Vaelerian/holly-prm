@@ -20,10 +20,12 @@ export async function GET(req: NextRequest) {
   }
 
   const encoder = new TextEncoder()
+  let pingInterval: ReturnType<typeof setInterval> | undefined
+  let subscriber: Redis | undefined
 
   const stream = new ReadableStream({
     start(controller) {
-      const subscriber = new Redis(process.env.REDIS_URL ?? "redis://localhost:6379", {
+      subscriber = new Redis(process.env.REDIS_URL ?? "redis://localhost:6379", {
         maxRetriesPerRequest: 3,
         lazyConnect: false,
       })
@@ -42,14 +44,16 @@ export async function GET(req: NextRequest) {
       subscriber.on("message", (_channel: string, message: string) => {
         try {
           controller.enqueue(encoder.encode(`data: ${message}\n\n`))
-        } catch {}
+        } catch (err) {
+          console.error("[sse] enqueue failed", err)
+        }
       })
 
       subscriber.on("error", (err) => {
         console.error("[sse] redis subscriber error", err)
       })
 
-      const pingInterval = setInterval(() => {
+      pingInterval = setInterval(() => {
         try {
           controller.enqueue(encoder.encode(": ping\n\n"))
         } catch {
@@ -59,9 +63,14 @@ export async function GET(req: NextRequest) {
 
       req.signal.addEventListener("abort", () => {
         clearInterval(pingInterval)
-        subscriber.unsubscribe("holly:events").catch(() => {})
-        subscriber.quit().catch(() => {})
+        subscriber?.unsubscribe("holly:events").catch(() => {})
+        subscriber?.quit().catch(() => {})
       })
+    },
+    cancel() {
+      clearInterval(pingInterval)
+      subscriber?.unsubscribe("holly:events").catch(() => {})
+      subscriber?.quit().catch(() => {})
     },
   })
 
