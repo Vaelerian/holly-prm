@@ -72,7 +72,40 @@ describe("updateTask", () => {
       expect.objectContaining({ where: { id: "task-1" } })
     )
     expect(mockPrisma.auditLog.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({ entity: "Task", entityId: "task-1", action: "update" }),
+      data: expect.objectContaining({
+        entity: "Task",
+        entityId: "task-1",
+        action: "update",
+        diff: expect.objectContaining({ before: expect.anything(), after: expect.anything() }),
+      }),
     })
+  })
+})
+
+describe("deleteTask", () => {
+  it("logs delete then removes the task", async () => {
+    mockPrisma.task.delete.mockResolvedValue({ id: "task-1" } as any)
+    mockPrisma.auditLog.create.mockResolvedValue({} as any)
+    await deleteTask("task-1", "ian")
+    expect(mockPrisma.auditLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ entity: "Task", entityId: "task-1", action: "delete" }),
+    })
+    expect(mockPrisma.task.delete).toHaveBeenCalledWith({ where: { id: "task-1" } })
+  })
+})
+
+describe("getTask", () => {
+  it("returns task with project and actionItems", async () => {
+    const task = { id: "task-1", title: "T1", project: { id: "proj-1", title: "P1" }, actionItems: [] }
+    mockPrisma.task.findUnique.mockResolvedValue(task as any)
+    const result = await getTask("task-1")
+    expect(mockPrisma.task.findUnique).toHaveBeenCalledWith({
+      where: { id: "task-1" },
+      include: expect.objectContaining({
+        project: expect.anything(),
+        actionItems: expect.anything(),
+      }),
+    })
+    expect(result).toEqual(task)
   })
 })
