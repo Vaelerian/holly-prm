@@ -22,6 +22,8 @@ export default function SettingsPage() {
   const [pushStatus, setPushStatus] = useState<"unknown" | "enabled" | "disabled" | "unsupported">("unknown")
   const [pushWorking, setPushWorking] = useState(false)
 
+  const [googleStatus, setGoogleStatus] = useState<{ connected: boolean; email: string | null }>({ connected: false, email: null })
+
   async function loadKeys() {
     const res = await fetch("/api/v1/settings/api-keys")
     if (res.ok) setKeys(await res.json())
@@ -29,6 +31,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     loadKeys()
+    fetch("/api/v1/google/status").then(r => r.json()).then(setGoogleStatus).catch(() => {})
     // Check push status
     if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
       setPushStatus("unsupported")
@@ -174,6 +177,31 @@ export default function SettingsPage() {
             <Button variant="danger" onClick={disableNotifications} disabled={pushWorking}>
               {pushWorking ? "Disabling..." : "Disable"}
             </Button>
+          )}
+        </div>
+      </section>
+
+      <section>
+        <h2 className="text-base font-semibold text-[#c0c0d0] mb-1">Google Integration</h2>
+        <p className="text-sm text-[#666688] mb-4">Connect Google to enable Gmail monitoring and Google Calendar sync.</p>
+
+        <div className="bg-[#111125] border border-[rgba(0,255,136,0.15)] rounded-lg px-4 py-3 flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-[#c0c0d0]">Google account</p>
+            <p className="text-xs text-[#666688]">
+              {googleStatus.connected ? `Connected as ${googleStatus.email}` : "Not connected"}
+            </p>
+          </div>
+          {googleStatus.connected ? (
+            <form action="/api/v1/google/disconnect" method="POST" onSubmit={async (e) => {
+              e.preventDefault()
+              await fetch("/api/v1/google/disconnect", { method: "DELETE" })
+              setGoogleStatus({ connected: false, email: null })
+            }}>
+              <Button variant="danger" type="submit">Disconnect</Button>
+            </form>
+          ) : (
+            <Button onClick={() => { window.location.href = "/api/v1/google/connect" }}>Connect Google</Button>
           )}
         </div>
       </section>
