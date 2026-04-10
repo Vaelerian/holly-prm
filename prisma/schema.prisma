@@ -203,3 +203,11 @@ model HollyApiKey {
   revokedAt DateTime?
   createdAt DateTime  @default(now())
 }
+
+model PushSubscription {
+  id        String   @id @default(uuid())
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+}
