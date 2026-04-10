@@ -222,7 +222,7 @@ enum CalendarEntityType {
 
 model GoogleToken {
   id           String   @id @default(uuid())
-  email        String
+  email        String   @unique
   accessToken  String
   refreshToken String
   expiresAt    DateTime

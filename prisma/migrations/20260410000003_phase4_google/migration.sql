@@ -14,6 +14,9 @@ CREATE TABLE "GoogleToken" (
     CONSTRAINT "GoogleToken_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateIndex
+CREATE UNIQUE INDEX "GoogleToken_email_key" ON "GoogleToken"("email");
+
 -- CreateTable
 CREATE TABLE "CalendarSync" (
     "id" TEXT NOT NULL,
