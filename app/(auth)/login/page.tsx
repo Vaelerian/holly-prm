@@ -2,6 +2,7 @@
 
 import { signIn } from "next-auth/react"
 import { useState } from "react"
+import Link from "next/link"
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
@@ -38,6 +39,9 @@ export default function LoginPage() {
           {error && <p className="text-red-400 text-sm">{error}</p>}
           <button type="submit" className="w-full bg-[#00ff88] text-[#0a0a1a] rounded px-4 py-2 text-sm font-bold hover:bg-[#00cc6f] transition-colors">Sign in</button>
         </form>
+        <p className="text-xs text-[#666688] text-center mt-4">
+          Need access? <Link href="/register" className="text-[#00ff88] hover:underline">Request an account</Link>
+        </p>
       </div>
     </main>
   )
