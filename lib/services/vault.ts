@@ -140,6 +140,9 @@ export async function createNote(
     await access(filePath)
     throw new Error("FILE_EXISTS")
   } catch (e) {
+    // access() throws ENOENT  -> file does not exist, proceed
+    // access() succeeds       -> FILE_EXISTS thrown above, code is undefined, rethrown here
+    // access() throws other   -> permissions or I/O error, rethrown here
     if ((e as NodeJS.ErrnoException).code !== "ENOENT") throw e
   }
 

@@ -194,6 +194,13 @@ describe("createNote", () => {
     await expect(createNote("John Smith", "contact", "id1", "content")).rejects.toThrow("FILE_EXISTS")
   })
 
+  it("rethrows unexpected access errors (e.g. EACCES)", async () => {
+    mockPrisma.vaultConfig.findFirst.mockResolvedValue(fakeConfig as any)
+    mockFs.mkdir.mockResolvedValue(undefined as any)
+    mockFs.access.mockRejectedValue(Object.assign(new Error("EACCES"), { code: "EACCES" }))
+    await expect(createNote("John Smith", "contact", "id1", "content")).rejects.toThrow("EACCES")
+  })
+
   it("creates note with frontmatter and inserts VaultNote row", async () => {
     mockPrisma.vaultConfig.findFirst.mockResolvedValue(fakeConfig as any)
     mockFs.mkdir.mockResolvedValue(undefined as any)
@@ -264,5 +271,17 @@ describe("updateNote", () => {
     const written = (mockFs.writeFile as jest.Mock).mock.calls[0][1] as string
     expect(written).not.toContain("2025-01-01")
     expect(written).toContain("last_updated: " + new Date().toISOString().slice(0, 10))
+  })
+
+  it("replaces file content entirely when no frontmatter present", async () => {
+    mockPrisma.vaultConfig.findFirst.mockResolvedValue(fakeConfig as any)
+    mockFs.readFile.mockResolvedValue("No frontmatter here, just plain content" as any)
+    mockFs.writeFile.mockResolvedValue(undefined)
+    mockPrisma.vaultNote.updateMany.mockResolvedValue({ count: 0 } as any)
+
+    await updateNote("Holly/Note.md", "New content")
+
+    const written = (mockFs.writeFile as jest.Mock).mock.calls[0][1] as string
+    expect(written).toBe("New content")
   })
 })
