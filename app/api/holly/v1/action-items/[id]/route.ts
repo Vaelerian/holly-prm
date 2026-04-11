@@ -22,6 +22,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const parsed = UpdateActionItemSchema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: "Validation failed", code: "VALIDATION_ERROR", details: parsed.error.flatten() }, { status: 422 })
   const item = await updateActionItemStatus(id, parsed.data, "holly", userId)
+  if (!item) return NextResponse.json({ error: "Not found", code: "NOT_FOUND" }, { status: 404 })
   return NextResponse.json(item)
 }
 
