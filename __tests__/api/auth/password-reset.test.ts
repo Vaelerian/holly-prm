@@ -50,7 +50,7 @@ describe("POST /api/auth/forgot-password", () => {
     expect(mockSendEmail).toHaveBeenCalledWith(
       "alice@example.com",
       expect.any(String),
-      expect.stringContaining("tok123")
+      expect.stringContaining("/reset-password?token=tok123")
     )
   })
 

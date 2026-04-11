@@ -84,6 +84,7 @@ export function ProfileForm({ initialName, initialEmail, hasPassword }: Props) {
           <Button type="submit" disabled={identityLoading}>
             {identityLoading ? "Saving..." : "Save"}
           </Button>
+          <p className="text-xs text-[#666688]">Email changes take effect on next sign in.</p>
         </form>
       </div>
 
