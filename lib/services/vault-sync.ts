@@ -12,6 +12,8 @@ function cronToIntervalMs(cron: string): number {
   if (hourField === "*") return 60 * 60 * 1000
   const stepMatch = hourField.match(/^\*\/(\d+)$/)
   if (stepMatch) return parseInt(stepMatch[1]) * 60 * 60 * 1000
+  // Handles the fixed set of patterns the settings UI dropdown can produce.
+  // "9,17" is the only comma-list pattern; other comma-lists fall through to 24h.
   if (hourField === "9,17") return 8 * 60 * 60 * 1000
   return 24 * 60 * 60 * 1000
 }
@@ -70,7 +72,7 @@ export async function runVaultSync(): Promise<VaultSyncResult> {
         const fileLastUpdated = new Date(fileLastUpdatedStr)
         const isNewer = lastSyncDateStr === null
           ? !isNaN(fileLastUpdated.getTime())
-          : fileLastUpdatedStr >= lastSyncDateStr
+          : fileLastUpdatedStr > lastSyncDateStr
         if (!isNaN(fileLastUpdated.getTime()) && isNewer) {
           const titleMatch = content.match(/^#\s+(.+)$/m)
           updatedNotes.push({

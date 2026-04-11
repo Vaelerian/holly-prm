@@ -112,17 +112,20 @@ describe("runVaultSync", () => {
 
   it("adds note to updatedNotes when last_updated is after lastSyncAt", async () => {
     mockGetVaultConfig.mockResolvedValue(baseConfig as any)
-    const pastSync = new Date(Date.now() - 2 * 60 * 60 * 1000)
+    // lastSyncAt is 2 days ago
+    const twoDaysAgo = new Date()
+    twoDaysAgo.setDate(twoDaysAgo.getDate() - 2)
     mockPrisma.vaultNote.findMany.mockResolvedValue([
       {
         id: "n1",
         entityType: "contact",
         entityId: "c1",
         vaultPath: "Holly/John.md",
-        lastSyncAt: pastSync,
+        lastSyncAt: twoDaysAgo,
         createdAt: new Date(),
       },
     ] as any)
+    // last_updated is today (after lastSyncAt)
     const today = new Date().toISOString().slice(0, 10)
     mockGetNoteContent.mockResolvedValue(
       `---\nprm_entity: contact\nprm_id: c1\nlast_updated: ${today}\n---\n\n# John\n\nContent`
@@ -150,6 +153,32 @@ describe("runVaultSync", () => {
     ] as any)
     mockGetNoteContent.mockResolvedValue(
       "---\nprm_entity: contact\nprm_id: c1\nlast_updated: 2026-01-01\n---\n\n# John\n\nContent"
+    )
+    mockPrisma.vaultConfig.update.mockResolvedValue({} as any)
+
+    const result = await runVaultSync()
+    expect(result.updatedNotes).toHaveLength(0)
+  })
+
+  it("does not report note as updated when last_updated equals lastSyncAt date", async () => {
+    mockGetVaultConfig.mockResolvedValue(baseConfig as any)
+    // lastSyncAt is today at noon
+    const todayNoon = new Date()
+    todayNoon.setHours(12, 0, 0, 0)
+    const todayStr = todayNoon.toISOString().slice(0, 10)
+    mockPrisma.vaultNote.findMany.mockResolvedValue([
+      {
+        id: "n1",
+        entityType: "contact",
+        entityId: "c1",
+        vaultPath: "Holly/John.md",
+        lastSyncAt: todayNoon,
+        createdAt: new Date(),
+      },
+    ] as any)
+    // last_updated is the same date as lastSyncAt
+    mockGetNoteContent.mockResolvedValue(
+      `---\nprm_entity: contact\nprm_id: c1\nlast_updated: ${todayStr}\n---\n\n# John\n\nContent`
     )
     mockPrisma.vaultConfig.update.mockResolvedValue({} as any)
 
