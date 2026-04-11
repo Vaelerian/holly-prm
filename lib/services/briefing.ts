@@ -43,14 +43,14 @@ export async function getBriefing(userId: string) {
     }),
     prisma.task.count({
       where: {
-        userId,
+        project: { OR: [{ userId }, { members: { some: { userId } } }] },
         dueDate: { gte: todayStart, lte: todayEnd },
         status: { notIn: ["done", "cancelled"] },
       },
     }),
     prisma.task.findMany({
       where: {
-        userId,
+        project: { OR: [{ userId }, { members: { some: { userId } } }] },
         isMilestone: true,
         status: { notIn: ["done", "cancelled"] },
         dueDate: { gte: todayStart, lte: fourteenDaysFromNow },

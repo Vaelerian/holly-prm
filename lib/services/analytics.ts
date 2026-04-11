@@ -1,18 +1,18 @@
 import { prisma } from "@/lib/db"
 
-export async function getHealthAnalytics(days: number) {
+export async function getHealthAnalytics(days: number, userId: string) {
   const windowStart = new Date()
   windowStart.setDate(windowStart.getDate() - days)
 
   const contacts = await prisma.contact.findMany({
-    where: { interactionFreqDays: { not: null } },
+    where: { userId, interactionFreqDays: { not: null } },
     select: { id: true, name: true, healthScore: true, lastInteraction: true, interactionFreqDays: true },
     orderBy: { healthScore: "asc" },
   })
 
   // Find the most recent health score for each contact from before the window
   const auditLogs = await prisma.auditLog.findMany({
-    where: { entity: "Contact", action: "update", occurredAt: { lt: windowStart } },
+    where: { userId, entity: "Contact", action: "update", occurredAt: { lt: windowStart } },
     orderBy: { occurredAt: "desc" },
   })
 
@@ -54,12 +54,12 @@ export async function getHealthAnalytics(days: number) {
   }
 }
 
-export async function getVelocityAnalytics(days: number) {
+export async function getVelocityAnalytics(days: number, userId: string) {
   const windowStart = new Date()
   windowStart.setDate(windowStart.getDate() - days)
 
   const projects = await prisma.project.findMany({
-    where: { status: { in: ["planning", "active", "on_hold"] } },
+    where: { userId, status: { in: ["planning", "active", "on_hold"] } },
     select: {
       id: true,
       title: true,
@@ -71,7 +71,7 @@ export async function getVelocityAnalytics(days: number) {
 
   // Tasks that transitioned to "done" within the window (track last status to handle reverts)
   const taskLogs = await prisma.auditLog.findMany({
-    where: { entity: "Task", action: "update", occurredAt: { gte: windowStart } },
+    where: { userId, entity: "Task", action: "update", occurredAt: { gte: windowStart } },
     orderBy: { occurredAt: "asc" },
   })
   const completedInWindowIds = new Set<string>()
@@ -117,12 +117,12 @@ export async function getVelocityAnalytics(days: number) {
   }
 }
 
-export async function getCompletionAnalytics(days: number) {
+export async function getCompletionAnalytics(days: number, userId: string) {
   const windowStart = new Date()
   windowStart.setDate(windowStart.getDate() - days)
 
   const actionItemLogs = await prisma.auditLog.findMany({
-    where: { entity: "ActionItem", action: "update", occurredAt: { gte: windowStart } },
+    where: { userId, entity: "ActionItem", action: "update", occurredAt: { gte: windowStart } },
     orderBy: { occurredAt: "asc" },
   })
 
@@ -135,7 +135,7 @@ export async function getCompletionAnalytics(days: number) {
   const completedItems =
     completedItemIds.length > 0
       ? await prisma.actionItem.findMany({
-          where: { id: { in: completedItemIds } },
+          where: { userId, id: { in: completedItemIds } },
           select: { id: true, assignedTo: true },
         })
       : []
@@ -143,7 +143,7 @@ export async function getCompletionAnalytics(days: number) {
   const assigneeMap = new Map(completedItems.map(i => [i.id, i.assignedTo]))
 
   const overdueItems = await prisma.actionItem.findMany({
-    where: { status: "todo", dueDate: { lt: new Date() } },
+    where: { userId, status: "todo", dueDate: { lt: new Date() } },
     select: { id: true, assignedTo: true },
   })
 

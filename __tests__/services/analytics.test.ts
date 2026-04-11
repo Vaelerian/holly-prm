@@ -23,7 +23,7 @@ describe("getHealthAnalytics", () => {
       { entityId: "c1", diff: { after: { healthScore: 90 } }, occurredAt: new Date(Date.now() - 40 * 24 * 60 * 60 * 1000) },
     ] as any)
 
-    const result = await getHealthAnalytics(30)
+    const result = await getHealthAnalytics(30, "user-1")
 
     expect(result.window).toBe(30)
     expect(result.contacts).toHaveLength(1)
@@ -38,7 +38,7 @@ describe("getHealthAnalytics", () => {
     ] as any)
     mockPrisma.auditLog.findMany.mockResolvedValue([])
 
-    const result = await getHealthAnalytics(30)
+    const result = await getHealthAnalytics(30, "user-1")
 
     expect(result.contacts[0].trend).toBe("insufficient_data")
     expect(result.contacts[0].previousScore).toBeNull()
@@ -63,7 +63,7 @@ describe("getVelocityAnalytics", () => {
       { entityId: "t2", diff: { after: { status: "done" } }, occurredAt: new Date() },
     ] as any)
 
-    const result = await getVelocityAnalytics(14)
+    const result = await getVelocityAnalytics(14, "user-1")
 
     expect(result.projects[0].tasksTotal).toBe(4)
     expect(result.projects[0].tasksCompleted).toBe(2)
@@ -78,7 +78,7 @@ describe("getVelocityAnalytics", () => {
     ] as any)
     mockPrisma.auditLog.findMany.mockResolvedValue([])
 
-    const result = await getVelocityAnalytics(30)
+    const result = await getVelocityAnalytics(30, "user-1")
 
     expect(result.projects[0].weeklyRate).toBe(0)
     expect(result.projects[0].projectedCompletionDate).toBeNull()
@@ -94,7 +94,7 @@ describe("getCompletionAnalytics", () => {
       .mockResolvedValueOnce([{ id: "a1", assignedTo: "ian" }] as any) // completed items
       .mockResolvedValueOnce([]) // overdue todos
 
-    const result = await getCompletionAnalytics(30)
+    const result = await getCompletionAnalytics(30, "user-1")
 
     expect(result.window).toBe(30)
     expect(result.rates.ian).toBe(1)
@@ -106,7 +106,7 @@ describe("getCompletionAnalytics", () => {
     mockPrisma.auditLog.findMany.mockResolvedValue([])
     mockPrisma.actionItem.findMany.mockResolvedValue([])
 
-    const result = await getCompletionAnalytics(30)
+    const result = await getCompletionAnalytics(30, "user-1")
 
     expect(result.rates.ian).toBe(0)
     expect(result.rates.holly).toBe(0)

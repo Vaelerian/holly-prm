@@ -8,6 +8,7 @@ export async function GET(req: NextRequest) {
     if (authResult.rateLimited) return NextResponse.json({ error: "Rate limit exceeded", code: "RATE_LIMITED" }, { status: 429, headers: { "Retry-After": "60" } })
     return NextResponse.json({ error: "Unauthorized", code: "UNAUTHORIZED" }, { status: 401 })
   }
+  const { userId } = authResult
   const days = Math.min(365, Math.max(7, parseInt(req.nextUrl.searchParams.get("days") ?? "30", 10) || 30))
-  return NextResponse.json(await getCompletionAnalytics(days))
+  return NextResponse.json(await getCompletionAnalytics(days, userId))
 }
