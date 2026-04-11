@@ -19,6 +19,7 @@ export function ProjectMembers({ projectId, members: initialMembers, isOwner }: 
   const [members, setMembers] = useState(initialMembers)
   const [email, setEmail] = useState("")
   const [adding, setAdding] = useState(false)
+  const [removing, setRemoving] = useState<string | null>(null)
   const [error, setError] = useState("")
 
   async function addMember() {
@@ -43,8 +44,19 @@ export function ProjectMembers({ projectId, members: initialMembers, isOwner }: 
   }
 
   async function removeMember(memberId: string) {
-    await fetch(`/api/v1/projects/${projectId}/members/${memberId}`, { method: "DELETE" })
-    setMembers(prev => prev.filter(m => m.userId !== memberId))
+    setRemoving(memberId)
+    setError("")
+    try {
+      const res = await fetch(`/api/v1/projects/${projectId}/members/${memberId}`, { method: "DELETE" })
+      if (res.ok) {
+        setMembers(prev => prev.filter(m => m.userId !== memberId))
+      } else {
+        const data = await res.json().catch(() => ({}))
+        setError(data.error ?? "Failed to remove member")
+      }
+    } finally {
+      setRemoving(null)
+    }
   }
 
   if (!isOwner && members.length === 0) return null
@@ -63,8 +75,8 @@ export function ProjectMembers({ projectId, members: initialMembers, isOwner }: 
                 <span className="text-xs text-[#666688] ml-2">{m.user.email}</span>
               </div>
               {isOwner && (
-                <Button size="sm" variant="danger" onClick={() => removeMember(m.userId)}>
-                  Remove
+                <Button size="sm" variant="danger" onClick={() => removeMember(m.userId)} disabled={removing === m.userId}>
+                  {removing === m.userId ? "Removing..." : "Remove"}
                 </Button>
               )}
             </div>

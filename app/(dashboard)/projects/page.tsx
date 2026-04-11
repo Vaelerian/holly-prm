@@ -60,7 +60,6 @@ export default async function ProjectsPage({ searchParams }: PageProps) {
                   </span>
                 )}
                 <ProjectCard
-                  key={p.id}
                   id={p.id}
                   title={p.title}
                   category={p.category}
