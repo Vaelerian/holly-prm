@@ -47,6 +47,11 @@ ALTER TABLE "UserPreference" ADD COLUMN "userId" TEXT;
 ALTER TABLE "VaultConfig" ADD COLUMN "userId" TEXT;
 ALTER TABLE "VaultNote" ADD COLUMN "userId" TEXT;
 
+-- CreateIndex: unique userId on one-to-one tables (required by Prisma for optional 1-1 relations)
+CREATE UNIQUE INDEX "GoogleToken_userId_key" ON "GoogleToken"("userId");
+CREATE UNIQUE INDEX "UserPreference_userId_key" ON "UserPreference"("userId");
+CREATE UNIQUE INDEX "VaultConfig_userId_key" ON "VaultConfig"("userId");
+
 -- AddForeignKey: userId columns (SET NULL on user delete - data becomes unclaimed, not deleted)
 ALTER TABLE "Contact" ADD CONSTRAINT "Contact_userId_fkey"
     FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;

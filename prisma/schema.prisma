@@ -103,7 +103,7 @@ model User {
   hollyApiKeys      HollyApiKey[]
   pushSubscriptions PushSubscription[]
   googleToken       GoogleToken?
-  calendarSync      CalendarSync?
+  calendarSyncs     CalendarSync[]
   userPreference    UserPreference?
   vaultConfig       VaultConfig?
   vaultNotes        VaultNote[]
@@ -138,7 +138,7 @@ model Contact {
   createdAt           DateTime      @default(now())
   updatedAt           DateTime      @updatedAt
   userId              String?
-  user                User?         @relation(fields: [userId], references: [id])
+  user                User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([name])
 }
@@ -163,7 +163,7 @@ model Interaction {
   actionItems       ActionItem[]
   createdAt         DateTime        @default(now())
   userId            String?
-  user              User?           @relation(fields: [userId], references: [id])
+  user              User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([contactId])
   @@index([occurredAt])
@@ -183,7 +183,7 @@ model ActionItem {
   dueDate       DateTime?
   createdAt     DateTime     @default(now())
   userId        String?
-  user          User?        @relation(fields: [userId], references: [id])
+  user          User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([interactionId])
   @@index([status, assignedTo])
@@ -202,7 +202,7 @@ model Project {
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
   userId      String?
-  user        User?           @relation(fields: [userId], references: [id])
+  user        User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
   members     ProjectMember[]
 }
 
@@ -230,7 +230,7 @@ model AuditLog {
   diff       Json?
   occurredAt DateTime    @default(now())
   userId     String?
-  user       User?       @relation(fields: [userId], references: [id])
+  user       User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([entity, entityId])
   @@index([occurredAt])
@@ -247,7 +247,7 @@ model KnowledgeItem {
   exported         Boolean             @default(false)
   createdAt        DateTime            @default(now())
   userId           String?
-  user             User?               @relation(fields: [userId], references: [id])
+  user             User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([sourceId, sourceType])
 }
@@ -260,7 +260,7 @@ model HollyApiKey {
   revokedAt DateTime?
   createdAt DateTime  @default(now())
   userId    String?
-  user      User?     @relation(fields: [userId], references: [id])
+  user      User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
 }
 
 model PushSubscription {
@@ -270,7 +270,7 @@ model PushSubscription {
   auth      String
   createdAt DateTime @default(now())
   userId    String?
-  user      User?    @relation(fields: [userId], references: [id])
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 }
 
 enum CalendarEntityType {
@@ -290,7 +290,7 @@ model GoogleToken {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   userId       String?  @unique
-  user         User?    @relation(fields: [userId], references: [id])
+  user         User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 }
 
 model CalendarSync {
@@ -300,8 +300,8 @@ model CalendarSync {
   googleEventId String
   calendarId    String             @default("primary")
   createdAt     DateTime           @default(now())
-  userId        String?            @unique
-  user          User?              @relation(fields: [userId], references: [id])
+  userId        String?
+  user          User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@unique([entityType, entityId])
 }
@@ -312,7 +312,7 @@ model UserPreference {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
   userId          String?  @unique
-  user            User?    @relation(fields: [userId], references: [id])
+  user            User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 }
 
 model VaultConfig {
@@ -325,7 +325,7 @@ model VaultConfig {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   userId      String?   @unique
-  user        User?     @relation(fields: [userId], references: [id])
+  user        User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
 }
 
 model VaultNote {
@@ -336,7 +336,7 @@ model VaultNote {
   lastSyncAt DateTime
   createdAt  DateTime @default(now())
   userId     String?
-  user       User?    @relation(fields: [userId], references: [id])
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@unique([entityType, entityId])
 }
