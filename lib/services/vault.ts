@@ -1,0 +1,118 @@
+import { prisma } from "@/lib/db"
+import { access, readFile, readdir, mkdir, writeFile } from "node:fs/promises"
+import path from "node:path"
+
+export interface VaultSearchResult {
+  path: string
+  title: string
+  snippet: string
+  frontmatter: Record<string, string>
+}
+
+export async function getVaultConfig() {
+  return prisma.vaultConfig.findFirst()
+}
+
+export async function isVaultAccessible(): Promise<boolean> {
+  const config = await getVaultConfig()
+  if (!config) return false
+  try {
+    await access(config.vaultPath)
+    return true
+  } catch {
+    return false
+  }
+}
+
+function parseFrontmatter(content: string): Record<string, string> {
+  const match = content.match(/^---\n([\s\S]*?)\n---/)
+  if (!match) return {}
+  const result: Record<string, string> = {}
+  for (const line of match[1].split("\n")) {
+    const colonIdx = line.indexOf(":")
+    if (colonIdx !== -1) {
+      result[line.slice(0, colonIdx).trim()] = line.slice(colonIdx + 1).trim()
+    }
+  }
+  return result
+}
+
+function extractTitle(content: string, filePath: string): string {
+  const match = content.match(/^#\s+(.+)$/m)
+  if (match) return match[1].trim()
+  return path.basename(filePath, ".md")
+}
+
+function extractSnippet(content: string, query: string): string {
+  const lc = content.toLowerCase()
+  const idx = lc.indexOf(query.toLowerCase())
+  if (idx === -1) return content.slice(0, 200)
+  const start = Math.max(0, idx - 50)
+  const end = Math.min(content.length, idx + 150)
+  const snippet = content.slice(start, end)
+  return (start > 0 ? "..." : "") + snippet + (end < content.length ? "..." : "")
+}
+
+async function walkDir(dir: string): Promise<string[]> {
+  const entries = await readdir(dir, { withFileTypes: true })
+  const files: string[] = []
+  for (const entry of entries) {
+    const full = path.join(dir, entry.name)
+    if (entry.isDirectory()) {
+      files.push(...(await walkDir(full)))
+    } else if (entry.isFile() && entry.name.endsWith(".md")) {
+      files.push(full)
+    }
+  }
+  return files
+}
+
+export async function searchVault(query: string, limit = 10): Promise<VaultSearchResult[]> {
+  const config = await getVaultConfig()
+  if (!config) return []
+  try {
+    await access(config.vaultPath)
+  } catch {
+    return []
+  }
+
+  const files = await walkDir(config.vaultPath)
+  const results: VaultSearchResult[] = []
+
+  for (const filePath of files) {
+    if (results.length >= limit) break
+    try {
+      const content = await readFile(filePath, "utf-8")
+      if (!content.toLowerCase().includes(query.toLowerCase())) continue
+      const relPath = path.relative(config.vaultPath, filePath).replace(/\\/g, "/")
+      results.push({
+        path: relPath,
+        title: extractTitle(content, filePath),
+        snippet: extractSnippet(content, query),
+        frontmatter: parseFrontmatter(content),
+      })
+    } catch {
+      // skip unreadable files
+    }
+  }
+
+  return results
+}
+
+function isPathSafe(vaultRoot: string, resolvedPath: string): boolean {
+  const rel = path.relative(vaultRoot, resolvedPath)
+  return !rel.startsWith("..") && !path.isAbsolute(rel)
+}
+
+export async function getNoteContent(relativePath: string): Promise<string | null> {
+  const config = await getVaultConfig()
+  if (!config) return null
+  const vaultRoot = path.resolve(config.vaultPath)
+  const resolved = path.resolve(vaultRoot, relativePath)
+  if (!isPathSafe(vaultRoot, resolved)) return null
+  try {
+    return await readFile(resolved, "utf-8")
+  } catch {
+    return null
+  }
+}
