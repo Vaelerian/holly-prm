@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server"
 import { validateHollyRequest } from "@/lib/holly-auth"
 import { getNoteContent, createNote, updateNote, isVaultAccessible } from "@/lib/services/vault"
 
+const VALID_ENTITY_TYPE = /^[a-zA-Z]+$/
+const VALID_ENTITY_ID = /^[a-zA-Z0-9_-]+$/
+
 type AuthCheckResult = { ok: true } | { ok: false; response: NextResponse }
 
 async function checkAuth(req: NextRequest): Promise<AuthCheckResult> {
@@ -45,6 +48,10 @@ export async function POST(req: NextRequest) {
   const { filename, entityType, entityId, content } = body as Record<string, string>
   if (!filename || !entityType || !entityId || content === undefined) {
     return NextResponse.json({ error: "filename, entityType, entityId, content are required" }, { status: 400 })
+  }
+
+  if (!VALID_ENTITY_TYPE.test(entityType) || !VALID_ENTITY_ID.test(entityId)) {
+    return NextResponse.json({ error: "Invalid entityType or entityId", code: "INVALID_INPUT" }, { status: 422 })
   }
 
   try {
