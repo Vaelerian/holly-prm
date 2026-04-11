@@ -25,9 +25,6 @@ export async function validateHollyRequest(req: NextRequest): Promise<Validation
 
   if (!matchedKeyId) return { valid: false }
 
-  // Reject unclaimed keys (no userId assigned) -- user must claim data first
-  if (!matchedUserId) return { valid: false }
-
   const rateLimitKey = `holly:ratelimit:${apiKey.slice(0, 24)}`
   let count: number
   try {
@@ -41,6 +38,9 @@ export async function validateHollyRequest(req: NextRequest): Promise<Validation
   }
 
   if (count > 1000) return { valid: false, rateLimited: true }
+
+  // Reject unclaimed keys (no userId assigned) -- user must claim data first
+  if (!matchedUserId) return { valid: false }
 
   prisma.hollyApiKey
     .update({ where: { id: matchedKeyId }, data: { lastUsed: new Date() } })

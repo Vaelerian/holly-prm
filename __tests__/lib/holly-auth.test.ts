@@ -68,7 +68,7 @@ it("returns valid=true when key matches stored hash", async () => {
 
 it("returns userId of the matched key owner", async () => {
   const plaintext = "hky_testkey123"
-  const hash = await bcrypt.hash(plaintext, 12)
+  const hash = await bcrypt.hash(plaintext, 1)
   mockPrisma.hollyApiKey.findMany.mockResolvedValue([
     { id: "key-1", keyHash: hash, userId: "user-abc" },
   ] as any)
@@ -87,7 +87,7 @@ it("returns userId of the matched key owner", async () => {
 
 it("returns valid: false when key has no userId (unclaimed)", async () => {
   const plaintext = "hky_testkey456"
-  const hash = await bcrypt.hash(plaintext, 12)
+  const hash = await bcrypt.hash(plaintext, 1)
   mockPrisma.hollyApiKey.findMany.mockResolvedValue([
     { id: "key-2", keyHash: hash, userId: null },
   ] as any)
