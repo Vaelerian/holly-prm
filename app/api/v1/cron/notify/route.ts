@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // 3. Gmail poll - cache recent emails for briefing
+  // 2. Gmail poll - cache recent emails for briefing
   try {
     const recentEmails = await fetchRecentEmails({ hours: 24 })
     await redis.set("gmail:recent", JSON.stringify(recentEmails), "EX", 3600)
@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
     console.error("[cron/notify] gmail poll failed", e)
   }
 
-  // 4. Vault sync
+  // 3. Vault sync
   try {
     const vaultConfig = await getVaultConfig()
     if (vaultConfig && shouldRunSync(vaultConfig)) {
@@ -77,6 +77,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ sent: 0 })
   }
 
+  // 4. Push - overdue contacts
   for (const contact of overdueContacts) {
     if (sent >= MAX_NOTIFICATIONS_PER_RUN) break
     const dedupeKey = `notify:sent:overdue:${contact.id}:${today}`
@@ -98,7 +99,7 @@ export async function POST(req: NextRequest) {
     sent++
   }
 
-  // 2. Follow-ups due
+  // 5. Follow-ups due
   const now = new Date()
   const pendingFollowUps = await prisma.interaction.findMany({
     where: {
