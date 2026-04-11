@@ -24,13 +24,38 @@ export default function SettingsPage() {
 
   const [googleStatus, setGoogleStatus] = useState<{ connected: boolean; email: string | null }>({ connected: false, email: null })
 
+  const [vaultPath, setVaultPath] = useState("")
+  const [vaultWorkdayCron, setVaultWorkdayCron] = useState("0 * * * 1-5")
+  const [vaultWeekendCron, setVaultWeekendCron] = useState("0 */4 * * 0,6")
+  const [vaultEnabled, setVaultEnabled] = useState(true)
+  const [vaultLastSyncAt, setVaultLastSyncAt] = useState<string | null>(null)
+  const [vaultTestStatus, setVaultTestStatus] = useState<"idle" | "testing" | "ok" | "fail">("idle")
+  const [vaultSaving, setVaultSaving] = useState(false)
+  const [vaultSyncing, setVaultSyncing] = useState(false)
+  const [vaultSyncResult, setVaultSyncResult] = useState<{ updatedNotes: unknown[]; errors: string[] } | null>(null)
+
   async function loadKeys() {
     const res = await fetch("/api/v1/settings/api-keys")
     if (res.ok) setKeys(await res.json())
   }
 
+  async function loadVaultStatus() {
+    const res = await fetch("/api/v1/vault/status")
+    if (res.ok) {
+      const data = await res.json()
+      if (data.config) {
+        setVaultPath(data.config.vaultPath)
+        setVaultWorkdayCron(data.config.workdayCron)
+        setVaultWeekendCron(data.config.weekendCron)
+        setVaultEnabled(data.config.enabled)
+        setVaultLastSyncAt(data.config.lastSyncAt ?? null)
+      }
+    }
+  }
+
   useEffect(() => {
     loadKeys()
+    loadVaultStatus()
     fetch("/api/v1/google/status").then(r => r.json()).then(setGoogleStatus).catch(() => {})
     // Check push status
     if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
@@ -62,6 +87,38 @@ export default function SettingsPage() {
   async function deleteKey(id: string) {
     await fetch(`/api/v1/settings/api-keys/${id}`, { method: "DELETE" })
     await loadKeys()
+  }
+
+  async function testVaultConnection() {
+    setVaultTestStatus("testing")
+    const res = await fetch("/api/v1/vault/status")
+    if (res.ok) {
+      const data = await res.json()
+      setVaultTestStatus(data.accessible ? "ok" : "fail")
+    } else {
+      setVaultTestStatus("fail")
+    }
+  }
+
+  async function saveVaultConfig() {
+    setVaultSaving(true)
+    await fetch("/api/v1/vault/config", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ vaultPath, workdayCron: vaultWorkdayCron, weekendCron: vaultWeekendCron, enabled: vaultEnabled }),
+    })
+    setVaultSaving(false)
+  }
+
+  async function syncVaultNow() {
+    setVaultSyncing(true)
+    setVaultSyncResult(null)
+    const res = await fetch("/api/v1/vault/sync", { method: "POST" })
+    if (res.ok) {
+      const data = await res.json()
+      setVaultSyncResult(data)
+    }
+    setVaultSyncing(false)
   }
 
   async function enableNotifications() {
@@ -200,6 +257,100 @@ export default function SettingsPage() {
           ) : (
             <Button onClick={() => { window.location.href = "/api/v1/google/connect" }}>Connect Google</Button>
           )}
+        </div>
+      </section>
+
+      <section>
+        <h2 className="text-base font-semibold text-[#c0c0d0] mb-1">Obsidian Vault</h2>
+        <p className="text-sm text-[#666688] mb-4">Connect your Obsidian vault for note search and sync.</p>
+
+        <div className="space-y-3">
+          {/* Vault path */}
+          <div className="bg-[#111125] border border-[rgba(0,255,136,0.15)] rounded-lg px-4 py-3">
+            <p className="text-sm font-medium text-[#c0c0d0] mb-2">Vault path</p>
+            <div className="flex gap-2">
+              <Input
+                placeholder="/home/user/vault"
+                value={vaultPath}
+                onChange={e => setVaultPath(e.target.value)}
+              />
+              <Button onClick={testVaultConnection} disabled={vaultTestStatus === "testing" || !vaultPath.trim()}>
+                {vaultTestStatus === "testing" ? "Testing..." : "Test"}
+              </Button>
+            </div>
+            {vaultTestStatus === "ok" && <p className="text-xs text-[#00ff88] mt-1">Connected</p>}
+            {vaultTestStatus === "fail" && <p className="text-xs text-[#ff4444] mt-1">Not accessible</p>}
+          </div>
+
+          {/* Sync schedule */}
+          <div className="bg-[#111125] border border-[rgba(0,255,136,0.15)] rounded-lg px-4 py-3">
+            <p className="text-sm font-medium text-[#c0c0d0] mb-2">Sync schedule</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <p className="text-xs text-[#666688] mb-1">Work days</p>
+                <select
+                  value={vaultWorkdayCron}
+                  onChange={e => setVaultWorkdayCron(e.target.value)}
+                  className="w-full bg-[#111125] border border-[rgba(0,255,136,0.15)] rounded text-[#c0c0d0] text-sm px-3 py-2"
+                >
+                  <option value="0 * * * 1-5">Every hour</option>
+                  <option value="0 */2 * * 1-5">Every 2 hours</option>
+                  <option value="0 */4 * * 1-5">Every 4 hours</option>
+                  <option value="0 9,17 * * 1-5">Twice daily (9am and 5pm)</option>
+                  <option value="0 9 * * 1-5">Once daily (9am)</option>
+                </select>
+              </div>
+              <div>
+                <p className="text-xs text-[#666688] mb-1">Weekends</p>
+                <select
+                  value={vaultWeekendCron}
+                  onChange={e => setVaultWeekendCron(e.target.value)}
+                  className="w-full bg-[#111125] border border-[rgba(0,255,136,0.15)] rounded text-[#c0c0d0] text-sm px-3 py-2"
+                >
+                  <option value="0 * * * 0,6">Every hour</option>
+                  <option value="0 */2 * * 0,6">Every 2 hours</option>
+                  <option value="0 */4 * * 0,6">Every 4 hours</option>
+                  <option value="0 9,17 * * 0,6">Twice daily (9am and 5pm)</option>
+                  <option value="0 9 * * 0,6">Once daily (9am)</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Enabled + last synced + actions */}
+          <div className="bg-[#111125] border border-[rgba(0,255,136,0.15)] rounded-lg px-4 py-3 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-[#c0c0d0]">Sync enabled</p>
+                <p className="text-xs text-[#666688]">
+                  Last synced: {vaultLastSyncAt ? new Date(vaultLastSyncAt).toLocaleString("en-GB") : "Never"}
+                </p>
+              </div>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={vaultEnabled}
+                  onChange={e => setVaultEnabled(e.target.checked)}
+                  className="w-4 h-4 accent-[#00ff88]"
+                />
+                <span className="text-sm text-[#c0c0d0]">{vaultEnabled ? "Enabled" : "Disabled"}</span>
+              </label>
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={saveVaultConfig} disabled={vaultSaving}>
+                {vaultSaving ? "Saving..." : "Save"}
+              </Button>
+              <Button onClick={syncVaultNow} disabled={vaultSyncing}>
+                {vaultSyncing ? "Syncing..." : "Sync now"}
+              </Button>
+            </div>
+            {vaultSyncResult && (
+              <p className="text-xs text-[#666688]">
+                Synced - {vaultSyncResult.updatedNotes.length} note{vaultSyncResult.updatedNotes.length !== 1 ? "s" : ""} updated
+                {vaultSyncResult.errors.length > 0 && `, ${vaultSyncResult.errors.length} error${vaultSyncResult.errors.length !== 1 ? "s" : ""}`}
+              </p>
+            )}
+          </div>
         </div>
       </section>
     </div>
