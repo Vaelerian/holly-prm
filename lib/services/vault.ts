@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db"
-import { access, readFile, readdir } from "node:fs/promises"
+import { access, readFile, readdir, mkdir, writeFile } from "node:fs/promises"
 import path from "node:path"
 
 export interface VaultSearchResult {
@@ -115,4 +115,86 @@ export async function getNoteContent(relativePath: string): Promise<string | nul
   } catch {
     return null
   }
+}
+
+const VALID_FILENAME = /^[a-zA-Z0-9 _-]+$/
+
+export async function createNote(
+  filename: string,
+  entityType: string,
+  entityId: string,
+  content: string
+): Promise<string> {
+  if (!VALID_FILENAME.test(filename)) {
+    throw new Error(`Invalid filename: ${filename}`)
+  }
+  const config = await getVaultConfig()
+  if (!config) throw new Error("Vault not configured")
+
+  const hollyDir = path.join(config.vaultPath, "Holly")
+  await mkdir(hollyDir, { recursive: true })
+
+  const filePath = path.join(hollyDir, `${filename}.md`)
+
+  try {
+    await access(filePath)
+    throw new Error("FILE_EXISTS")
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== "ENOENT") throw e
+  }
+
+  const today = new Date().toISOString().slice(0, 10)
+  const frontmatter = `---\nprm_entity: ${entityType}\nprm_id: ${entityId}\ncreated: ${today}\n---\n\n`
+
+  await writeFile(filePath, frontmatter + content, "utf-8")
+
+  const relativePath = `Holly/${filename}.md`
+
+  await prisma.vaultNote.upsert({
+    where: { entityType_entityId: { entityType, entityId } },
+    create: { entityType, entityId, vaultPath: relativePath, lastSyncAt: new Date() },
+    update: { vaultPath: relativePath, lastSyncAt: new Date() },
+  })
+
+  return relativePath
+}
+
+export async function updateNote(relativePath: string, content: string): Promise<void> {
+  const config = await getVaultConfig()
+  if (!config) throw new Error("Vault not configured")
+
+  const vaultRoot = path.resolve(config.vaultPath)
+  const resolved = path.resolve(vaultRoot, relativePath)
+  if (!isPathSafe(vaultRoot, resolved)) throw new Error("Path traversal detected")
+
+  let existing: string
+  try {
+    existing = await readFile(resolved, "utf-8")
+  } catch {
+    throw new Error("NOTE_NOT_FOUND")
+  }
+
+  const today = new Date().toISOString().slice(0, 10)
+  const fmMatch = existing.match(/^(---\r?\n[\s\S]*?\r?\n---\r?\n)/)
+
+  let newContent: string
+  if (fmMatch) {
+    let fm = fmMatch[1]
+    if (/last_updated:/.test(fm)) {
+      fm = fm.replace(/last_updated: .+(\r?\n)/, `last_updated: ${today}$1`)
+    } else {
+      fm = fm.replace(/---\r?\n$/, `last_updated: ${today}\n---\n`)
+    }
+    newContent = fm + "\n" + content
+  } else {
+    newContent = content
+  }
+
+  await writeFile(resolved, newContent, "utf-8")
+
+  const normalizedPath = relativePath.replace(/\\/g, "/")
+  await prisma.vaultNote.updateMany({
+    where: { vaultPath: normalizedPath },
+    data: { lastSyncAt: new Date() },
+  })
 }
