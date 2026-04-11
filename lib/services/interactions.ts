@@ -9,10 +9,11 @@ interface ListInteractionsOptions {
   contactId?: string
   followUpRequired?: boolean
   limit?: number
+  userId: string
 }
 
 export async function listInteractions(opts: ListInteractionsOptions) {
-  const where: Record<string, unknown> = {}
+  const where: Record<string, unknown> = { userId: opts.userId }
   if (opts.contactId) where.contactId = opts.contactId
   if (opts.followUpRequired) {
     where.followUpRequired = true
@@ -26,14 +27,15 @@ export async function listInteractions(opts: ListInteractionsOptions) {
   })
 }
 
-export async function getInteraction(id: string) {
-  return prisma.interaction.findUnique({ where: { id }, include: { actionItems: true } })
+export async function getInteraction(id: string, userId: string) {
+  return prisma.interaction.findFirst({ where: { id, userId }, include: { actionItems: true } })
 }
 
-export async function createInteraction(data: CreateInteractionInput, actor: Actor) {
+export async function createInteraction(data: CreateInteractionInput, actor: Actor, userId: string) {
   const interaction = await prisma.interaction.create({
     data: {
       ...data,
+      userId,
       occurredAt: new Date(data.occurredAt),
       followUpDate: data.followUpDate ? new Date(data.followUpDate) : null,
       createdByHolly: actor === "holly",
@@ -52,7 +54,7 @@ export async function createInteraction(data: CreateInteractionInput, actor: Act
   })
 
   await prisma.auditLog.create({
-    data: { entity: "Interaction", entityId: interaction.id, action: "create", actor },
+    data: { entity: "Interaction", entityId: interaction.id, action: "create", actor, userId },
   })
 
   await publishSseEvent("interaction.created", {
@@ -66,10 +68,12 @@ export async function createInteraction(data: CreateInteractionInput, actor: Act
   return interaction
 }
 
-export async function updateInteraction(id: string, data: UpdateInteractionInput, actor: Actor) {
+export async function updateInteraction(id: string, data: UpdateInteractionInput, actor: Actor, userId: string) {
+  const existing = await prisma.interaction.findFirst({ where: { id, userId } })
+  if (!existing) return null
   const interaction = await prisma.interaction.update({ where: { id }, data })
   await prisma.auditLog.create({
-    data: { entity: "Interaction", entityId: id, action: "update", actor },
+    data: { entity: "Interaction", entityId: id, action: "update", actor, userId },
   })
   if (interaction.followUpDate) {
     const contact = await prisma.contact.findUnique({ where: { id: interaction.contactId }, select: { name: true } })
@@ -83,9 +87,11 @@ export async function updateInteraction(id: string, data: UpdateInteractionInput
   return interaction
 }
 
-export async function deleteInteraction(id: string, actor: Actor) {
+export async function deleteInteraction(id: string, actor: Actor, userId: string) {
+  const existing = await prisma.interaction.findFirst({ where: { id, userId } })
+  if (!existing) return null
   await prisma.auditLog.create({
-    data: { entity: "Interaction", entityId: id, action: "delete", actor },
+    data: { entity: "Interaction", entityId: id, action: "delete", actor, userId },
   })
   return prisma.interaction.delete({ where: { id } })
 }

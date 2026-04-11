@@ -6,10 +6,11 @@ interface ListContactsOptions {
   q?: string
   type?: string
   overdue?: boolean
+  userId: string
 }
 
 export async function listContacts(opts: ListContactsOptions) {
-  const where: Record<string, unknown> = {}
+  const where: Record<string, unknown> = { userId: opts.userId }
   if (opts.q) where.name = { contains: opts.q, mode: "insensitive" }
   if (opts.type) where.type = opts.type
   if (opts.overdue) {
@@ -19,9 +20,9 @@ export async function listContacts(opts: ListContactsOptions) {
   return prisma.contact.findMany({ where, orderBy: { name: "asc" } })
 }
 
-export async function getContact(id: string) {
-  return prisma.contact.findUnique({
-    where: { id },
+export async function getContact(id: string, userId: string) {
+  return prisma.contact.findFirst({
+    where: { id, userId },
     include: {
       interactions: {
         orderBy: { occurredAt: "desc" },
@@ -32,28 +33,32 @@ export async function getContact(id: string) {
   })
 }
 
-export async function createContact(data: CreateContactInput, actor: Actor) {
+export async function createContact(data: CreateContactInput, actor: Actor, userId: string) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const contact = await prisma.contact.create({ data: data as any })
+  const contact = await prisma.contact.create({ data: { ...(data as any), userId } })
   await prisma.auditLog.create({
-    data: { entity: "Contact", entityId: contact.id, action: "create", actor },
+    data: { entity: "Contact", entityId: contact.id, action: "create", actor, userId },
   })
   return contact
 }
 
-export async function updateContact(id: string, data: UpdateContactInput, actor: Actor) {
-  const before = await prisma.contact.findUnique({ where: { id } })
+export async function updateContact(id: string, data: UpdateContactInput, actor: Actor, userId: string) {
+  const existing = await prisma.contact.findFirst({ where: { id, userId } })
+  if (!existing) return null
+  const before = existing
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const contact = await prisma.contact.update({ where: { id }, data: data as any })
   await prisma.auditLog.create({
-    data: { entity: "Contact", entityId: id, action: "update", actor, diff: { before, after: contact } },
+    data: { entity: "Contact", entityId: id, action: "update", actor, userId, diff: { before, after: contact } },
   })
   return contact
 }
 
-export async function deleteContact(id: string, actor: Actor) {
+export async function deleteContact(id: string, actor: Actor, userId: string) {
+  const existing = await prisma.contact.findFirst({ where: { id, userId } })
+  if (!existing) return null
   await prisma.auditLog.create({
-    data: { entity: "Contact", entityId: id, action: "delete", actor },
+    data: { entity: "Contact", entityId: id, action: "delete", actor, userId },
   })
   return prisma.contact.delete({ where: { id } })
 }

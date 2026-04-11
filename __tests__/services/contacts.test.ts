@@ -6,6 +6,7 @@ jest.mock("@/lib/db", () => ({
     contact: {
       findMany: jest.fn(),
       findUnique: jest.fn(),
+      findFirst: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
       delete: jest.fn(),
@@ -61,11 +62,48 @@ describe("createContact", () => {
     const created = { id: "abc", ...input }
     mockPrisma.contact.create.mockResolvedValue(created as any)
     mockPrisma.auditLog.create.mockResolvedValue({} as any)
-    const result = await createContact(input, "ian")
-    expect(mockPrisma.contact.create).toHaveBeenCalledWith({ data: input })
+    const result = await createContact(input, "ian", "user-1")
+    expect(mockPrisma.contact.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ userId: "user-1" }) })
+    )
     expect(mockPrisma.auditLog.create).toHaveBeenCalledWith({
       data: expect.objectContaining({ entity: "Contact", entityId: "abc", action: "create", actor: "ian" }),
     })
     expect(result).toEqual(created)
+  })
+})
+
+describe("userId scoping", () => {
+  it("listContacts filters by userId", async () => {
+    mockPrisma.contact.findMany.mockResolvedValue([{ id: "c1", name: "Alice" }] as any)
+
+    const result = await listContacts({ userId: "user-1" })
+
+    expect(mockPrisma.contact.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ userId: "user-1" }) })
+    )
+    expect(result).toHaveLength(1)
+  })
+
+  it("getContact returns null when contact belongs to different user", async () => {
+    mockPrisma.contact.findFirst.mockResolvedValue(null)
+
+    const result = await getContact("c1", "user-2")
+
+    expect(mockPrisma.contact.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: "c1", userId: "user-2" } })
+    )
+    expect(result).toBeNull()
+  })
+
+  it("createContact sets userId on the new record", async () => {
+    mockPrisma.contact.create.mockResolvedValue({ id: "c2", userId: "user-1" } as any)
+    mockPrisma.auditLog.create.mockResolvedValue({} as any)
+
+    await createContact({ name: "Bob" } as any, "ian", "user-1")
+
+    expect(mockPrisma.contact.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ userId: "user-1" }) })
+    )
   })
 })
