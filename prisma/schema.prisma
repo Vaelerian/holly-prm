@@ -107,6 +107,7 @@ model User {
   userPreference    UserPreference?
   vaultConfig       VaultConfig?
   vaultNotes        VaultNote[]
+  passwordResetTokens PasswordResetToken[]
 }
 
 model ProjectMember {
@@ -339,4 +340,14 @@ model VaultNote {
   user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@unique([entityType, entityId])
+}
+
+model PasswordResetToken {
+  id         String    @id @default(uuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  usedAt     DateTime?
+  createdAt  DateTime  @default(now())
 }
