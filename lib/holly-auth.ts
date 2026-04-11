@@ -3,30 +3,31 @@ import { prisma } from "@/lib/db"
 import { redis } from "@/lib/redis"
 import bcrypt from "bcryptjs"
 
-interface ValidationResult {
-  valid: boolean
-  rateLimited?: boolean
-  keyId?: string
-}
+type ValidationResult =
+  | { valid: true; keyId: string; userId: string }
+  | { valid: false; rateLimited?: boolean }
 
 export async function validateHollyRequest(req: NextRequest): Promise<ValidationResult> {
   const apiKey = req.headers.get("x-holly-api-key")
   if (!apiKey || !apiKey.startsWith("hky_")) return { valid: false }
 
-  // Validate key before consuming rate limit quota
   const keys = await prisma.hollyApiKey.findMany()
   let matchedKeyId: string | undefined
+  let matchedUserId: string | null | undefined
   for (const key of keys) {
     const match = await bcrypt.compare(apiKey, key.keyHash)
     if (match) {
       matchedKeyId = key.id
+      matchedUserId = key.userId
       break
     }
   }
 
   if (!matchedKeyId) return { valid: false }
 
-  // Rate limit using atomic pipeline with EXPIRE NX to prevent permanent TTL loss
+  // Reject unclaimed keys (no userId assigned) -- user must claim data first
+  if (!matchedUserId) return { valid: false }
+
   const rateLimitKey = `holly:ratelimit:${apiKey.slice(0, 24)}`
   let count: number
   try {
@@ -41,10 +42,9 @@ export async function validateHollyRequest(req: NextRequest): Promise<Validation
 
   if (count > 1000) return { valid: false, rateLimited: true }
 
-  // Fire-and-forget lastUsed update (audit write should not fail the auth check)
   prisma.hollyApiKey
     .update({ where: { id: matchedKeyId }, data: { lastUsed: new Date() } })
     .catch((err) => console.error("[holly-auth] lastUsed update failed", err))
 
-  return { valid: true, keyId: matchedKeyId }
+  return { valid: true, keyId: matchedKeyId, userId: matchedUserId }
 }

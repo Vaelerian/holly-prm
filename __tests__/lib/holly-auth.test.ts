@@ -47,7 +47,7 @@ it("rejects request with wrong prefix", async () => {
 it("returns valid=false+rateLimited=true when rate limit exceeded", async () => {
   const plaintext = "hky_testkey"
   const hash = await bcrypt.hash(plaintext, 1)
-  mockPrisma.hollyApiKey.findMany.mockResolvedValue([{ id: "key-1", keyHash: hash, name: "test" }] as any)
+  mockPrisma.hollyApiKey.findMany.mockResolvedValue([{ id: "key-1", keyHash: hash, name: "test", userId: "user-1" }] as any)
   mockPipeline.exec.mockResolvedValue([[null, 1001], [null, 1]])
 
   const result = await validateHollyRequest(makeRequest(plaintext))
@@ -58,10 +58,45 @@ it("returns valid=false+rateLimited=true when rate limit exceeded", async () => 
 it("returns valid=true when key matches stored hash", async () => {
   const plaintext = "hky_validkey123"
   const hash = await bcrypt.hash(plaintext, 1)
-  mockPrisma.hollyApiKey.findMany.mockResolvedValue([{ id: "key-1", keyHash: hash, name: "test" }] as any)
+  mockPrisma.hollyApiKey.findMany.mockResolvedValue([{ id: "key-1", keyHash: hash, name: "test", userId: "user-1" }] as any)
   mockPrisma.hollyApiKey.update.mockResolvedValue({} as any)
 
   const result = await validateHollyRequest(makeRequest(plaintext))
   expect(result.valid).toBe(true)
   expect(result.keyId).toBe("key-1")
+})
+
+it("returns userId of the matched key owner", async () => {
+  const plaintext = "hky_testkey123"
+  const hash = await bcrypt.hash(plaintext, 12)
+  mockPrisma.hollyApiKey.findMany.mockResolvedValue([
+    { id: "key-1", keyHash: hash, userId: "user-abc" },
+  ] as any)
+  mockPipeline.exec.mockResolvedValue([[null, 1], [null, true]])
+
+  const req = new NextRequest("http://localhost/api/test", {
+    headers: { "x-holly-api-key": plaintext },
+  })
+  const result = await validateHollyRequest(req)
+
+  expect(result.valid).toBe(true)
+  if (result.valid) {
+    expect(result.userId).toBe("user-abc")
+  }
+})
+
+it("returns valid: false when key has no userId (unclaimed)", async () => {
+  const plaintext = "hky_testkey456"
+  const hash = await bcrypt.hash(plaintext, 12)
+  mockPrisma.hollyApiKey.findMany.mockResolvedValue([
+    { id: "key-2", keyHash: hash, userId: null },
+  ] as any)
+  mockPipeline.exec.mockResolvedValue([[null, 1], [null, true]])
+
+  const req = new NextRequest("http://localhost/api/test", {
+    headers: { "x-holly-api-key": plaintext },
+  })
+  const result = await validateHollyRequest(req)
+
+  expect(result.valid).toBe(false)
 })
