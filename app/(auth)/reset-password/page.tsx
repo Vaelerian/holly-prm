@@ -43,7 +43,7 @@ function ResetPasswordForm() {
 
   if (!token) {
     return (
-      <p className="text-sm text-red-400">Invalid reset link. <Link href="/auth/forgot-password" className="text-[#00ff88] hover:underline">Request a new one.</Link></p>
+      <p className="text-sm text-red-400">Invalid reset link. <Link href="/forgot-password" className="text-[#00ff88] hover:underline">Request a new one.</Link></p>
     )
   }
 
