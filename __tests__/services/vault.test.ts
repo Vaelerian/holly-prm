@@ -117,6 +117,22 @@ describe("searchVault", () => {
     }))
   })
 
+  it("parses frontmatter from CRLF line-ending files", async () => {
+    mockPrisma.vaultConfig.findFirst.mockResolvedValue(fakeConfig as any)
+    mockFs.access.mockResolvedValue(undefined)
+    mockFs.readdir.mockResolvedValue([
+      { name: "Note.md", isDirectory: () => false, isFile: () => true },
+    ] as any)
+    mockFs.readFile.mockResolvedValue(
+      "---\r\nprm_entity: contact\r\nprm_id: crlf123\r\n---\r\n\r\n# Note\r\n\r\nquery here" as any
+    )
+    const results = await searchVault("query")
+    expect(results[0].frontmatter).toEqual(expect.objectContaining({
+      prm_entity: "contact",
+      prm_id: "crlf123",
+    }))
+  })
+
   it("respects the limit parameter", async () => {
     mockPrisma.vaultConfig.findFirst.mockResolvedValue(fakeConfig as any)
     mockFs.access.mockResolvedValue(undefined)
