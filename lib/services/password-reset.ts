@@ -40,8 +40,10 @@ export async function consumeResetToken(token: string, newPassword: string): Pro
   if (!row) return false
 
   const passwordHash = await bcrypt.hash(newPassword, 12)
-  await prisma.user.update({ where: { id: row.user.id }, data: { passwordHash } })
-  await prisma.passwordResetToken.update({ where: { id: row.id }, data: { usedAt: new Date() } })
+  await prisma.$transaction([
+    prisma.user.update({ where: { id: row.user.id }, data: { passwordHash } }),
+    prisma.passwordResetToken.update({ where: { id: row.id }, data: { usedAt: new Date() } }),
+  ])
 
   return true
 }

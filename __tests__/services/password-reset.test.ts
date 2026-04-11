@@ -11,6 +11,7 @@ jest.mock("@/lib/db", () => ({
       update: jest.fn(),
     },
     user: { update: jest.fn() },
+    $transaction: jest.fn().mockImplementation((ops: any[]) => Promise.all(ops)),
   },
 }))
 
