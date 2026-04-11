@@ -92,7 +92,7 @@ export default function SettingsPage() {
   async function testVaultConnection() {
     setVaultTestStatus("testing")
     try {
-      // Save the current vaultPath so the status check reflects what's in the input
+      // Save current config so the status check reflects the path in the input
       await fetch("/api/v1/vault/config", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -112,23 +112,34 @@ export default function SettingsPage() {
 
   async function saveVaultConfig() {
     setVaultSaving(true)
-    await fetch("/api/v1/vault/config", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ vaultPath, workdayCron: vaultWorkdayCron, weekendCron: vaultWeekendCron, enabled: vaultEnabled }),
-    })
-    setVaultSaving(false)
+    try {
+      await fetch("/api/v1/vault/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ vaultPath, workdayCron: vaultWorkdayCron, weekendCron: vaultWeekendCron, enabled: vaultEnabled }),
+      })
+    } catch (e) {
+      console.error("[settings] save vault config failed", e)
+    } finally {
+      setVaultSaving(false)
+    }
   }
 
   async function syncVaultNow() {
     setVaultSyncing(true)
     setVaultSyncResult(null)
-    const res = await fetch("/api/v1/vault/sync", { method: "POST" })
-    if (res.ok) {
-      const data = await res.json()
-      setVaultSyncResult(data)
+    try {
+      const res = await fetch("/api/v1/vault/sync", { method: "POST" })
+      if (res.ok) {
+        const data = await res.json()
+        setVaultSyncResult(data)
+        await loadVaultStatus()
+      }
+    } catch (e) {
+      console.error("[settings] vault sync failed", e)
+    } finally {
+      setVaultSyncing(false)
     }
-    setVaultSyncing(false)
   }
 
   async function enableNotifications() {
