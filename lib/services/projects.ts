@@ -1,17 +1,23 @@
 import { prisma } from "@/lib/db"
-import { Actor } from "@/app/generated/prisma/client"
+import { Actor, ProjectStatus } from "@/app/generated/prisma/client"
 import { upsertCalendarEvent, deleteCalendarEvent } from "@/lib/services/calendar-sync"
 import type { CreateProjectInput, UpdateProjectInput } from "@/lib/validations/project"
 
 interface ListProjectsOptions {
   status?: string
+  userId: string
 }
 
 export async function listProjects(opts: ListProjectsOptions) {
-  const where: Record<string, unknown> = {}
-  if (opts.status) where.status = opts.status
+  const statusWhere = opts.status ? { status: opts.status as ProjectStatus } : {}
   return prisma.project.findMany({
-    where,
+    where: {
+      ...statusWhere,
+      OR: [
+        { userId: opts.userId },
+        { members: { some: { userId: opts.userId } } },
+      ],
+    },
     orderBy: { createdAt: "desc" },
     include: {
       _count: { select: { tasks: true } },
@@ -20,27 +26,35 @@ export async function listProjects(opts: ListProjectsOptions) {
   })
 }
 
-export async function getProject(id: string) {
-  return prisma.project.findUnique({
-    where: { id },
+export async function getProject(id: string, userId: string) {
+  return prisma.project.findFirst({
+    where: {
+      id,
+      OR: [
+        { userId },
+        { members: { some: { userId } } },
+      ],
+    },
     include: {
       tasks: {
         orderBy: [{ isMilestone: "desc" }, { createdAt: "asc" }],
         include: { actionItems: { orderBy: { createdAt: "asc" } } },
       },
+      members: { include: { user: { select: { id: true, name: true, email: true } } } },
     },
   })
 }
 
-export async function createProject(data: CreateProjectInput, actor: Actor) {
+export async function createProject(data: CreateProjectInput, actor: Actor, userId: string) {
   const project = await prisma.project.create({
     data: {
       ...data,
       targetDate: data.targetDate ? new Date(data.targetDate) : null,
+      userId,
     },
   })
   await prisma.auditLog.create({
-    data: { entity: "Project", entityId: project.id, action: "create", actor },
+    data: { entity: "Project", entityId: project.id, action: "create", actor, userId },
   })
   if (project.targetDate) {
     void upsertCalendarEvent("project", project.id, { title: project.title, date: project.targetDate })
@@ -48,8 +62,10 @@ export async function createProject(data: CreateProjectInput, actor: Actor) {
   return project
 }
 
-export async function updateProject(id: string, data: UpdateProjectInput, actor: Actor) {
-  const before = await prisma.project.findUnique({ where: { id } })
+export async function updateProject(id: string, data: UpdateProjectInput, actor: Actor, userId: string) {
+  const existing = await prisma.project.findFirst({ where: { id, userId } })
+  if (!existing) return null
+  const before = existing
   const project = await prisma.project.update({
     where: { id },
     data: {
@@ -58,7 +74,7 @@ export async function updateProject(id: string, data: UpdateProjectInput, actor:
     },
   })
   await prisma.auditLog.create({
-    data: { entity: "Project", entityId: id, action: "update", actor, diff: { before, after: project } },
+    data: { entity: "Project", entityId: id, action: "update", actor, userId, diff: { before, after: project } },
   })
   if (project.targetDate) {
     void upsertCalendarEvent("project", project.id, { title: project.title, date: project.targetDate })
@@ -68,9 +84,11 @@ export async function updateProject(id: string, data: UpdateProjectInput, actor:
   return project
 }
 
-export async function deleteProject(id: string, actor: Actor) {
+export async function deleteProject(id: string, actor: Actor, userId: string) {
+  const existing = await prisma.project.findFirst({ where: { id, userId } })
+  if (!existing) return null
   await prisma.auditLog.create({
-    data: { entity: "Project", entityId: id, action: "delete", actor },
+    data: { entity: "Project", entityId: id, action: "delete", actor, userId },
   })
   void deleteCalendarEvent("project", id)
   return prisma.project.delete({ where: { id } })

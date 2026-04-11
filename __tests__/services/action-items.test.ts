@@ -4,7 +4,7 @@ import { publishSseEvent } from "@/lib/sse-events"
 
 jest.mock("@/lib/db", () => ({
   prisma: {
-    actionItem: { create: jest.fn(), findUnique: jest.fn(), update: jest.fn(), findMany: jest.fn() },
+    actionItem: { create: jest.fn(), findUnique: jest.fn(), findFirst: jest.fn(), update: jest.fn(), findMany: jest.fn() },
     auditLog: { create: jest.fn() },
   },
 }))
@@ -32,7 +32,7 @@ describe("createActionItem", () => {
     mockPrisma.actionItem.create.mockResolvedValue(created as any)
     mockPrisma.auditLog.create.mockResolvedValue({} as any)
 
-    await createActionItem(input, "ian")
+    await createActionItem(input, "ian", "user-1")
 
     expect(mockPrisma.actionItem.create).toHaveBeenCalled()
     expect(publishSseEvent).toHaveBeenCalledWith(
@@ -46,11 +46,11 @@ describe("updateActionItemStatus", () => {
   it("publishes action_item.completed when status changes to done", async () => {
     const existing = { id: "a1", title: "Send email", assignedTo: "ian", status: "todo" }
     const updated = { ...existing, status: "done" }
-    mockPrisma.actionItem.findUnique.mockResolvedValue(existing as any)
+    mockPrisma.actionItem.findFirst.mockResolvedValue(existing as any)
     mockPrisma.actionItem.update.mockResolvedValue(updated as any)
     mockPrisma.auditLog.create.mockResolvedValue({} as any)
 
-    await updateActionItemStatus("a1", { status: "done" }, "ian")
+    await updateActionItemStatus("a1", { status: "done" }, "ian", "user-1")
 
     expect(publishSseEvent).toHaveBeenCalledWith(
       "action_item.completed",
@@ -61,11 +61,11 @@ describe("updateActionItemStatus", () => {
   it("does not publish SSE when status does not change to done", async () => {
     const existing = { id: "a1", title: "Send email", assignedTo: "ian", status: "todo" }
     const updated = { ...existing, status: "cancelled" }
-    mockPrisma.actionItem.findUnique.mockResolvedValue(existing as any)
+    mockPrisma.actionItem.findFirst.mockResolvedValue(existing as any)
     mockPrisma.actionItem.update.mockResolvedValue(updated as any)
     mockPrisma.auditLog.create.mockResolvedValue({} as any)
 
-    await updateActionItemStatus("a1", { status: "cancelled" }, "ian")
+    await updateActionItemStatus("a1", { status: "cancelled" }, "ian", "user-1")
 
     expect(publishSseEvent).not.toHaveBeenCalled()
   })
