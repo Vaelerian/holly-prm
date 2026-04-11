@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { validateHollyRequest } from "@/lib/holly-auth"
 import { runVaultSync } from "@/lib/services/vault-sync"
-import { getVaultConfig } from "@/lib/services/vault"
+import { isVaultAccessible } from "@/lib/services/vault"
 
 export async function POST(req: NextRequest) {
   const authResult = await validateHollyRequest(req)
@@ -10,8 +10,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized", code: "UNAUTHORIZED" }, { status: 401 })
   }
 
-  const config = await getVaultConfig()
-  if (!config) return NextResponse.json({ error: "vault_not_configured" }, { status: 503 })
+  const accessible = await isVaultAccessible()
+  if (!accessible) return NextResponse.json({ error: "vault_not_configured" }, { status: 503 })
 
   const result = await runVaultSync()
   return NextResponse.json(result)
