@@ -39,7 +39,7 @@ export async function updateActionItem(id: string, data: UpdateActionItemInput, 
   const existing = await prisma.actionItem.findFirst({ where: { id, userId } })
   if (!existing) return null
   const before = existing
-  const item = await prisma.actionItem.update({ where: { id }, data: { ...data, userId } })
+  const item = await prisma.actionItem.update({ where: { id, userId }, data })
   await prisma.auditLog.create({
     data: { entity: "ActionItem", entityId: id, action: "update", actor, userId, diff: { before, after: item } },
   })
@@ -59,7 +59,7 @@ export async function deleteActionItem(id: string, actor: Actor, userId: string)
   await prisma.auditLog.create({
     data: { entity: "ActionItem", entityId: id, action: "delete", actor, userId },
   })
-  return prisma.actionItem.delete({ where: { id } })
+  return prisma.actionItem.delete({ where: { id, userId } })
 }
 
 // Kept for backward compatibility — delegates to updateActionItem

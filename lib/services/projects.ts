@@ -67,7 +67,7 @@ export async function updateProject(id: string, data: UpdateProjectInput, actor:
   if (!existing) return null
   const before = existing
   const project = await prisma.project.update({
-    where: { id },
+    where: { id, userId },
     data: {
       ...data,
       targetDate: data.targetDate !== undefined ? (data.targetDate ? new Date(data.targetDate) : null) : undefined,
@@ -91,5 +91,5 @@ export async function deleteProject(id: string, actor: Actor, userId: string) {
     data: { entity: "Project", entityId: id, action: "delete", actor, userId },
   })
   void deleteCalendarEvent("project", id)
-  return prisma.project.delete({ where: { id } })
+  return prisma.project.delete({ where: { id, userId } })
 }

@@ -5,7 +5,6 @@ import { CreateTaskSchema } from "@/lib/validations/task"
 
 export async function GET(req: NextRequest) {
   const session = await auth()
-  if (!session) return NextResponse.json({ error: "Unauthorized", code: "UNAUTHORIZED" }, { status: 401 })
   const userId = session?.userId
   if (!userId) return NextResponse.json({ error: "Unauthorized", code: "UNAUTHORIZED" }, { status: 401 })
   const { searchParams } = req.nextUrl
@@ -21,7 +20,6 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const session = await auth()
-  if (!session) return NextResponse.json({ error: "Unauthorized", code: "UNAUTHORIZED" }, { status: 401 })
   const userId = session?.userId
   if (!userId) return NextResponse.json({ error: "Unauthorized", code: "UNAUTHORIZED" }, { status: 401 })
   const body = await req.json()

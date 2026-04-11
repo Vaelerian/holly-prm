@@ -73,6 +73,47 @@ describe("getProject", () => {
   })
 })
 
+describe("updateProject", () => {
+  it("returns null when userId does not match (non-owner)", async () => {
+    mockPrisma.project.findFirst.mockResolvedValue(null)
+    const result = await updateProject("p1", { title: "X" } as any, "ian", "other-user")
+    expect(result).toBeNull()
+    expect(mockPrisma.project.update).not.toHaveBeenCalled()
+  })
+
+  it("folds userId into update where clause", async () => {
+    const existing = { id: "p1", title: "Old", userId: "user-1" }
+    const updated = { ...existing, title: "New" }
+    mockPrisma.project.findFirst.mockResolvedValue(existing as any)
+    mockPrisma.project.update.mockResolvedValue(updated as any)
+    mockPrisma.auditLog.create.mockResolvedValue({} as any)
+    await updateProject("p1", { title: "New" } as any, "ian", "user-1")
+    expect(mockPrisma.project.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ id: "p1", userId: "user-1" }) })
+    )
+  })
+})
+
+describe("deleteProject", () => {
+  it("returns null when userId does not match (non-owner)", async () => {
+    mockPrisma.project.findFirst.mockResolvedValue(null)
+    const result = await deleteProject("p1", "ian", "other-user")
+    expect(result).toBeNull()
+    expect(mockPrisma.project.delete).not.toHaveBeenCalled()
+  })
+
+  it("folds userId into delete where clause", async () => {
+    const existing = { id: "p1", userId: "user-1" }
+    mockPrisma.project.findFirst.mockResolvedValue(existing as any)
+    mockPrisma.project.delete.mockResolvedValue(existing as any)
+    mockPrisma.auditLog.create.mockResolvedValue({} as any)
+    await deleteProject("p1", "ian", "user-1")
+    expect(mockPrisma.project.delete).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ id: "p1", userId: "user-1" }) })
+    )
+  })
+})
+
 describe("createProject", () => {
   it("creates project and writes audit log", async () => {
     const input = { title: "P1", description: "", category: "work" as const, status: "planning" as const, priority: "medium" as const, targetDate: null, notes: "" }

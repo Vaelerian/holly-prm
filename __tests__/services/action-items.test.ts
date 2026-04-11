@@ -34,7 +34,9 @@ describe("createActionItem", () => {
 
     await createActionItem(input, "ian", "user-1")
 
-    expect(mockPrisma.actionItem.create).toHaveBeenCalled()
+    expect(mockPrisma.actionItem.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ userId: "user-1" }) })
+    )
     expect(publishSseEvent).toHaveBeenCalledWith(
       "action_item.created",
       expect.objectContaining({ id: "a1", title: "Send email", assignedTo: "ian" })
