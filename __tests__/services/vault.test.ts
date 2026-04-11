@@ -34,46 +34,51 @@ const fakeConfig = {
 }
 
 describe("getVaultConfig", () => {
-  it("returns null when no config exists", async () => {
-    mockPrisma.vaultConfig.findFirst.mockResolvedValue(null)
+  it("returns null when no userId provided", async () => {
     expect(await getVaultConfig()).toBeNull()
+    expect(mockPrisma.vaultConfig.findFirst).not.toHaveBeenCalled()
+  })
+
+  it("returns null when no config exists for userId", async () => {
+    mockPrisma.vaultConfig.findFirst.mockResolvedValue(null)
+    expect(await getVaultConfig("user-1")).toBeNull()
   })
 
   it("returns config when one exists", async () => {
     mockPrisma.vaultConfig.findFirst.mockResolvedValue(fakeConfig as any)
-    expect(await getVaultConfig()).toEqual(fakeConfig)
+    expect(await getVaultConfig("user-1")).toEqual(fakeConfig)
   })
 })
 
 describe("isVaultAccessible", () => {
   it("returns false when no config", async () => {
     mockPrisma.vaultConfig.findFirst.mockResolvedValue(null)
-    expect(await isVaultAccessible()).toBe(false)
+    expect(await isVaultAccessible("user-1")).toBe(false)
   })
 
   it("returns true when vault path is accessible", async () => {
     mockPrisma.vaultConfig.findFirst.mockResolvedValue(fakeConfig as any)
     mockFs.access.mockResolvedValue(undefined)
-    expect(await isVaultAccessible()).toBe(true)
+    expect(await isVaultAccessible("user-1")).toBe(true)
   })
 
   it("returns false when vault path not accessible", async () => {
     mockPrisma.vaultConfig.findFirst.mockResolvedValue(fakeConfig as any)
     mockFs.access.mockRejectedValue(Object.assign(new Error("ENOENT"), { code: "ENOENT" }))
-    expect(await isVaultAccessible()).toBe(false)
+    expect(await isVaultAccessible("user-1")).toBe(false)
   })
 })
 
 describe("searchVault", () => {
   it("returns empty array when no config", async () => {
     mockPrisma.vaultConfig.findFirst.mockResolvedValue(null)
-    expect(await searchVault("query")).toEqual([])
+    expect(await searchVault("query", 10, "user-1")).toEqual([])
   })
 
   it("returns empty array when vault inaccessible", async () => {
     mockPrisma.vaultConfig.findFirst.mockResolvedValue(fakeConfig as any)
     mockFs.access.mockRejectedValue(Object.assign(new Error("ENOENT"), { code: "ENOENT" }))
-    expect(await searchVault("query")).toEqual([])
+    expect(await searchVault("query", 10, "user-1")).toEqual([])
   })
 
   it("returns matching results with title, path, snippet", async () => {
@@ -83,7 +88,7 @@ describe("searchVault", () => {
       { name: "Note.md", isDirectory: () => false, isFile: () => true },
     ] as any)
     mockFs.readFile.mockResolvedValue("# Note Title\n\nHello query world" as any)
-    const results = await searchVault("query")
+    const results = await searchVault("query", 10, "user-1")
     expect(results).toHaveLength(1)
     expect(results[0].title).toBe("Note Title")
     expect(results[0].path).toBe("Note.md")
@@ -97,7 +102,7 @@ describe("searchVault", () => {
       { name: "My Note.md", isDirectory: () => false, isFile: () => true },
     ] as any)
     mockFs.readFile.mockResolvedValue("Some query content without heading" as any)
-    const results = await searchVault("query")
+    const results = await searchVault("query", 10, "user-1")
     expect(results[0].title).toBe("My Note")
   })
 
@@ -110,7 +115,7 @@ describe("searchVault", () => {
     mockFs.readFile.mockResolvedValue(
       "---\nprm_entity: contact\nprm_id: abc123\n---\n\n# Note\n\nquery here" as any
     )
-    const results = await searchVault("query")
+    const results = await searchVault("query", 10, "user-1")
     expect(results[0].frontmatter).toEqual(expect.objectContaining({
       prm_entity: "contact",
       prm_id: "abc123",
@@ -126,7 +131,7 @@ describe("searchVault", () => {
     mockFs.readFile.mockResolvedValue(
       "---\r\nprm_entity: contact\r\nprm_id: crlf123\r\n---\r\n\r\n# Note\r\n\r\nquery here" as any
     )
-    const results = await searchVault("query")
+    const results = await searchVault("query", 10, "user-1")
     expect(results[0].frontmatter).toEqual(expect.objectContaining({
       prm_entity: "contact",
       prm_id: "crlf123",
@@ -142,7 +147,7 @@ describe("searchVault", () => {
       { name: "C.md", isDirectory: () => false, isFile: () => true },
     ] as any)
     mockFs.readFile.mockResolvedValue("# Title\n\nquery content" as any)
-    const results = await searchVault("query", 2)
+    const results = await searchVault("query", 2, "user-1")
     expect(results).toHaveLength(2)
   })
 })
@@ -150,55 +155,55 @@ describe("searchVault", () => {
 describe("getNoteContent", () => {
   it("returns null when no config", async () => {
     mockPrisma.vaultConfig.findFirst.mockResolvedValue(null)
-    expect(await getNoteContent("Note.md")).toBeNull()
+    expect(await getNoteContent("Note.md", "user-1")).toBeNull()
   })
 
   it("returns null when path traversal detected", async () => {
     mockPrisma.vaultConfig.findFirst.mockResolvedValue(fakeConfig as any)
-    expect(await getNoteContent("../../etc/passwd")).toBeNull()
+    expect(await getNoteContent("../../etc/passwd", "user-1")).toBeNull()
   })
 
   it("returns content when file exists", async () => {
     mockPrisma.vaultConfig.findFirst.mockResolvedValue(fakeConfig as any)
     mockFs.readFile.mockResolvedValue("# Hello\n\ncontent here" as any)
-    expect(await getNoteContent("Note.md")).toBe("# Hello\n\ncontent here")
+    expect(await getNoteContent("Note.md", "user-1")).toBe("# Hello\n\ncontent here")
   })
 
   it("returns null when file not found", async () => {
     mockPrisma.vaultConfig.findFirst.mockResolvedValue(fakeConfig as any)
     mockFs.readFile.mockRejectedValue(Object.assign(new Error("ENOENT"), { code: "ENOENT" }))
-    expect(await getNoteContent("missing.md")).toBeNull()
+    expect(await getNoteContent("missing.md", "user-1")).toBeNull()
   })
 })
 
 describe("createNote", () => {
   it("throws on invalid filename (path separators)", async () => {
     mockPrisma.vaultConfig.findFirst.mockResolvedValue(fakeConfig as any)
-    await expect(createNote("../bad/path", "contact", "id1", "content")).rejects.toThrow("Invalid filename")
+    await expect(createNote("../bad/path", "contact", "id1", "content", "user-1")).rejects.toThrow("Invalid filename")
   })
 
   it("throws on invalid filename (special chars)", async () => {
     mockPrisma.vaultConfig.findFirst.mockResolvedValue(fakeConfig as any)
-    await expect(createNote("note<>.md", "contact", "id1", "content")).rejects.toThrow("Invalid filename")
+    await expect(createNote("note<>.md", "contact", "id1", "content", "user-1")).rejects.toThrow("Invalid filename")
   })
 
   it("throws when vault not configured", async () => {
     mockPrisma.vaultConfig.findFirst.mockResolvedValue(null)
-    await expect(createNote("John Smith", "contact", "id1", "content")).rejects.toThrow("Vault not configured")
+    await expect(createNote("John Smith", "contact", "id1", "content", "user-1")).rejects.toThrow("Vault not configured")
   })
 
   it("throws FILE_EXISTS when note already exists", async () => {
     mockPrisma.vaultConfig.findFirst.mockResolvedValue(fakeConfig as any)
     mockFs.mkdir.mockResolvedValue(undefined as any)
     mockFs.access.mockResolvedValue(undefined) // file exists - access does NOT throw
-    await expect(createNote("John Smith", "contact", "id1", "content")).rejects.toThrow("FILE_EXISTS")
+    await expect(createNote("John Smith", "contact", "id1", "content", "user-1")).rejects.toThrow("FILE_EXISTS")
   })
 
   it("rethrows unexpected access errors (e.g. EACCES)", async () => {
     mockPrisma.vaultConfig.findFirst.mockResolvedValue(fakeConfig as any)
     mockFs.mkdir.mockResolvedValue(undefined as any)
     mockFs.access.mockRejectedValue(Object.assign(new Error("EACCES"), { code: "EACCES" }))
-    await expect(createNote("John Smith", "contact", "id1", "content")).rejects.toThrow("EACCES")
+    await expect(createNote("John Smith", "contact", "id1", "content", "user-1")).rejects.toThrow("EACCES")
   })
 
   it("creates note with frontmatter and inserts VaultNote row", async () => {
@@ -208,7 +213,7 @@ describe("createNote", () => {
     mockFs.writeFile.mockResolvedValue(undefined)
     mockPrisma.vaultNote.upsert.mockResolvedValue({} as any)
 
-    const result = await createNote("John Smith", "contact", "id1", "# John Smith\n\nContent")
+    const result = await createNote("John Smith", "contact", "id1", "# John Smith\n\nContent", "user-1")
     expect(result).toBe("Holly/John Smith.md")
     const written = (mockFs.writeFile as jest.Mock).mock.calls[0][1] as string
     expect(written).toContain("prm_entity: contact")
@@ -216,7 +221,7 @@ describe("createNote", () => {
     expect(written).toContain("# John Smith")
     expect(mockPrisma.vaultNote.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
-        create: expect.objectContaining({ entityType: "contact", entityId: "id1", vaultPath: "Holly/John Smith.md" }),
+        create: expect.objectContaining({ entityType: "contact", entityId: "id1", vaultPath: "Holly/John Smith.md", userId: "user-1" }),
       })
     )
   })
@@ -225,18 +230,18 @@ describe("createNote", () => {
 describe("updateNote", () => {
   it("throws when vault not configured", async () => {
     mockPrisma.vaultConfig.findFirst.mockResolvedValue(null)
-    await expect(updateNote("Holly/Note.md", "new content")).rejects.toThrow("Vault not configured")
+    await expect(updateNote("Holly/Note.md", "new content", "user-1")).rejects.toThrow("Vault not configured")
   })
 
   it("throws NOTE_NOT_FOUND when file missing", async () => {
     mockPrisma.vaultConfig.findFirst.mockResolvedValue(fakeConfig as any)
     mockFs.readFile.mockRejectedValue(Object.assign(new Error("ENOENT"), { code: "ENOENT" }))
-    await expect(updateNote("Holly/Note.md", "new content")).rejects.toThrow("NOTE_NOT_FOUND")
+    await expect(updateNote("Holly/Note.md", "new content", "user-1")).rejects.toThrow("NOTE_NOT_FOUND")
   })
 
   it("throws on path traversal attempt", async () => {
     mockPrisma.vaultConfig.findFirst.mockResolvedValue(fakeConfig as any)
-    await expect(updateNote("../../etc/passwd", "content")).rejects.toThrow("Path traversal")
+    await expect(updateNote("../../etc/passwd", "content", "user-1")).rejects.toThrow("Path traversal")
   })
 
   it("preserves frontmatter and adds last_updated when frontmatter exists", async () => {
@@ -247,7 +252,7 @@ describe("updateNote", () => {
     mockFs.writeFile.mockResolvedValue(undefined)
     mockPrisma.vaultNote.updateMany.mockResolvedValue({ count: 1 } as any)
 
-    await updateNote("Holly/Note.md", "New content")
+    await updateNote("Holly/Note.md", "New content", "user-1")
 
     const written = (mockFs.writeFile as jest.Mock).mock.calls[0][1] as string
     expect(written).toContain("prm_entity: contact")
@@ -266,7 +271,7 @@ describe("updateNote", () => {
     mockFs.writeFile.mockResolvedValue(undefined)
     mockPrisma.vaultNote.updateMany.mockResolvedValue({ count: 0 } as any)
 
-    await updateNote("Holly/Note.md", "New content")
+    await updateNote("Holly/Note.md", "New content", "user-1")
 
     const written = (mockFs.writeFile as jest.Mock).mock.calls[0][1] as string
     expect(written).not.toContain("2025-01-01")
@@ -279,7 +284,7 @@ describe("updateNote", () => {
     mockFs.writeFile.mockResolvedValue(undefined)
     mockPrisma.vaultNote.updateMany.mockResolvedValue({ count: 0 } as any)
 
-    await updateNote("Holly/Note.md", "New content")
+    await updateNote("Holly/Note.md", "New content", "user-1")
 
     const written = (mockFs.writeFile as jest.Mock).mock.calls[0][1] as string
     expect(written).toBe("New content")

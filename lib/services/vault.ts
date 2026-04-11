@@ -10,7 +10,8 @@ export interface VaultSearchResult {
 }
 
 export async function getVaultConfig(userId?: string) {
-  return prisma.vaultConfig.findFirst(userId ? { where: { userId } } : undefined)
+  if (!userId) return null
+  return prisma.vaultConfig.findFirst({ where: { userId } })
 }
 
 export async function isVaultAccessible(userId?: string): Promise<boolean> {
@@ -156,7 +157,7 @@ export async function createNote(
 
   await prisma.vaultNote.upsert({
     where: { entityType_entityId: { entityType, entityId } },
-    create: { entityType, entityId, vaultPath: relativePath, lastSyncAt: new Date() },
+    create: { entityType, entityId, vaultPath: relativePath, lastSyncAt: new Date(), userId: userId ?? null },
     update: { vaultPath: relativePath, lastSyncAt: new Date() },
   })
 
