@@ -4,6 +4,8 @@ import { redis } from "@/lib/redis"
 import { sendPushNotification, isPushConfigured } from "@/lib/push"
 import { publishSseEvent } from "@/lib/sse-events"
 import { fetchRecentEmails } from "@/lib/services/gmail"
+import { getVaultConfig } from "@/lib/services/vault"
+import { shouldRunSync, runVaultSync } from "@/lib/services/vault-sync"
 
 const MAX_NOTIFICATIONS_PER_RUN = 5
 
@@ -53,6 +55,17 @@ export async function POST(req: NextRequest) {
     await redis.set("gmail:recent", JSON.stringify(recentEmails), "EX", 3600)
   } catch (e) {
     console.error("[cron/notify] gmail poll failed", e)
+  }
+
+  // 4. Vault sync
+  try {
+    const vaultConfig = await getVaultConfig()
+    if (vaultConfig && shouldRunSync(vaultConfig)) {
+      const result = await runVaultSync()
+      await redis.set("vault:sync:latest", JSON.stringify(result), "EX", 7200)
+    }
+  } catch (e) {
+    console.error("[cron/notify] vault sync failed", e)
   }
 
   if (!isPushConfigured) {

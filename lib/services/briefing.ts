@@ -102,6 +102,18 @@ export async function getBriefing() {
     // Redis unavailable or invalid JSON - proceed with empty array
   }
 
+  // Read vault sync cache (populated by cron)
+  let vaultUpdates: unknown[] = []
+  try {
+    const vaultCached = await redis.get("vault:sync:latest")
+    if (vaultCached) {
+      const parsed = JSON.parse(vaultCached)
+      vaultUpdates = parsed.updatedNotes ?? []
+    }
+  } catch {
+    // Redis unavailable or invalid JSON - proceed with empty array
+  }
+
   const now = new Date()
   const followUpCandidates = candidateContacts.filter(c => {
     const daysSince = (now.getTime() - c.lastInteraction!.getTime()) / (1000 * 60 * 60 * 24)
@@ -132,6 +144,7 @@ export async function getBriefing() {
     recentInteractions,
     projectHealth,
     recentEmails,
+    vaultUpdates,
     generatedAt: new Date(),
   }
 }

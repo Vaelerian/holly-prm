@@ -1,5 +1,6 @@
 import { getBriefing } from "@/lib/services/briefing"
 import { prisma } from "@/lib/db"
+import { redis } from "@/lib/redis"
 
 jest.mock("@/lib/db", () => ({
   prisma: {
@@ -11,7 +12,14 @@ jest.mock("@/lib/db", () => ({
   },
 }))
 
+jest.mock("@/lib/redis", () => ({
+  redis: {
+    get: jest.fn().mockResolvedValue(null),
+  },
+}))
+
 const mockPrisma = prisma as jest.Mocked<typeof prisma>
+const mockRedis = redis as jest.Mocked<typeof redis>
 
 beforeEach(() => jest.clearAllMocks())
 
@@ -71,4 +79,44 @@ it("followUpCandidates filters contacts approaching overdue threshold", async ()
 
   expect(result.followUpCandidates).toHaveLength(1)
   expect(result.followUpCandidates[0].id).toBe("c3")
+})
+
+it("vaultUpdates is populated from Redis cache", async () => {
+  mockPrisma.contact.findMany.mockResolvedValue([])
+  mockPrisma.interaction.findMany.mockResolvedValue([])
+  mockPrisma.actionItem.findMany.mockResolvedValue([])
+  mockPrisma.project.count.mockResolvedValue(0 as any)
+  mockPrisma.project.findMany.mockResolvedValue([])
+  mockPrisma.task.count.mockResolvedValue(0 as any)
+  mockPrisma.task.findMany.mockResolvedValue([])
+
+  const updatedNotes = [
+    { path: "Holly/Alice.md", entityType: "contact", entityId: "c1" },
+    { path: "Holly/Bob.md", entityType: "contact", entityId: "c2" },
+  ]
+  mockRedis.get.mockImplementation(async (key: string) => {
+    if (key === "vault:sync:latest") return JSON.stringify({ updatedNotes, errors: [] })
+    return null
+  })
+
+  const result = await getBriefing()
+
+  expect(result.vaultUpdates).toHaveLength(2)
+  expect(result.vaultUpdates[0]).toMatchObject({ path: "Holly/Alice.md" })
+})
+
+it("vaultUpdates is empty when Redis cache is absent", async () => {
+  mockPrisma.contact.findMany.mockResolvedValue([])
+  mockPrisma.interaction.findMany.mockResolvedValue([])
+  mockPrisma.actionItem.findMany.mockResolvedValue([])
+  mockPrisma.project.count.mockResolvedValue(0 as any)
+  mockPrisma.project.findMany.mockResolvedValue([])
+  mockPrisma.task.count.mockResolvedValue(0 as any)
+  mockPrisma.task.findMany.mockResolvedValue([])
+
+  mockRedis.get.mockResolvedValue(null)
+
+  const result = await getBriefing()
+
+  expect(result.vaultUpdates).toEqual([])
 })
