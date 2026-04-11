@@ -78,6 +78,49 @@ enum KnowledgeSourceType {
   contact
 }
 
+enum UserStatus {
+  pending
+  approved
+  rejected
+}
+
+model User {
+  id           String     @id @default(uuid())
+  email        String     @unique
+  name         String
+  passwordHash String?
+  status       UserStatus @default(pending)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  contacts          Contact[]
+  interactions      Interaction[]
+  actionItems       ActionItem[]
+  projects          Project[]
+  projectMemberships ProjectMember[]
+  auditLogs         AuditLog[]
+  knowledgeItems    KnowledgeItem[]
+  hollyApiKeys      HollyApiKey[]
+  pushSubscriptions PushSubscription[]
+  googleToken       GoogleToken?
+  calendarSync      CalendarSync?
+  userPreference    UserPreference?
+  vaultConfig       VaultConfig?
+  vaultNotes        VaultNote[]
+}
+
+model ProjectMember {
+  id        String   @id @default(uuid())
+  projectId String
+  userId    String
+  createdAt DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+}
+
 model Contact {
   id                  String        @id @default(uuid())
   name                String
@@ -94,6 +137,8 @@ model Contact {
   interactions        Interaction[]
   createdAt           DateTime      @default(now())
   updatedAt           DateTime      @updatedAt
+  userId              String?
+  user                User?         @relation(fields: [userId], references: [id])
 
   @@index([name])
 }
@@ -117,6 +162,8 @@ model Interaction {
   occurredAt        DateTime
   actionItems       ActionItem[]
   createdAt         DateTime        @default(now())
+  userId            String?
+  user              User?           @relation(fields: [userId], references: [id])
 
   @@index([contactId])
   @@index([occurredAt])
@@ -135,6 +182,8 @@ model ActionItem {
   assignedTo    Actor
   dueDate       DateTime?
   createdAt     DateTime     @default(now())
+  userId        String?
+  user          User?        @relation(fields: [userId], references: [id])
 
   @@index([interactionId])
   @@index([status, assignedTo])
@@ -152,6 +201,9 @@ model Project {
   tasks       Task[]
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
+  userId      String?
+  user        User?           @relation(fields: [userId], references: [id])
+  members     ProjectMember[]
 }
 
 model Task {
@@ -177,6 +229,8 @@ model AuditLog {
   actor      Actor
   diff       Json?
   occurredAt DateTime    @default(now())
+  userId     String?
+  user       User?       @relation(fields: [userId], references: [id])
 
   @@index([entity, entityId])
   @@index([occurredAt])
@@ -192,6 +246,8 @@ model KnowledgeItem {
   obsidianReady    Boolean             @default(false)
   exported         Boolean             @default(false)
   createdAt        DateTime            @default(now())
+  userId           String?
+  user             User?               @relation(fields: [userId], references: [id])
 
   @@index([sourceId, sourceType])
 }
@@ -203,6 +259,8 @@ model HollyApiKey {
   lastUsed  DateTime?
   revokedAt DateTime?
   createdAt DateTime  @default(now())
+  userId    String?
+  user      User?     @relation(fields: [userId], references: [id])
 }
 
 model PushSubscription {
@@ -211,6 +269,8 @@ model PushSubscription {
   p256dh    String
   auth      String
   createdAt DateTime @default(now())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
 }
 
 enum CalendarEntityType {
@@ -229,6 +289,8 @@ model GoogleToken {
   scopes       String[]
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+  userId       String?  @unique
+  user         User?    @relation(fields: [userId], references: [id])
 }
 
 model CalendarSync {
@@ -238,6 +300,8 @@ model CalendarSync {
   googleEventId String
   calendarId    String             @default("primary")
   createdAt     DateTime           @default(now())
+  userId        String?            @unique
+  user          User?              @relation(fields: [userId], references: [id])
 
   @@unique([entityType, entityId])
 }
@@ -247,6 +311,8 @@ model UserPreference {
   calendarFilters Json     @default("{\"tasks\":true,\"projects\":true,\"followUps\":true,\"milestones\":true,\"actionItems\":true,\"googleEvents\":true}")
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+  userId          String?  @unique
+  user            User?    @relation(fields: [userId], references: [id])
 }
 
 model VaultConfig {
@@ -258,6 +324,8 @@ model VaultConfig {
   enabled     Boolean   @default(true)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+  userId      String?   @unique
+  user        User?     @relation(fields: [userId], references: [id])
 }
 
 model VaultNote {
@@ -267,6 +335,8 @@ model VaultNote {
   vaultPath  String
   lastSyncAt DateTime
   createdAt  DateTime @default(now())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id])
 
   @@unique([entityType, entityId])
 }
