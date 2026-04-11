@@ -116,6 +116,19 @@ describe("searchVault", () => {
       prm_id: "abc123",
     }))
   })
+
+  it("respects the limit parameter", async () => {
+    mockPrisma.vaultConfig.findFirst.mockResolvedValue(fakeConfig as any)
+    mockFs.access.mockResolvedValue(undefined)
+    mockFs.readdir.mockResolvedValue([
+      { name: "A.md", isDirectory: () => false, isFile: () => true },
+      { name: "B.md", isDirectory: () => false, isFile: () => true },
+      { name: "C.md", isDirectory: () => false, isFile: () => true },
+    ] as any)
+    mockFs.readFile.mockResolvedValue("# Title\n\nquery content" as any)
+    const results = await searchVault("query", 2)
+    expect(results).toHaveLength(2)
+  })
 })
 
 describe("getNoteContent", () => {
