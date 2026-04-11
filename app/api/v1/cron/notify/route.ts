@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
     console.error("[cron/notify] gmail poll failed", e)
   }
 
-  // 3. Vault sync
+  // 3. Vault sync (best-effort per-user; falls back to unclaimed config if no userId)
   try {
     const vaultConfig = await getVaultConfig()
     if (vaultConfig && shouldRunSync(vaultConfig)) {
@@ -72,18 +72,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ sent: 0 })
   }
 
-  const subscriptions = await prisma.pushSubscription.findMany()
-  if (subscriptions.length === 0) {
-    return NextResponse.json({ sent: 0 })
-  }
-
-  // 4. Push - overdue contacts
+  // 4. Push - overdue contacts (scoped per user)
   for (const contact of overdueContacts) {
     if (sent >= MAX_NOTIFICATIONS_PER_RUN) break
+    if (!contact.userId) continue
     const dedupeKey = `notify:sent:overdue:${contact.id}:${today}`
     const already = await redis.get(dedupeKey)
     if (already) continue
 
+    const subscriptions = await prisma.pushSubscription.findMany({ where: { userId: contact.userId } })
     for (const sub of subscriptions) {
       try {
         await sendPushNotification(sub, {
@@ -99,7 +96,7 @@ export async function POST(req: NextRequest) {
     sent++
   }
 
-  // 5. Follow-ups due
+  // 5. Follow-ups due (scoped per user)
   const now = new Date()
   const pendingFollowUps = await prisma.interaction.findMany({
     where: {
@@ -114,6 +111,7 @@ export async function POST(req: NextRequest) {
 
   for (const interaction of pendingFollowUps) {
     if (sent >= MAX_NOTIFICATIONS_PER_RUN) break
+    if (!interaction.userId) continue
     const dedupeKey = `notify:sent:followup:${interaction.id}:${today}`
     const already = await redis.get(dedupeKey)
     if (already) continue
@@ -122,6 +120,7 @@ export async function POST(req: NextRequest) {
       ? interaction.summary.slice(0, 60) + "..."
       : interaction.summary
 
+    const subscriptions = await prisma.pushSubscription.findMany({ where: { userId: interaction.userId } })
     for (const sub of subscriptions) {
       try {
         await sendPushNotification(sub, {

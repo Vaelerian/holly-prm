@@ -19,8 +19,8 @@ export async function GET(req: NextRequest) {
   }
 
   const stateKey = `google:oauth:state:${state}`
-  const valid = await redis.get(stateKey).catch(() => null)
-  if (!valid) {
+  const storedUserId = await redis.get(stateKey).catch(() => null)
+  if (!storedUserId) {
     return NextResponse.redirect(new URL("/settings?error=oauth_failed", req.url))
   }
   await redis.del(stateKey).catch(() => {})
@@ -48,8 +48,8 @@ export async function GET(req: NextRequest) {
 
   const scopes = Array.isArray(tokens.scope) ? tokens.scope : (tokens.scope ?? "").split(" ")
 
-  // Upsert - delete existing and recreate (single-user, at most one row)
-  await prisma.googleToken.deleteMany()
+  // Upsert - delete existing token for this user and recreate
+  await prisma.googleToken.deleteMany({ where: { userId: storedUserId } })
   await prisma.googleToken.create({
     data: {
       email,
@@ -57,6 +57,7 @@ export async function GET(req: NextRequest) {
       refreshToken: encrypt(tokens.refresh_token),
       expiresAt: new Date(tokens.expiry_date),
       scopes,
+      userId: storedUserId,
     },
   })
 

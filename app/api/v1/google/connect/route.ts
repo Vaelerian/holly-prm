@@ -7,9 +7,11 @@ import { randomUUID } from "crypto"
 export async function GET(req: NextRequest) {
   const session = await auth()
   if (!session) return NextResponse.redirect(new URL("/login", req.url))
+  const userId = session?.userId
+  if (!userId) return NextResponse.redirect(new URL("/login", req.url))
 
   const state = randomUUID()
-  await redis.set(`google:oauth:state:${state}`, "1", "EX", 600)
+  await redis.set(`google:oauth:state:${state}`, userId, "EX", 600)
 
   const client = new OAuth2Client(
     process.env.GOOGLE_CLIENT_ID,

@@ -33,6 +33,8 @@ const ConfigSchema = z.object({
 export async function POST(req: NextRequest) {
   const session = await auth()
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const userId = session?.userId
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   let body: unknown
   try { body = await req.json() } catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }) }
@@ -42,13 +44,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Validation failed", details: parsed.error.flatten() }, { status: 422 })
   }
 
-  const existing = await prisma.vaultConfig.findFirst()
+  const existing = await prisma.vaultConfig.findFirst({ where: { userId } })
   const config = existing
     ? await prisma.vaultConfig.update({
         where: { id: existing.id },
         data: parsed.data,
       })
-    : await prisma.vaultConfig.create({ data: parsed.data })
+    : await prisma.vaultConfig.create({ data: { ...parsed.data, userId } })
 
   return NextResponse.json(config)
 }

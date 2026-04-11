@@ -9,12 +9,12 @@ export interface VaultSearchResult {
   frontmatter: Record<string, string>
 }
 
-export async function getVaultConfig() {
-  return prisma.vaultConfig.findFirst()
+export async function getVaultConfig(userId?: string) {
+  return prisma.vaultConfig.findFirst(userId ? { where: { userId } } : undefined)
 }
 
-export async function isVaultAccessible(): Promise<boolean> {
-  const config = await getVaultConfig()
+export async function isVaultAccessible(userId?: string): Promise<boolean> {
+  const config = await getVaultConfig(userId)
   if (!config) return false
   try {
     await access(config.vaultPath)
@@ -67,8 +67,8 @@ async function walkDir(dir: string): Promise<string[]> {
   return files
 }
 
-export async function searchVault(query: string, limit = 10): Promise<VaultSearchResult[]> {
-  const config = await getVaultConfig()
+export async function searchVault(query: string, limit = 10, userId?: string): Promise<VaultSearchResult[]> {
+  const config = await getVaultConfig(userId)
   if (!config) return []
   try {
     await access(config.vaultPath)
@@ -104,8 +104,8 @@ function isPathSafe(vaultRoot: string, resolvedPath: string): boolean {
   return !rel.startsWith("..") && !path.isAbsolute(rel)
 }
 
-export async function getNoteContent(relativePath: string): Promise<string | null> {
-  const config = await getVaultConfig()
+export async function getNoteContent(relativePath: string, userId?: string): Promise<string | null> {
+  const config = await getVaultConfig(userId)
   if (!config) return null
   const vaultRoot = path.resolve(config.vaultPath)
   const resolved = path.resolve(vaultRoot, relativePath)
@@ -123,12 +123,13 @@ export async function createNote(
   filename: string,
   entityType: string,
   entityId: string,
-  content: string
+  content: string,
+  userId?: string
 ): Promise<string> {
   if (!VALID_FILENAME.test(filename)) {
     throw new Error(`Invalid filename: ${filename}`)
   }
-  const config = await getVaultConfig()
+  const config = await getVaultConfig(userId)
   if (!config) throw new Error("Vault not configured")
 
   const hollyDir = path.join(config.vaultPath, "Holly")
@@ -162,8 +163,8 @@ export async function createNote(
   return relativePath
 }
 
-export async function updateNote(relativePath: string, content: string): Promise<void> {
-  const config = await getVaultConfig()
+export async function updateNote(relativePath: string, content: string, userId?: string): Promise<void> {
+  const config = await getVaultConfig(userId)
   if (!config) throw new Error("Vault not configured")
 
   const vaultRoot = path.resolve(config.vaultPath)

@@ -30,7 +30,7 @@ export async function createActionItem(data: CreateActionItemInput, actor: Actor
     dueDate: item.dueDate ? item.dueDate.toISOString() : null,
   })
   if (item.dueDate) {
-    void upsertCalendarEvent("action_item", item.id, { title: item.title, date: item.dueDate })
+    void upsertCalendarEvent("action_item", item.id, { title: item.title, date: item.dueDate }, userId)
   }
   return item
 }

@@ -47,8 +47,8 @@ function parseFm(content: string): Record<string, string> {
   return result
 }
 
-export async function runVaultSync(): Promise<VaultSyncResult> {
-  const config = await getVaultConfig()
+export async function runVaultSync(userId?: string): Promise<VaultSyncResult> {
+  const config = await getVaultConfig(userId)
   if (!config) return { updatedNotes: [], errors: [] }
 
   const vaultNotes = await prisma.vaultNote.findMany()

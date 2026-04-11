@@ -66,7 +66,7 @@ export async function createTask(data: CreateTaskInput, actor: Actor, userId: st
     data: { entity: "Task", entityId: task.id, action: "create", actor, userId },
   })
   if (task.dueDate) {
-    void upsertCalendarEvent("task", task.id, { title: task.title, date: task.dueDate })
+    void upsertCalendarEvent("task", task.id, { title: task.title, date: task.dueDate }, userId)
   }
   return task
 }
@@ -91,9 +91,9 @@ export async function updateTask(id: string, data: UpdateTaskInput, actor: Actor
     data: { entity: "Task", entityId: id, action: "update", actor, userId, diff: { before: existing, after: task } },
   })
   if (task.dueDate) {
-    void upsertCalendarEvent("task", task.id, { title: task.title, date: task.dueDate })
+    void upsertCalendarEvent("task", task.id, { title: task.title, date: task.dueDate }, userId)
   } else if (data.dueDate === null) {
-    void deleteCalendarEvent("task", task.id)
+    void deleteCalendarEvent("task", task.id, userId)
   }
   return task
 }
@@ -108,6 +108,6 @@ export async function deleteTask(id: string, actor: Actor, userId: string) {
   await prisma.auditLog.create({
     data: { entity: "Task", entityId: id, action: "delete", actor, userId },
   })
-  void deleteCalendarEvent("task", id)
+  void deleteCalendarEvent("task", id, userId)
   return prisma.task.delete({ where: { id } })
 }

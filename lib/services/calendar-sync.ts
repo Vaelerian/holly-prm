@@ -19,11 +19,12 @@ export interface GoogleCalendarEvent {
 export async function upsertCalendarEvent(
   entityType: CalendarEntityType,
   entityId: string,
-  data: CalendarEventData
+  data: CalendarEventData,
+  userId: string
 ): Promise<void> {
   let client
   try {
-    client = await getGoogleClient()
+    client = await getGoogleClient(userId)
   } catch (err) {
     if (err instanceof GoogleNotConnectedError) return
     console.error("[calendar-sync] getGoogleClient failed", err)
@@ -73,11 +74,12 @@ export async function upsertCalendarEvent(
 
 export async function deleteCalendarEvent(
   entityType: CalendarEntityType,
-  entityId: string
+  entityId: string,
+  userId: string
 ): Promise<void> {
   let client
   try {
-    client = await getGoogleClient()
+    client = await getGoogleClient(userId)
   } catch (err) {
     if (err instanceof GoogleNotConnectedError) return
     console.error("[calendar-sync] getGoogleClient failed", err)
@@ -99,10 +101,10 @@ export async function deleteCalendarEvent(
   }
 }
 
-export async function fetchGoogleEvents(days: number): Promise<GoogleCalendarEvent[]> {
+export async function fetchGoogleEvents(days: number, userId: string): Promise<GoogleCalendarEvent[]> {
   let client
   try {
-    client = await getGoogleClient()
+    client = await getGoogleClient(userId)
   } catch (err) {
     if (err instanceof GoogleNotConnectedError) return []
     console.error("[calendar-sync] fetchGoogleEvents failed", err)

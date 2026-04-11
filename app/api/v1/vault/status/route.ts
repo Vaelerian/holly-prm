@@ -5,13 +5,15 @@ import { getVaultConfig, isVaultAccessible } from "@/lib/services/vault"
 export async function GET(req: NextRequest) {
   const session = await auth()
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const userId = session?.userId
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  const config = await getVaultConfig()
+  const config = await getVaultConfig(userId)
   if (!config) {
     return NextResponse.json({ configured: false, accessible: false, config: null })
   }
 
-  const accessible = await isVaultAccessible()
+  const accessible = await isVaultAccessible(userId)
   return NextResponse.json({
     configured: true,
     accessible,

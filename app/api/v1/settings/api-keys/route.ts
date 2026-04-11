@@ -8,16 +8,20 @@ const CreateKeySchema = z.object({ name: z.string().min(1) })
 export async function GET() {
   const session = await auth()
   if (!session) return NextResponse.json({ error: "Unauthorized", code: "UNAUTHORIZED" }, { status: 401 })
-  const keys = await listApiKeys()
+  const userId = session?.userId
+  if (!userId) return NextResponse.json({ error: "Unauthorized", code: "UNAUTHORIZED" }, { status: 401 })
+  const keys = await listApiKeys(userId)
   return NextResponse.json(keys)
 }
 
 export async function POST(req: NextRequest) {
   const session = await auth()
   if (!session) return NextResponse.json({ error: "Unauthorized", code: "UNAUTHORIZED" }, { status: 401 })
+  const userId = session?.userId
+  if (!userId) return NextResponse.json({ error: "Unauthorized", code: "UNAUTHORIZED" }, { status: 401 })
   const body = await req.json()
   const parsed = CreateKeySchema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: "Validation failed", code: "VALIDATION_ERROR" }, { status: 422 })
-  const key = await generateApiKey(parsed.data.name)
+  const key = await generateApiKey(parsed.data.name, userId)
   return NextResponse.json({ key }, { status: 201 })
 }

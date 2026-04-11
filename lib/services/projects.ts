@@ -57,7 +57,7 @@ export async function createProject(data: CreateProjectInput, actor: Actor, user
     data: { entity: "Project", entityId: project.id, action: "create", actor, userId },
   })
   if (project.targetDate) {
-    void upsertCalendarEvent("project", project.id, { title: project.title, date: project.targetDate })
+    void upsertCalendarEvent("project", project.id, { title: project.title, date: project.targetDate }, userId)
   }
   return project
 }
@@ -77,9 +77,9 @@ export async function updateProject(id: string, data: UpdateProjectInput, actor:
     data: { entity: "Project", entityId: id, action: "update", actor, userId, diff: { before, after: project } },
   })
   if (project.targetDate) {
-    void upsertCalendarEvent("project", project.id, { title: project.title, date: project.targetDate })
+    void upsertCalendarEvent("project", project.id, { title: project.title, date: project.targetDate }, userId)
   } else if (data.targetDate === null) {
-    void deleteCalendarEvent("project", project.id)
+    void deleteCalendarEvent("project", project.id, userId)
   }
   return project
 }
@@ -90,6 +90,6 @@ export async function deleteProject(id: string, actor: Actor, userId: string) {
   await prisma.auditLog.create({
     data: { entity: "Project", entityId: id, action: "delete", actor, userId },
   })
-  void deleteCalendarEvent("project", id)
+  void deleteCalendarEvent("project", id, userId)
   return prisma.project.delete({ where: { id, userId } })
 }

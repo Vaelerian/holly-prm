@@ -1,14 +1,19 @@
 import { prisma } from "@/lib/db"
+import { auth } from "@/lib/auth"
 import { fetchGoogleEvents } from "@/lib/services/calendar-sync"
 import { CalendarView, CalendarItem } from "@/components/calendar/calendar-view"
 import Link from "next/link"
 
 export default async function CalendarPage() {
+  const session = await auth()
+  const userId = session?.userId ?? null
+
   let items: CalendarItem[] = []
   let filters = { tasks: true, projects: true, followUps: true, milestones: true, actionItems: true, googleEvents: true }
   let dbError = false
 
   try {
+    const userWhere = userId ? { userId } : {}
     const [tasks, projects, followUps, actionItems, googleEvents, pref] = await Promise.all([
       prisma.task.findMany({
         where: { dueDate: { not: null }, status: { notIn: ["done", "cancelled"] } },
@@ -19,15 +24,15 @@ export default async function CalendarPage() {
         select: { id: true, title: true, targetDate: true },
       }),
       prisma.interaction.findMany({
-        where: { followUpRequired: true, followUpCompleted: false, followUpDate: { not: null } },
+        where: { followUpRequired: true, followUpCompleted: false, followUpDate: { not: null }, ...userWhere },
         include: { contact: { select: { name: true } } },
       }),
       prisma.actionItem.findMany({
-        where: { dueDate: { not: null }, status: "todo" },
+        where: { dueDate: { not: null }, status: "todo", ...userWhere },
         select: { id: true, title: true, dueDate: true },
       }),
-      fetchGoogleEvents(42), // enough for month view + buffer
-      prisma.userPreference.findFirst(),
+      userId ? fetchGoogleEvents(42, userId) : Promise.resolve([]),
+      prisma.userPreference.findFirst(userId ? { where: { userId } } : undefined),
     ])
 
     if (pref) filters = pref.calendarFilters as typeof filters

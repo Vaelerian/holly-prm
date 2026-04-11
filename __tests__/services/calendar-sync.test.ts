@@ -24,7 +24,7 @@ describe("upsertCalendarEvent", () => {
   it("returns silently when Google not connected", async () => {
     mockGetGoogleClient.mockRejectedValue(new GoogleNotConnectedError())
     await expect(
-      upsertCalendarEvent("task", "t1", { title: "My task", date: new Date("2026-05-01") })
+      upsertCalendarEvent("task", "t1", { title: "My task", date: new Date("2026-05-01") }, "user1")
     ).resolves.toBeUndefined()
     expect(mockPrisma.calendarSync.findUnique).not.toHaveBeenCalled()
   })
@@ -34,7 +34,7 @@ describe("deleteCalendarEvent", () => {
   it("returns silently when no CalendarSync row exists", async () => {
     mockGetGoogleClient.mockResolvedValue({} as any)
     mockPrisma.calendarSync.findUnique.mockResolvedValue(null)
-    await expect(deleteCalendarEvent("task", "t1")).resolves.toBeUndefined()
+    await expect(deleteCalendarEvent("task", "t1", "user1")).resolves.toBeUndefined()
     expect(mockPrisma.calendarSync.delete).not.toHaveBeenCalled()
   })
 })

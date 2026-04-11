@@ -80,9 +80,9 @@ export async function updateInteraction(id: string, data: UpdateInteractionInput
     void upsertCalendarEvent("follow_up", id, {
       title: `Follow-up: ${contact?.name ?? "Contact"}`,
       date: interaction.followUpDate,
-    })
+    }, userId)
   } else if (data.followUpDate === null) {
-    void deleteCalendarEvent("follow_up", id)
+    void deleteCalendarEvent("follow_up", id, userId)
   }
   return interaction
 }

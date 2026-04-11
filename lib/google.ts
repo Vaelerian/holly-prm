@@ -9,8 +9,8 @@ export class GoogleNotConnectedError extends Error {
   }
 }
 
-export async function getGoogleClient(): Promise<OAuth2Client> {
-  const token = await prisma.googleToken.findFirst()
+export async function getGoogleClient(userId: string): Promise<OAuth2Client> {
+  const token = await prisma.googleToken.findFirst({ where: { userId } })
   if (!token) throw new GoogleNotConnectedError()
 
   const client = new OAuth2Client(
@@ -45,12 +45,12 @@ export async function getGoogleClient(): Promise<OAuth2Client> {
   return client
 }
 
-export async function isGoogleConnected(): Promise<boolean> {
-  const token = await prisma.googleToken.findFirst({ select: { id: true, email: true } })
+export async function isGoogleConnected(userId: string): Promise<boolean> {
+  const token = await prisma.googleToken.findFirst({ where: { userId }, select: { id: true, email: true } })
   return token !== null
 }
 
-export async function getConnectedEmail(): Promise<string | null> {
-  const token = await prisma.googleToken.findFirst({ select: { email: true } })
+export async function getConnectedEmail(userId: string): Promise<string | null> {
+  const token = await prisma.googleToken.findFirst({ where: { userId }, select: { email: true } })
   return token?.email ?? null
 }

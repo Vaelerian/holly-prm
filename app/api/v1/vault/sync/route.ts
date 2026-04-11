@@ -6,10 +6,12 @@ import { runVaultSync } from "@/lib/services/vault-sync"
 export async function POST(req: NextRequest) {
   const session = await auth()
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const userId = session?.userId
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  const accessible = await isVaultAccessible()
+  const accessible = await isVaultAccessible(userId)
   if (!accessible) return NextResponse.json({ error: "vault_not_configured" }, { status: 503 })
 
-  const result = await runVaultSync()
+  const result = await runVaultSync(userId)
   return NextResponse.json(result)
 }
