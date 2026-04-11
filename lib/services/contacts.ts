@@ -47,7 +47,7 @@ export async function updateContact(id: string, data: UpdateContactInput, actor:
   if (!existing) return null
   const before = existing
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const contact = await prisma.contact.update({ where: { id }, data: data as any })
+  const contact = await prisma.contact.update({ where: { id, userId }, data: data as any })
   await prisma.auditLog.create({
     data: { entity: "Contact", entityId: id, action: "update", actor, userId, diff: { before, after: contact } },
   })
@@ -60,5 +60,5 @@ export async function deleteContact(id: string, actor: Actor, userId: string) {
   await prisma.auditLog.create({
     data: { entity: "Contact", entityId: id, action: "delete", actor, userId },
   })
-  return prisma.contact.delete({ where: { id } })
+  return prisma.contact.delete({ where: { id, userId } })
 }

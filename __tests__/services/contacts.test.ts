@@ -23,7 +23,7 @@ describe("listContacts", () => {
   it("returns contacts ordered by name", async () => {
     const contacts = [{ id: "1", name: "Alice" }, { id: "2", name: "Bob" }]
     mockPrisma.contact.findMany.mockResolvedValue(contacts as any)
-    const result = await listContacts({})
+    const result = await listContacts({ userId: "user-1" })
     expect(mockPrisma.contact.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ orderBy: { name: "asc" } })
     )
@@ -32,7 +32,7 @@ describe("listContacts", () => {
 
   it("filters by search query on name", async () => {
     mockPrisma.contact.findMany.mockResolvedValue([])
-    await listContacts({ q: "alice" })
+    await listContacts({ q: "alice", userId: "user-1" })
     expect(mockPrisma.contact.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
@@ -44,7 +44,7 @@ describe("listContacts", () => {
 
   it("filters overdue contacts when overdue=true", async () => {
     mockPrisma.contact.findMany.mockResolvedValue([])
-    await listContacts({ overdue: true })
+    await listContacts({ overdue: true, userId: "user-1" })
     expect(mockPrisma.contact.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
@@ -105,5 +105,23 @@ describe("userId scoping", () => {
     expect(mockPrisma.contact.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ userId: "user-1" }) })
     )
+  })
+
+  it("updateContact returns null when contact belongs to different user", async () => {
+    mockPrisma.contact.findFirst.mockResolvedValue(null)
+
+    const result = await updateContact("c1", { name: "New" } as any, "ian", "user-2")
+
+    expect(result).toBeNull()
+    expect(mockPrisma.contact.update).not.toHaveBeenCalled()
+  })
+
+  it("deleteContact returns null when contact belongs to different user", async () => {
+    mockPrisma.contact.findFirst.mockResolvedValue(null)
+
+    const result = await deleteContact("c1", "ian", "user-2")
+
+    expect(result).toBeNull()
+    expect(mockPrisma.contact.delete).not.toHaveBeenCalled()
   })
 })

@@ -71,7 +71,7 @@ export async function createInteraction(data: CreateInteractionInput, actor: Act
 export async function updateInteraction(id: string, data: UpdateInteractionInput, actor: Actor, userId: string) {
   const existing = await prisma.interaction.findFirst({ where: { id, userId } })
   if (!existing) return null
-  const interaction = await prisma.interaction.update({ where: { id }, data })
+  const interaction = await prisma.interaction.update({ where: { id, userId }, data })
   await prisma.auditLog.create({
     data: { entity: "Interaction", entityId: id, action: "update", actor, userId },
   })
@@ -93,5 +93,5 @@ export async function deleteInteraction(id: string, actor: Actor, userId: string
   await prisma.auditLog.create({
     data: { entity: "Interaction", entityId: id, action: "delete", actor, userId },
   })
-  return prisma.interaction.delete({ where: { id } })
+  return prisma.interaction.delete({ where: { id, userId } })
 }

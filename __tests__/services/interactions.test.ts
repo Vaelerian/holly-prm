@@ -1,11 +1,11 @@
-import { createInteraction, listInteractions } from "@/lib/services/interactions"
+import { createInteraction, listInteractions, updateInteraction, deleteInteraction } from "@/lib/services/interactions"
 import { prisma } from "@/lib/db"
 import { computeHealthScore } from "@/lib/health-score"
 import { publishSseEvent } from "@/lib/sse-events"
 
 jest.mock("@/lib/db", () => ({
   prisma: {
-    interaction: { create: jest.fn(), findMany: jest.fn() },
+    interaction: { create: jest.fn(), findMany: jest.fn(), findFirst: jest.fn(), update: jest.fn(), delete: jest.fn() },
     contact: { findUnique: jest.fn(), update: jest.fn() },
     auditLog: { create: jest.fn() },
   },
@@ -45,7 +45,7 @@ describe("createInteraction", () => {
     mockPrisma.contact.update.mockResolvedValue({} as any)
     mockPrisma.auditLog.create.mockResolvedValue({} as any)
 
-    await createInteraction(input, "ian")
+    await createInteraction(input, "ian", "user-1")
 
     expect(mockPrisma.interaction.create).toHaveBeenCalled()
     expect(mockPrisma.contact.update).toHaveBeenCalledWith({
@@ -76,7 +76,7 @@ describe("createInteraction", () => {
     mockPrisma.contact.update.mockResolvedValue({} as any)
     mockPrisma.auditLog.create.mockResolvedValue({} as any)
 
-    await createInteraction(input, "holly")
+    await createInteraction(input, "holly", "user-1")
 
     const createCall = (mockPrisma.interaction.create as jest.Mock).mock.calls[0][0]
     expect(createCall.data.transcript).toBe("Ian: Hey\nHolly: Hi")
@@ -102,7 +102,7 @@ describe("createInteraction", () => {
     mockPrisma.contact.update.mockResolvedValue({} as any)
     mockPrisma.auditLog.create.mockResolvedValue({} as any)
 
-    await createInteraction(input, "ian")
+    await createInteraction(input, "ian", "user-1")
 
     expect(publishSseEvent).toHaveBeenCalledWith(
       "interaction.created",
@@ -114,7 +114,7 @@ describe("createInteraction", () => {
 describe("listInteractions", () => {
   it("filters by contactId when provided", async () => {
     mockPrisma.interaction.findMany.mockResolvedValue([])
-    await listInteractions({ contactId: "contact-1" })
+    await listInteractions({ contactId: "contact-1", userId: "user-1" })
     expect(mockPrisma.interaction.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: expect.objectContaining({ contactId: "contact-1" }) })
     )
@@ -122,11 +122,31 @@ describe("listInteractions", () => {
 
   it("filters followUpRequired when requested", async () => {
     mockPrisma.interaction.findMany.mockResolvedValue([])
-    await listInteractions({ followUpRequired: true })
+    await listInteractions({ followUpRequired: true, userId: "user-1" })
     expect(mockPrisma.interaction.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({ followUpRequired: true, followUpCompleted: false }),
       })
     )
+  })
+})
+
+describe("ownership checks", () => {
+  it("updateInteraction returns null when interaction belongs to different user", async () => {
+    mockPrisma.interaction.findFirst.mockResolvedValue(null)
+
+    const result = await updateInteraction("i1", { summary: "New" } as any, "ian", "user-2")
+
+    expect(result).toBeNull()
+    expect(mockPrisma.interaction.update).not.toHaveBeenCalled()
+  })
+
+  it("deleteInteraction returns null when interaction belongs to different user", async () => {
+    mockPrisma.interaction.findFirst.mockResolvedValue(null)
+
+    const result = await deleteInteraction("i1", "ian", "user-2")
+
+    expect(result).toBeNull()
+    expect(mockPrisma.interaction.delete).not.toHaveBeenCalled()
   })
 })
