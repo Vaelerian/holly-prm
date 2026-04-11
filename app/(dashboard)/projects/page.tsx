@@ -1,15 +1,18 @@
 import { listProjects } from "@/lib/services/projects"
 import { ProjectCard } from "@/components/projects/project-card"
+import { auth } from "@/lib/auth"
 import Link from "next/link"
 
 interface PageProps { searchParams: Promise<{ status?: string }> }
 
 export default async function ProjectsPage({ searchParams }: PageProps) {
   const { status } = await searchParams
+  const session = await auth()
+  const userId = session?.userId ?? ""
   let projects: Awaited<ReturnType<typeof listProjects>> = []
   let dbError = false
   try {
-    projects = await listProjects({ status })
+    projects = await listProjects({ status, userId })
   } catch (e) {
     console.error("[projects page]", e)
     dbError = true
@@ -48,18 +51,26 @@ export default async function ProjectsPage({ searchParams }: PageProps) {
           {projects.map(p => {
             const regularTasks = p.tasks.filter(t => !t.isMilestone)
             const taskDoneCount = regularTasks.filter(t => t.status === "done").length
+            const isShared = p.userId !== userId
             return (
-              <ProjectCard
-                key={p.id}
-                id={p.id}
-                title={p.title}
-                category={p.category}
-                status={p.status}
-                priority={p.priority}
-                targetDate={p.targetDate}
-                taskDoneCount={taskDoneCount}
-                taskTotalCount={regularTasks.length}
-              />
+              <div key={p.id} className="relative">
+                {isShared && (
+                  <span className="absolute top-2 right-2 z-10 text-xs bg-[rgba(0,255,136,0.1)] border border-[rgba(0,255,136,0.2)] text-[#00ff88] px-2 py-0.5 rounded-full">
+                    Shared
+                  </span>
+                )}
+                <ProjectCard
+                  key={p.id}
+                  id={p.id}
+                  title={p.title}
+                  category={p.category}
+                  status={p.status}
+                  priority={p.priority}
+                  targetDate={p.targetDate}
+                  taskDoneCount={taskDoneCount}
+                  taskTotalCount={regularTasks.length}
+                />
+              </div>
             )
           })}
         </div>

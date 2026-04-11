@@ -4,6 +4,8 @@ import { Badge } from "@/components/ui/badge"
 import { TaskRow } from "@/components/tasks/task-row"
 import { AddTaskForm } from "@/components/tasks/add-task-form"
 import { DeleteProjectButton } from "@/components/projects/delete-project-button"
+import { ProjectMembers } from "@/components/projects/project-members"
+import { auth } from "@/lib/auth"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 
@@ -11,8 +13,13 @@ interface PageProps { params: Promise<{ id: string }> }
 
 export default async function ProjectDetailPage({ params }: PageProps) {
   const { id } = await params
-  const project = await getProject(id)
+  const session = await auth()
+  const userId = session?.userId ?? ""
+  const project = await getProject(id, userId)
   if (!project) notFound()
+
+  const isOwner = project.userId === userId
+  const members = project.members ?? []
 
   const actionItems = await prisma.actionItem.findMany({
     where: { task: { projectId: id }, status: "todo" },
@@ -108,6 +115,8 @@ export default async function ProjectDetailPage({ params }: PageProps) {
           </div>
         </section>
       )}
+
+      <ProjectMembers projectId={id} members={members} isOwner={isOwner} />
     </div>
   )
 }
