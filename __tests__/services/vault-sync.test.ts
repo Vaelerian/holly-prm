@@ -69,6 +69,26 @@ describe("shouldRunSync", () => {
     }
     expect(shouldRunSync(config)).toBe(false)
   })
+
+  it("uses 8-hour interval for 9,17 cron (twice daily)", () => {
+    const config = {
+      ...baseConfig,
+      workdayCron: "0 9,17 * * 1-5",
+      weekendCron: "0 9,17 * * 0,6",
+      lastSyncAt: new Date(Date.now() - 7 * 60 * 60 * 1000), // 7 hours ago
+    }
+    expect(shouldRunSync(config)).toBe(false)
+  })
+
+  it("uses 24-hour interval for single-hour cron (once daily)", () => {
+    const config = {
+      ...baseConfig,
+      workdayCron: "0 9 * * 1-5",
+      weekendCron: "0 9 * * 0,6",
+      lastSyncAt: new Date(Date.now() - 12 * 60 * 60 * 1000), // 12 hours ago
+    }
+    expect(shouldRunSync(config)).toBe(false)
+  })
 })
 
 describe("runVaultSync", () => {
