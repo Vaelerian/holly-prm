@@ -13,13 +13,16 @@ interface User {
 
 interface Props {
   users: User[]
-  approvedUsers: User[]
 }
 
-export function AdminPanel({ users, approvedUsers }: Props) {
+export function AdminPanel({ users }: Props) {
   const [userList, setUserList] = useState(users)
-  const [claimUserId, setClaimUserId] = useState(approvedUsers[0]?.id ?? "")
+  const [claimUserId, setClaimUserId] = useState(() => {
+    const first = users.find(u => u.status === "approved")
+    return first?.id ?? ""
+  })
   const [claimResult, setClaimResult] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
   const [working, setWorking] = useState<string | null>(null)
 
   const pending = userList.filter(u => u.status === "pending")
@@ -27,34 +30,50 @@ export function AdminPanel({ users, approvedUsers }: Props) {
 
   async function updateStatus(id: string, action: "approve" | "reject") {
     setWorking(id)
-    await fetch(`/api/admin/users/${id}/${action}`, { method: "POST" })
-    setUserList(prev =>
-      prev.map(u => u.id === id ? { ...u, status: action === "approve" ? "approved" : "rejected" } : u)
-    )
-    setWorking(null)
+    setActionError(null)
+    try {
+      const res = await fetch(`/api/admin/users/${id}/${action}`, { method: "POST" })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        setActionError(data.error ?? "Action failed")
+        return
+      }
+      setUserList(prev =>
+        prev.map(u => u.id === id ? { ...u, status: action === "approve" ? "approved" : "rejected" } : u)
+      )
+      // Keep claim dropdown in sync: if we just approved someone, they may now appear
+      if (action === "approve" && !claimUserId) setClaimUserId(id)
+    } finally {
+      setWorking(null)
+    }
   }
 
   async function claimUnclaimed() {
     if (!claimUserId) return
     setWorking("claim")
-    const res = await fetch("/api/admin/claim-unclaimed", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId: claimUserId }),
-    })
-    const data = await res.json()
-    if (res.ok) {
-      const total = Object.values(data.claimed as Record<string, number>).reduce((a, b) => a + b, 0)
-      setClaimResult(`Claimed ${total} records`)
-    } else {
-      setClaimResult("Claim failed")
+    setClaimResult(null)
+    try {
+      const res = await fetch("/api/admin/claim-unclaimed", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: claimUserId }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        const total = Object.values(data.claimed as Record<string, number>).reduce((a, b) => a + b, 0)
+        setClaimResult(`Claimed ${total} records`)
+      } else {
+        setClaimResult("Claim failed")
+      }
+    } finally {
+      setWorking(null)
     }
-    setWorking(null)
   }
 
   return (
     <div className="p-6 max-w-2xl space-y-8">
       <h1 className="text-xl font-semibold text-[#c0c0d0]">Admin</h1>
+      {actionError && <p className="text-xs text-[#ff4444]">{actionError}</p>}
 
       <section>
         <h2 className="text-base font-semibold text-[#c0c0d0] mb-3">Pending approval</h2>
@@ -112,7 +131,7 @@ export function AdminPanel({ users, approvedUsers }: Props) {
             onChange={e => setClaimUserId(e.target.value)}
             className="w-full bg-[#111125] border border-[rgba(0,255,136,0.15)] rounded text-[#c0c0d0] text-sm px-3 py-2"
           >
-            {approvedUsers.map(u => (
+            {approved.map(u => (
               <option key={u.id} value={u.id}>{u.name} ({u.email})</option>
             ))}
           </select>

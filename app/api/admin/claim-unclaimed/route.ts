@@ -8,7 +8,7 @@ const Schema = z.object({ userId: z.string().min(1) })
 export async function POST(req: NextRequest) {
   const session = await auth()
   if (session?.role !== "admin") {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    return NextResponse.json({ error: "Unauthorized", code: "UNAUTHORIZED" }, { status: 403 })
   }
 
   const body = await req.json()

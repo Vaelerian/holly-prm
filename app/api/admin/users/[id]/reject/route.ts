@@ -8,9 +8,13 @@ export async function POST(
 ) {
   const session = await auth()
   if (session?.role !== "admin") {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    return NextResponse.json({ error: "Unauthorized", code: "UNAUTHORIZED" }, { status: 403 })
   }
   const { id } = await params
+  const existing = await prisma.user.findUnique({ where: { id } })
+  if (!existing) {
+    return NextResponse.json({ error: "User not found", code: "NOT_FOUND" }, { status: 404 })
+  }
   const user = await prisma.user.update({ where: { id }, data: { status: "rejected" } })
   return NextResponse.json({ ok: true, user })
 }

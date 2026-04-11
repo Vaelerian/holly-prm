@@ -41,14 +41,15 @@ function makeRequest(body?: unknown) {
   })
 }
 
-it("approve returns 401 if not admin", async () => {
+it("approve returns 403 if not admin", async () => {
   mockAuth.mockResolvedValue({ role: "user", userId: "u1" })
   const res = await approve(makeRequest(), { params: Promise.resolve({ id: "target-id" }) })
-  expect(res.status).toBe(401)
+  expect(res.status).toBe(403)
 })
 
 it("approve sets user status to approved", async () => {
   mockAuth.mockResolvedValue({ role: "admin" })
+  mockPrisma.user.findUnique.mockResolvedValue({ id: "target-id", status: "pending" } as any)
   mockPrisma.user.update.mockResolvedValue({ id: "target-id", status: "approved" } as any)
   const res = await approve(makeRequest(), { params: Promise.resolve({ id: "target-id" }) })
   expect(res.status).toBe(200)
@@ -58,8 +59,16 @@ it("approve sets user status to approved", async () => {
   })
 })
 
+it("approve returns 404 for unknown user id", async () => {
+  mockAuth.mockResolvedValue({ role: "admin" })
+  mockPrisma.user.findUnique.mockResolvedValue(null)
+  const res = await approve(makeRequest(), { params: Promise.resolve({ id: "unknown" }) })
+  expect(res.status).toBe(404)
+})
+
 it("reject sets user status to rejected", async () => {
   mockAuth.mockResolvedValue({ role: "admin" })
+  mockPrisma.user.findUnique.mockResolvedValue({ id: "target-id", status: "approved" } as any)
   mockPrisma.user.update.mockResolvedValue({ id: "target-id", status: "rejected" } as any)
   const res = await reject(makeRequest(), { params: Promise.resolve({ id: "target-id" }) })
   expect(res.status).toBe(200)
