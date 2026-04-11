@@ -11,6 +11,7 @@ const links = [
   { href: "/tasks", label: "Tasks" },
   { href: "/calendar", label: "Calendar" },
   { href: "/reports", label: "Reports" },
+  { href: "/profile", label: "Profile" },
   { href: "/settings", label: "Settings" },
 ]
 

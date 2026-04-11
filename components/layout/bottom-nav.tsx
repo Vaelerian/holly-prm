@@ -10,7 +10,7 @@ const tabs = [
   { href: "/projects", label: "Projects", icon: "📋" },
   { href: "/tasks", label: "Tasks", icon: "✓" },
   { href: "/calendar", label: "Cal", icon: "▦" },
-  { href: "/reports", label: "Reports", icon: "◈" },
+  { href: "/profile", label: "Profile", icon: "◉" },
 ]
 
 export function BottomNav({ onLogPress }: { onLogPress: () => void }) {
