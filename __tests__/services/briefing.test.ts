@@ -120,3 +120,18 @@ it("vaultUpdates is empty when Redis cache is absent", async () => {
 
   expect(result.vaultUpdates).toEqual([])
 })
+
+it("vaultUpdates is empty when Redis throws", async () => {
+  mockPrisma.contact.findMany.mockResolvedValue([])
+  mockPrisma.interaction.findMany.mockResolvedValue([])
+  mockPrisma.actionItem.findMany.mockResolvedValue([])
+  mockPrisma.project.count.mockResolvedValue(0 as any)
+  mockPrisma.project.findMany.mockResolvedValue([])
+  mockPrisma.task.count.mockResolvedValue(0 as any)
+  mockPrisma.task.findMany.mockResolvedValue([])
+  mockRedis.get.mockRejectedValue(new Error("Redis connection refused"))
+
+  const result = await getBriefing()
+
+  expect(result.vaultUpdates).toEqual([])
+})
