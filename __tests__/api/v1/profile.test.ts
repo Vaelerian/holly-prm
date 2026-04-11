@@ -66,6 +66,12 @@ describe("PATCH /api/v1/profile", () => {
     const body = await res.json()
     expect(body.error).toContain("already in use")
   })
+
+  it("returns 422 for invalid email format", async () => {
+    mockAuth.mockResolvedValue({ userId: "u1", role: "user" })
+    const res = await patchProfile(makeRequest({ email: "not-valid" }))
+    expect(res.status).toBe(422)
+  })
 })
 
 describe("PATCH /api/v1/profile/password", () => {
@@ -98,5 +104,12 @@ describe("PATCH /api/v1/profile/password", () => {
       where: { id: "u1" },
       data: { passwordHash: "new-hash" },
     })
+  })
+
+  it("returns 404 for user with no passwordHash (OAuth user)", async () => {
+    mockAuth.mockResolvedValue({ userId: "u1", role: "user" })
+    mockPrisma.user.findUnique.mockResolvedValue({ id: "u1", passwordHash: null } as any)
+    const res = await patchPassword(makeRequest({ currentPassword: "x", newPassword: "newpassword123" }))
+    expect(res.status).toBe(404)
   })
 })

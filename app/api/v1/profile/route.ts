@@ -33,8 +33,8 @@ export async function PATCH(req: NextRequest) {
   }
 
   const data: Record<string, string> = {}
-  if (name) data.name = name
-  if (email) data.email = email
+  if (name !== undefined) data.name = name
+  if (email !== undefined) data.email = email
 
   const user = await prisma.user.update({ where: { id: userId }, data, select: { name: true, email: true } })
   return NextResponse.json(user)
