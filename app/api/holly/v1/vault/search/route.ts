@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
 
   const accessible = await isVaultAccessible()
   if (!accessible) {
-    return NextResponse.json({ error: "vault_not_configured" }, { status: 503 })
+    return NextResponse.json({ error: "vault_not_configured", code: "VAULT_NOT_CONFIGURED" }, { status: 503 })
   }
 
   const q = req.nextUrl.searchParams.get("q") ?? ""

@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server"
 import { validateHollyRequest } from "@/lib/holly-auth"
 import { getNoteContent, createNote, updateNote, isVaultAccessible } from "@/lib/services/vault"
 
-async function checkAuth(req: NextRequest) {
+type AuthCheckResult = { ok: true } | { ok: false; response: NextResponse }
+
+async function checkAuth(req: NextRequest): Promise<AuthCheckResult> {
   const authResult = await validateHollyRequest(req)
   if (!authResult.valid) {
     const status = authResult.rateLimited ? 429 : 401
@@ -11,15 +13,15 @@ async function checkAuth(req: NextRequest) {
     const headers = authResult.rateLimited ? { "Retry-After": "60" } : undefined
     return { ok: false, response: NextResponse.json({ error, code }, { status, headers }) }
   }
-  return { ok: true, response: null }
+  return { ok: true }
 }
 
 export async function GET(req: NextRequest) {
   const auth = await checkAuth(req)
-  if (!auth.ok) return auth.response!
+  if (!auth.ok) return auth.response
 
   const accessible = await isVaultAccessible()
-  if (!accessible) return NextResponse.json({ error: "vault_not_configured" }, { status: 503 })
+  if (!accessible) return NextResponse.json({ error: "vault_not_configured", code: "VAULT_NOT_CONFIGURED" }, { status: 503 })
 
   const notePath = req.nextUrl.searchParams.get("path")
   if (!notePath) return NextResponse.json({ error: "path parameter required" }, { status: 400 })
@@ -32,10 +34,10 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const auth = await checkAuth(req)
-  if (!auth.ok) return auth.response!
+  if (!auth.ok) return auth.response
 
   const accessible = await isVaultAccessible()
-  if (!accessible) return NextResponse.json({ error: "vault_not_configured" }, { status: 503 })
+  if (!accessible) return NextResponse.json({ error: "vault_not_configured", code: "VAULT_NOT_CONFIGURED" }, { status: 503 })
 
   let body: unknown
   try { body = await req.json() } catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }) }
@@ -58,10 +60,10 @@ export async function POST(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   const auth = await checkAuth(req)
-  if (!auth.ok) return auth.response!
+  if (!auth.ok) return auth.response
 
   const accessible = await isVaultAccessible()
-  if (!accessible) return NextResponse.json({ error: "vault_not_configured" }, { status: 503 })
+  if (!accessible) return NextResponse.json({ error: "vault_not_configured", code: "VAULT_NOT_CONFIGURED" }, { status: 503 })
 
   let body: unknown
   try { body = await req.json() } catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }) }
