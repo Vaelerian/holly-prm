@@ -135,3 +135,18 @@ it("vaultUpdates is empty when Redis throws", async () => {
 
   expect(result.vaultUpdates).toEqual([])
 })
+
+it("getBriefing scopes all queries to the given userId", async () => {
+  mockPrisma.contact.findMany.mockResolvedValue([])
+  mockPrisma.interaction.findMany.mockResolvedValue([])
+  mockPrisma.actionItem.findMany.mockResolvedValue([])
+  mockPrisma.project.count.mockResolvedValue(0 as any)
+  mockPrisma.project.findMany.mockResolvedValue([])
+  mockPrisma.task.count.mockResolvedValue(0 as any)
+  mockPrisma.task.findMany.mockResolvedValue([])
+
+  await getBriefing("user-xyz")
+
+  const overdueCall = mockPrisma.contact.findMany.mock.calls[0][0]
+  expect(overdueCall?.where).toMatchObject({ userId: "user-xyz" })
+})

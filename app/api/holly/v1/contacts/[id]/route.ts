@@ -5,8 +5,9 @@ import { getContact } from "@/lib/services/contacts"
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const authResult = await validateHollyRequest(req)
   if (!authResult.valid) return NextResponse.json({ error: "Unauthorized", code: "UNAUTHORIZED" }, { status: 401 })
+  const { userId } = authResult
   const { id } = await params
-  const contact = await getContact(id)
+  const contact = await getContact(id, userId)
   if (!contact) return NextResponse.json({ error: "Not found", code: "NOT_FOUND" }, { status: 404 })
   return NextResponse.json(contact)
 }

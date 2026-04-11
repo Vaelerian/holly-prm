@@ -8,11 +8,13 @@ export async function GET(req: NextRequest) {
     if (authResult.rateLimited) return NextResponse.json({ error: "Rate limit exceeded", code: "RATE_LIMITED" }, { status: 429, headers: { "Retry-After": "60" } })
     return NextResponse.json({ error: "Unauthorized", code: "UNAUTHORIZED" }, { status: 401 })
   }
+  const { userId } = authResult
   const { searchParams } = req.nextUrl
   const contacts = await listContacts({
     q: searchParams.get("q") ?? undefined,
     type: searchParams.get("type") ?? undefined,
     overdue: searchParams.get("overdue") === "true",
+    userId,
   })
   return NextResponse.json(contacts)
 }

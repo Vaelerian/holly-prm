@@ -5,7 +5,7 @@ import { getNoteContent, createNote, updateNote, isVaultAccessible } from "@/lib
 const VALID_ENTITY_TYPE = /^[a-zA-Z]+$/
 const VALID_ENTITY_ID = /^[a-zA-Z0-9_-]+$/
 
-type AuthCheckResult = { ok: true } | { ok: false; response: NextResponse }
+type AuthCheckResult = { ok: true; userId: string } | { ok: false; response: NextResponse }
 
 async function checkAuth(req: NextRequest): Promise<AuthCheckResult> {
   const authResult = await validateHollyRequest(req)
@@ -16,20 +16,21 @@ async function checkAuth(req: NextRequest): Promise<AuthCheckResult> {
     const headers = authResult.rateLimited ? { "Retry-After": "60" } : undefined
     return { ok: false, response: NextResponse.json({ error, code }, { status, headers }) }
   }
-  return { ok: true }
+  return { ok: true, userId: authResult.userId }
 }
 
 export async function GET(req: NextRequest) {
   const auth = await checkAuth(req)
   if (!auth.ok) return auth.response
+  const { userId } = auth
 
-  const accessible = await isVaultAccessible()
+  const accessible = await isVaultAccessible(userId)
   if (!accessible) return NextResponse.json({ error: "vault_not_configured", code: "VAULT_NOT_CONFIGURED" }, { status: 503 })
 
   const notePath = req.nextUrl.searchParams.get("path")
   if (!notePath) return NextResponse.json({ error: "path parameter required" }, { status: 400 })
 
-  const content = await getNoteContent(decodeURIComponent(notePath))
+  const content = await getNoteContent(decodeURIComponent(notePath), userId)
   if (content === null) return NextResponse.json({ error: "not_found" }, { status: 404 })
 
   return NextResponse.json({ path: notePath, content })
@@ -38,8 +39,9 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const auth = await checkAuth(req)
   if (!auth.ok) return auth.response
+  const { userId } = auth
 
-  const accessible = await isVaultAccessible()
+  const accessible = await isVaultAccessible(userId)
   if (!accessible) return NextResponse.json({ error: "vault_not_configured", code: "VAULT_NOT_CONFIGURED" }, { status: 503 })
 
   let body: unknown
@@ -55,7 +57,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const notePath = await createNote(filename, entityType, entityId, content)
+    const notePath = await createNote(filename, entityType, entityId, content, userId)
     return NextResponse.json({ path: notePath }, { status: 201 })
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
@@ -68,8 +70,9 @@ export async function POST(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   const auth = await checkAuth(req)
   if (!auth.ok) return auth.response
+  const { userId } = auth
 
-  const accessible = await isVaultAccessible()
+  const accessible = await isVaultAccessible(userId)
   if (!accessible) return NextResponse.json({ error: "vault_not_configured", code: "VAULT_NOT_CONFIGURED" }, { status: 503 })
 
   let body: unknown
@@ -81,7 +84,7 @@ export async function PATCH(req: NextRequest) {
   }
 
   try {
-    await updateNote(notePath, content)
+    await updateNote(notePath, content, userId)
     return NextResponse.json({ path: notePath })
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)

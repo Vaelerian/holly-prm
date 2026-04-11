@@ -8,8 +8,9 @@ export async function GET(req: NextRequest) {
     if (authResult.rateLimited) return NextResponse.json({ error: "Rate limit exceeded", code: "RATE_LIMITED" }, { status: 429, headers: { "Retry-After": "60" } })
     return NextResponse.json({ error: "Unauthorized", code: "UNAUTHORIZED" }, { status: 401 })
   }
+  const { userId } = authResult
 
-  const accessible = await isVaultAccessible()
+  const accessible = await isVaultAccessible(userId)
   if (!accessible) {
     return NextResponse.json({ error: "vault_not_configured", code: "VAULT_NOT_CONFIGURED" }, { status: 503 })
   }
@@ -21,6 +22,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ results: [], query: q, total: 0 })
   }
 
-  const results = await searchVault(q, limit)
+  const results = await searchVault(q, limit, userId)
   return NextResponse.json({ results, query: q, total: results.length })
 }

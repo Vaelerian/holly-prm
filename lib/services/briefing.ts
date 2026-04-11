@@ -2,7 +2,7 @@ import { prisma } from "@/lib/db"
 import { Actor } from "@/app/generated/prisma/client"
 import { redis } from "@/lib/redis"
 
-export async function getBriefing() {
+export async function getBriefing(userId: string = "") {
   const todayStart = new Date()
   todayStart.setHours(0, 0, 0, 0)
   const todayEnd = new Date()
@@ -23,32 +23,34 @@ export async function getBriefing() {
     activeProjects,
   ] = await Promise.all([
     prisma.contact.findMany({
-      where: { interactionFreqDays: { not: null }, OR: [{ healthScore: { lt: 100 } }, { lastInteraction: null }] },
+      where: { userId, interactionFreqDays: { not: null }, OR: [{ healthScore: { lt: 100 } }, { lastInteraction: null }] },
       orderBy: { healthScore: "asc" },
       take: 10,
     }),
     prisma.interaction.findMany({
-      where: { followUpRequired: true, followUpCompleted: false },
+      where: { userId, followUpRequired: true, followUpCompleted: false },
       orderBy: { followUpDate: "asc" },
       take: 20,
       include: { contact: { select: { id: true, name: true } } },
     }),
     prisma.actionItem.findMany({
-      where: { status: "todo" },
+      where: { userId, status: "todo" },
       orderBy: [{ priority: "desc" }, { dueDate: "asc" }],
       take: 20,
     }),
     prisma.project.count({
-      where: { status: { in: ["planning", "active"] } },
+      where: { userId, status: { in: ["planning", "active"] } },
     }),
     prisma.task.count({
       where: {
+        userId,
         dueDate: { gte: todayStart, lte: todayEnd },
         status: { notIn: ["done", "cancelled"] },
       },
     }),
     prisma.task.findMany({
       where: {
+        userId,
         isMilestone: true,
         status: { notIn: ["done", "cancelled"] },
         dueDate: { gte: todayStart, lte: fourteenDaysFromNow },
@@ -58,7 +60,7 @@ export async function getBriefing() {
       include: { project: { select: { id: true, title: true } } },
     }),
     prisma.actionItem.findMany({
-      where: { assignedTo: Actor.ian, status: "todo" },
+      where: { userId, assignedTo: Actor.ian, status: "todo" },
       orderBy: [{ dueDate: "asc" }, { priority: "desc" }],
       take: 10,
       include: {
@@ -72,18 +74,19 @@ export async function getBriefing() {
     }),
     // Contacts with a frequency target and full health (not yet overdue), for candidate filtering
     prisma.contact.findMany({
-      where: { interactionFreqDays: { not: null }, healthScore: 100, lastInteraction: { not: null } },
+      where: { userId, interactionFreqDays: { not: null }, healthScore: 100, lastInteraction: { not: null } },
       select: { id: true, name: true, lastInteraction: true, interactionFreqDays: true },
     }),
     // Last 5 interactions with full text
     prisma.interaction.findMany({
+      where: { userId },
       orderBy: { occurredAt: "desc" },
       take: 5,
       include: { contact: { select: { id: true, name: true } } },
     }),
     // Active projects with task status breakdown
     prisma.project.findMany({
-      where: { status: { in: ["planning", "active"] } },
+      where: { userId, status: { in: ["planning", "active"] } },
       select: {
         id: true,
         title: true,
