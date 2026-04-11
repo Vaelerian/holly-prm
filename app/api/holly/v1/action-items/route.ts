@@ -1,7 +1,20 @@
 import { NextRequest, NextResponse } from "next/server"
 import { validateHollyRequest } from "@/lib/holly-auth"
-import { createActionItem } from "@/lib/services/action-items"
+import { listActionItems, createActionItem } from "@/lib/services/action-items"
 import { CreateActionItemSchema } from "@/lib/validations/action-item"
+
+export async function GET(req: NextRequest) {
+  const authResult = await validateHollyRequest(req)
+  if (!authResult.valid) return NextResponse.json({ error: "Unauthorized", code: "UNAUTHORIZED" }, { status: 401 })
+  const { userId } = authResult
+  const { searchParams } = req.nextUrl
+  const items = await listActionItems({
+    assignedTo: searchParams.get("assignedTo") as any ?? undefined,
+    status: searchParams.get("status") ?? undefined,
+    userId,
+  })
+  return NextResponse.json(items)
+}
 
 export async function POST(req: NextRequest) {
   const authResult = await validateHollyRequest(req)

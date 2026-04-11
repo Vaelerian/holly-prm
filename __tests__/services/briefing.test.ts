@@ -43,7 +43,7 @@ it("getBriefing returns all expected fields including new Phase 3 fields", async
   mockPrisma.task.count.mockResolvedValue(2 as any)
   mockPrisma.task.findMany.mockResolvedValue([{ id: "t1", title: "Milestone 1", isMilestone: true }] as any)
 
-  const result = await getBriefing()
+  const result = await getBriefing("user-1")
 
   expect(result.overdueContacts).toHaveLength(1)
   expect(result.pendingFollowUps).toHaveLength(1)
@@ -75,7 +75,7 @@ it("followUpCandidates filters contacts approaching overdue threshold", async ()
   mockPrisma.task.count.mockResolvedValue(0 as any)
   mockPrisma.task.findMany.mockResolvedValue([])
 
-  const result = await getBriefing()
+  const result = await getBriefing("user-1")
 
   expect(result.followUpCandidates).toHaveLength(1)
   expect(result.followUpCandidates[0].id).toBe("c3")
@@ -99,7 +99,7 @@ it("vaultUpdates is populated from Redis cache", async () => {
     return null
   })
 
-  const result = await getBriefing()
+  const result = await getBriefing("user-1")
 
   expect(result.vaultUpdates).toHaveLength(2)
   expect(result.vaultUpdates[0]).toMatchObject({ path: "Holly/Alice.md" })
@@ -116,7 +116,7 @@ it("vaultUpdates is empty when Redis cache is absent", async () => {
 
   mockRedis.get.mockResolvedValue(null)
 
-  const result = await getBriefing()
+  const result = await getBriefing("user-1")
 
   expect(result.vaultUpdates).toEqual([])
 })
@@ -131,7 +131,7 @@ it("vaultUpdates is empty when Redis throws", async () => {
   mockPrisma.task.findMany.mockResolvedValue([])
   mockRedis.get.mockRejectedValue(new Error("Redis connection refused"))
 
-  const result = await getBriefing()
+  const result = await getBriefing("user-1")
 
   expect(result.vaultUpdates).toEqual([])
 })

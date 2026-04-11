@@ -2,7 +2,7 @@ import { prisma } from "@/lib/db"
 import { Actor } from "@/app/generated/prisma/client"
 import { redis } from "@/lib/redis"
 
-export async function getBriefing(userId: string = "") {
+export async function getBriefing(userId: string) {
   const todayStart = new Date()
   todayStart.setHours(0, 0, 0, 0)
   const todayEnd = new Date()
