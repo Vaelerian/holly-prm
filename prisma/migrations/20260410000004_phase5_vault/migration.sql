@@ -1,4 +1,4 @@
--- VaultConfig
+-- CreateTable
 CREATE TABLE "VaultConfig" (
     "id" TEXT NOT NULL,
     "vaultPath" TEXT NOT NULL,
@@ -11,7 +11,7 @@ CREATE TABLE "VaultConfig" (
     CONSTRAINT "VaultConfig_pkey" PRIMARY KEY ("id")
 );
 
--- VaultNote
+-- CreateTable
 CREATE TABLE "VaultNote" (
     "id" TEXT NOT NULL,
     "entityType" TEXT NOT NULL,
@@ -22,4 +22,5 @@ CREATE TABLE "VaultNote" (
     CONSTRAINT "VaultNote_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateIndex
 CREATE UNIQUE INDEX "VaultNote_entityType_entityId_key" ON "VaultNote"("entityType", "entityId");
