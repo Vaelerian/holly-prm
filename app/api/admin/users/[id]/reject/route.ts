@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/db"
+import { sendEmail } from "@/lib/email"
+import { accountRejectedEmail } from "@/lib/email-templates"
 
 export async function POST(
   _req: NextRequest,
@@ -16,5 +18,7 @@ export async function POST(
     return NextResponse.json({ error: "User not found", code: "NOT_FOUND" }, { status: 404 })
   }
   const user = await prisma.user.update({ where: { id }, data: { status: "rejected" } })
+  const { subject, html } = accountRejectedEmail(existing.name)
+  sendEmail(existing.email, subject, html)
   return NextResponse.json({ ok: true, user })
 }

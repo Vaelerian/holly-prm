@@ -27,6 +27,8 @@ jest.mock("@/lib/auth", () => ({
   auth: jest.fn(),
 }))
 
+jest.mock("@/lib/email", () => ({ sendEmail: jest.fn() }))
+
 import { auth } from "@/lib/auth"
 const mockAuth = auth as jest.Mock
 const mockPrisma = prisma as jest.Mocked<typeof prisma>
@@ -49,7 +51,7 @@ it("approve returns 403 if not admin", async () => {
 
 it("approve sets user status to approved", async () => {
   mockAuth.mockResolvedValue({ role: "admin" })
-  mockPrisma.user.findUnique.mockResolvedValue({ id: "target-id", status: "pending" } as any)
+  mockPrisma.user.findUnique.mockResolvedValue({ id: "target-id", status: "pending", name: "Alice", email: "alice@example.com" } as any)
   mockPrisma.user.update.mockResolvedValue({ id: "target-id", status: "approved" } as any)
   const res = await approve(makeRequest(), { params: Promise.resolve({ id: "target-id" }) })
   expect(res.status).toBe(200)
@@ -68,7 +70,7 @@ it("approve returns 404 for unknown user id", async () => {
 
 it("reject sets user status to rejected", async () => {
   mockAuth.mockResolvedValue({ role: "admin" })
-  mockPrisma.user.findUnique.mockResolvedValue({ id: "target-id", status: "approved" } as any)
+  mockPrisma.user.findUnique.mockResolvedValue({ id: "target-id", status: "approved", name: "Alice", email: "alice@example.com" } as any)
   mockPrisma.user.update.mockResolvedValue({ id: "target-id", status: "rejected" } as any)
   const res = await reject(makeRequest(), { params: Promise.resolve({ id: "target-id" }) })
   expect(res.status).toBe(200)

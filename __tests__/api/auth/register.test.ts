@@ -7,6 +7,8 @@ jest.mock("@/lib/db", () => ({
   prisma: { user: { findUnique: jest.fn(), create: jest.fn() } },
 }))
 
+jest.mock("@/lib/email", () => ({ sendEmail: jest.fn() }))
+
 const mockPrisma = prisma as jest.Mocked<typeof prisma>
 
 beforeEach(() => jest.clearAllMocks())

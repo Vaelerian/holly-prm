@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server"
 import bcrypt from "bcryptjs"
 import { prisma } from "@/lib/db"
 import { z } from "zod"
+import { sendEmail } from "@/lib/email"
+import { registrationReceivedEmail } from "@/lib/email-templates"
 
 const RegisterSchema = z.object({
   email: z.string().email(),
@@ -30,6 +32,8 @@ export async function POST(req: NextRequest) {
 
   const passwordHash = await bcrypt.hash(password, 12)
   await prisma.user.create({ data: { email, name, passwordHash, status: "pending" } })
+  const { subject, html } = registrationReceivedEmail(name)
+  sendEmail(email, subject, html)
 
   return NextResponse.json({ ok: true }, { status: 201 })
 }
