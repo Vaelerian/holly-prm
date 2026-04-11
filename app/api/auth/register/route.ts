@@ -10,7 +10,12 @@ const RegisterSchema = z.object({
 })
 
 export async function POST(req: NextRequest) {
-  const body = await req.json()
+  let body: unknown
+  try {
+    body = await req.json()
+  } catch {
+    return NextResponse.json({ error: "Invalid input" }, { status: 422 })
+  }
   const parsed = RegisterSchema.safeParse(body)
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid input", details: parsed.error.flatten() }, { status: 422 })
