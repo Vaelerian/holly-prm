@@ -35,7 +35,12 @@ export default function LoginPage() {
 
         <form onSubmit={handleCredentials} className="space-y-4">
           <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-[#0a0a1a] border border-[rgba(0,255,136,0.2)] rounded px-3 py-2 text-sm text-[#c0c0d0] placeholder-[#666688] focus:outline-none focus:border-[#00ff88] focus:ring-1 focus:ring-[#00ff88]" required />
-          <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-[#0a0a1a] border border-[rgba(0,255,136,0.2)] rounded px-3 py-2 text-sm text-[#c0c0d0] placeholder-[#666688] focus:outline-none focus:border-[#00ff88] focus:ring-1 focus:ring-[#00ff88]" required />
+          <div className="space-y-2">
+            <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-[#0a0a1a] border border-[rgba(0,255,136,0.2)] rounded px-3 py-2 text-sm text-[#c0c0d0] placeholder-[#666688] focus:outline-none focus:border-[#00ff88] focus:ring-1 focus:ring-[#00ff88]" required />
+            <p className="text-xs text-[#666688] text-right">
+              <Link href="/auth/forgot-password" className="text-[#00ff88] hover:underline">Forgot password?</Link>
+            </p>
+          </div>
           {error && <p className="text-red-400 text-sm">{error}</p>}
           <button type="submit" className="w-full bg-[#00ff88] text-[#0a0a1a] rounded px-4 py-2 text-sm font-bold hover:bg-[#00cc6f] transition-colors">Sign in</button>
         </form>
