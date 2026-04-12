@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
-import { getContact, updateContact, deleteContact } from "@/lib/services/contacts"
+import { getContact, updateContact, deleteContact, isContactOwner } from "@/lib/services/contacts"
 import { UpdateContactSchema } from "@/lib/validations/contact"
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -18,6 +18,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const userId = session?.userId
   if (!userId) return NextResponse.json({ error: "Unauthorized", code: "UNAUTHORIZED" }, { status: 401 })
   const { id } = await params
+  const existing = await getContact(id, userId)
+  if (!existing) return NextResponse.json({ error: "Not found", code: "NOT_FOUND" }, { status: 404 })
+  if (!isContactOwner(existing.userId, userId)) return NextResponse.json({ error: "Forbidden", code: "FORBIDDEN" }, { status: 403 })
   const body = await req.json()
   const parsed = UpdateContactSchema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: "Validation failed", code: "VALIDATION_ERROR", details: parsed.error.flatten() }, { status: 422 })
@@ -31,6 +34,9 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   const userId = session?.userId
   if (!userId) return NextResponse.json({ error: "Unauthorized", code: "UNAUTHORIZED" }, { status: 401 })
   const { id } = await params
+  const existing = await getContact(id, userId)
+  if (!existing) return NextResponse.json({ error: "Not found", code: "NOT_FOUND" }, { status: 404 })
+  if (!isContactOwner(existing.userId, userId)) return NextResponse.json({ error: "Forbidden", code: "FORBIDDEN" }, { status: 403 })
   const result = await deleteContact(id, "ian", userId)
   if (!result) return NextResponse.json({ error: "Not found", code: "NOT_FOUND" }, { status: 404 })
   return new NextResponse(null, { status: 204 })

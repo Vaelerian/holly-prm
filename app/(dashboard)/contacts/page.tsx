@@ -1,15 +1,21 @@
+import { auth } from "@/lib/auth"
 import { listContacts } from "@/lib/services/contacts"
 import { ContactCard } from "@/components/contacts/contact-card"
 import Link from "next/link"
+import { redirect } from "next/navigation"
 
 interface PageProps { searchParams: Promise<{ q?: string; type?: string; overdue?: string }> }
 
 export default async function ContactsPage({ searchParams }: PageProps) {
+  const session = await auth()
+  if (!session?.userId) redirect("/login")
+  const userId = session.userId
+
   const { q, type, overdue } = await searchParams
   let contacts: Awaited<ReturnType<typeof listContacts>> = []
   let dbError = false
   try {
-    contacts = await listContacts({ q, type, overdue: overdue === "true" })
+    contacts = await listContacts({ q, type, overdue: overdue === "true", userId })
   } catch (e) {
     console.error("[contacts page]", e)
     dbError = true
@@ -52,6 +58,9 @@ export default async function ContactsPage({ searchParams }: PageProps) {
               healthScore={c.healthScore}
               lastInteraction={c.lastInteraction}
               tags={c.tags}
+              // @ts-expect-error Task 9 will add isShared/ownerName props to ContactCard
+              isShared={c.userId !== userId}
+              ownerName={c.userId !== userId ? (c.user?.name ?? null) : null}
             />
           ))}
         </div>
