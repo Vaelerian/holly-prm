@@ -13,7 +13,7 @@ jest.mock("@/lib/db", () => ({
     user: { findUnique: jest.fn() },
     userAccessGrant: { findMany: jest.fn(), findUnique: jest.fn(), create: jest.fn(), delete: jest.fn() },
     contact: { findFirst: jest.fn() },
-    contactShare: { findMany: jest.fn(), findUnique: jest.fn(), create: jest.fn(), delete: jest.fn() },
+    contactShare: { findMany: jest.fn(), deleteMany: jest.fn(), create: jest.fn() },
   },
 }))
 
@@ -48,19 +48,19 @@ describe("createAccessGrant", () => {
     })
   })
 
-  it("returns null when grantor email not found", async () => {
+  it("returns 'grantor_not_found' when grantor email not found", async () => {
     mockPrisma.user.findUnique.mockResolvedValueOnce(null)
     const result = await createAccessGrant("nope@x.com", "bob@x.com")
-    expect(result).toBeNull()
+    expect(result).toBe("grantor_not_found")
     expect(mockPrisma.userAccessGrant.create).not.toHaveBeenCalled()
   })
 
-  it("returns null when grantee email not found", async () => {
+  it("returns 'grantee_not_found' when grantee email not found", async () => {
     mockPrisma.user.findUnique
       .mockResolvedValueOnce({ id: "u1" } as any)
       .mockResolvedValueOnce(null)
     const result = await createAccessGrant("alice@x.com", "nope@x.com")
-    expect(result).toBeNull()
+    expect(result).toBe("grantee_not_found")
   })
 })
 
@@ -123,8 +123,7 @@ describe("createContactShare", () => {
 describe("deleteContactShare", () => {
   it("deletes share and returns true", async () => {
     mockPrisma.contact.findFirst.mockResolvedValue({ id: "c1" } as any)
-    mockPrisma.contactShare.findUnique.mockResolvedValue({ id: "s1" } as any)
-    mockPrisma.contactShare.delete.mockResolvedValue({ id: "s1" } as any)
+    mockPrisma.contactShare.deleteMany.mockResolvedValue({ count: 1 } as any)
     const result = await deleteContactShare("c1", "u2", "owner-id")
     expect(result).toBe(true)
   })
@@ -132,6 +131,14 @@ describe("deleteContactShare", () => {
   it("returns false when contact not owned by caller", async () => {
     mockPrisma.contact.findFirst.mockResolvedValue(null)
     const result = await deleteContactShare("c1", "u2", "wrong-user")
+    expect(result).toBe(false)
+    expect(mockPrisma.contactShare.deleteMany).not.toHaveBeenCalled()
+  })
+
+  it("returns false when share does not exist", async () => {
+    mockPrisma.contact.findFirst.mockResolvedValue({ id: "c1" } as any)
+    mockPrisma.contactShare.deleteMany.mockResolvedValue({ count: 0 } as any)
+    const result = await deleteContactShare("c1", "u2", "owner-id")
     expect(result).toBe(false)
   })
 })
