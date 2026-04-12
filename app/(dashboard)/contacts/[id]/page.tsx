@@ -88,7 +88,7 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
       {owner && (
         <SharingSection
           contactId={id}
-          initialShares={shares.map(s => ({ id: s.id, user: (s as any).user, createdAt: s.createdAt.toISOString() }))}
+          initialShares={shares.map(s => ({ id: s.id, userId: s.userId, user: (s as any).user, createdAt: s.createdAt.toISOString() }))}
         />
       )}
     </div>

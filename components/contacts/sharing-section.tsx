@@ -4,6 +4,7 @@ import { useState } from "react"
 
 interface Share {
   id: string
+  userId: string
   user: { name: string; email: string }
   createdAt: string
 }
@@ -34,17 +35,17 @@ export function SharingSection({ contactId, initialShares }: Props) {
         setError(data.error ?? "Failed to share")
         return
       }
-      setShares(prev => [...prev, { id: data.id, user: { name: email, email }, createdAt: new Date().toISOString() }])
+      setShares(prev => [...prev, { id: data.id, userId: data.userId, user: { name: data.user.name, email: data.user.email }, createdAt: new Date().toISOString() }])
       setEmail("")
     } finally {
       setWorking(false)
     }
   }
 
-  async function removeShare(sharedUserId: string) {
-    const res = await fetch(`/api/v1/contacts/${contactId}/shares/${sharedUserId}`, { method: "DELETE" })
+  async function removeShare(userId: string) {
+    const res = await fetch(`/api/v1/contacts/${contactId}/shares/${userId}`, { method: "DELETE" })
     if (res.ok) {
-      setShares(prev => prev.filter(s => s.user.email !== sharedUserId))
+      setShares(prev => prev.filter(s => s.userId !== userId))
     }
   }
 
@@ -63,7 +64,7 @@ export function SharingSection({ contactId, initialShares }: Props) {
                   <p className="text-xs text-[#666688]">{s.user.email}</p>
                 </div>
                 <button
-                  onClick={() => removeShare(s.user.email)}
+                  onClick={() => removeShare(s.userId)}
                   className="text-xs text-[#ff4444] hover:text-[#ff6666]"
                 >
                   Revoke

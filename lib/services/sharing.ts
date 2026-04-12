@@ -48,7 +48,10 @@ export async function createContactShare(
   if (!contact) return null
   const user = await prisma.user.findUnique({ where: { email } })
   if (!user) return "user_not_found"
-  return prisma.contactShare.create({ data: { contactId, userId: user.id } })
+  return prisma.contactShare.create({
+    data: { contactId, userId: user.id },
+    include: { user: { select: { name: true, email: true } } },
+  })
 }
 
 export async function deleteContactShare(
