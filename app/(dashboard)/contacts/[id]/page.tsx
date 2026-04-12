@@ -6,10 +6,13 @@ import { HealthScoreBadge } from "@/components/contacts/health-score-badge"
 import { Badge } from "@/components/ui/badge"
 import Link from "next/link"
 import { notFound } from "next/navigation"
+import { auth } from "@/lib/auth"
 
 export default async function ContactDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const contact = await getContact(id)
+  const session = await auth()
+  const userId = session?.userId ?? ""
+  const contact = await getContact(id, userId)
   if (!contact) notFound()
 
   // Flatten all action items from all interactions for this contact

@@ -9,25 +9,49 @@ interface ListContactsOptions {
   userId: string
 }
 
-export async function listContacts(opts: ListContactsOptions) {
-  const where: Record<string, unknown> = { userId: opts.userId }
-  if (opts.q) where.name = { contains: opts.q, mode: "insensitive" }
-  if (opts.type) where.type = opts.type
-  if (opts.overdue) {
-    where.interactionFreqDays = { not: null }
-    where.OR = [{ healthScore: { lt: 100 } }, { lastInteraction: null }]
+export function contactAccessWhere(userId: string) {
+  return {
+    OR: [
+      { userId },
+      { user: { grantedAccess: { some: { granteeId: userId } } } },
+      { shares: { some: { userId } } },
+      { project: { OR: [{ userId }, { members: { some: { userId } } }] } },
+    ],
   }
-  return prisma.contact.findMany({ where, orderBy: { name: "asc" } })
+}
+
+export function isContactOwner(contactUserId: string | null, userId: string): boolean {
+  return contactUserId === userId
+}
+
+export async function listContacts(opts: ListContactsOptions) {
+  const accessClause = contactAccessWhere(opts.userId)
+  const filters: object[] = [accessClause]
+  if (opts.q) filters.push({ name: { contains: opts.q, mode: "insensitive" } })
+  if (opts.type) filters.push({ type: opts.type })
+  if (opts.overdue) {
+    filters.push({ interactionFreqDays: { not: null } })
+    filters.push({ OR: [{ healthScore: { lt: 100 } }, { lastInteraction: null }] })
+  }
+  return prisma.contact.findMany({
+    where: filters.length === 1 ? accessClause : { AND: filters },
+    orderBy: { name: "asc" },
+    include: { user: { select: { id: true, name: true } } },
+  })
 }
 
 export async function getContact(id: string, userId: string) {
   return prisma.contact.findFirst({
-    where: { id, userId },
+    where: { id, ...contactAccessWhere(userId) },
     include: {
+      user: { select: { id: true, name: true } },
       interactions: {
         orderBy: { occurredAt: "desc" },
         take: 20,
-        include: { actionItems: { orderBy: { createdAt: "asc" } } },
+        include: {
+          actionItems: { orderBy: { createdAt: "asc" } },
+          createdByUser: { select: { name: true } },
+        },
       },
     },
   })
