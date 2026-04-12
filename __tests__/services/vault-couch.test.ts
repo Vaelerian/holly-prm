@@ -51,20 +51,23 @@ it("couchDbAccessible returns false on non-ok response", async () => {
   expect(await couchDbAccessible(fakeConfig)).toBe(false)
 })
 
-it("couchAllDocs calls _all_docs with include_docs=true", async () => {
+it("couchAllDocs calls _all_docs with include_docs=true and auth header", async () => {
   fetchMock.mockResolvedValue({ ok: true, json: async () => ({ rows: [], total_rows: 0, offset: 0 }) })
   const result = await couchAllDocs(fakeConfig, { include_docs: true })
-  expect(fetchMock).toHaveBeenCalledWith(
-    expect.stringContaining("_all_docs"),
-    expect.any(Object)
-  )
+  expect(fetchMock.mock.calls[0][0]).toContain("_all_docs")
   expect(fetchMock.mock.calls[0][0]).toContain("include_docs=true")
+  expect(fetchMock.mock.calls[0][1]).toEqual(
+    expect.objectContaining({ headers: expect.objectContaining({ Authorization: expect.stringContaining("Basic ") }) })
+  )
   expect(result.rows).toEqual([])
 })
 
-it("couchChanges calls _changes with since param", async () => {
+it("couchChanges calls _changes with since param and auth header", async () => {
   fetchMock.mockResolvedValue({ ok: true, json: async () => ({ results: [], last_seq: "5-abc" }) })
   const result = await couchChanges(fakeConfig, "3-xyz")
   expect(fetchMock.mock.calls[0][0]).toContain("since=3-xyz")
+  expect(fetchMock.mock.calls[0][1]).toEqual(
+    expect.objectContaining({ headers: expect.objectContaining({ Authorization: expect.stringContaining("Basic ") }) })
+  )
   expect(result.last_seq).toBe("5-abc")
 })

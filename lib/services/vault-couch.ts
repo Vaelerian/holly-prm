@@ -38,15 +38,7 @@ export interface CouchAllDocsResult {
 export async function couchAllDocs(config: VaultConfig, options: { include_docs?: boolean } = {}): Promise<CouchAllDocsResult> {
   const params = new URLSearchParams()
   if (options.include_docs) params.set("include_docs", "true")
-  const url = `${config.couchDbUrl}/${config.couchDbDatabase}/_all_docs?${params}`
-  const res = await fetch(url, {
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: basicAuth(config.couchDbUsername, config.couchDbPassword),
-    },
-  })
-  if (!res.ok) throw new Error(`CouchDB ${res.status}`)
-  return res.json()
+  return couchFetch(config, `_all_docs?${params}`)
 }
 
 export interface CouchChangesResult {
@@ -56,15 +48,7 @@ export interface CouchChangesResult {
 
 export async function couchChanges(config: VaultConfig, since: string): Promise<CouchChangesResult> {
   const params = new URLSearchParams({ since, include_docs: "true" })
-  const url = `${config.couchDbUrl}/${config.couchDbDatabase}/_changes?${params}`
-  const res = await fetch(url, {
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: basicAuth(config.couchDbUsername, config.couchDbPassword),
-    },
-  })
-  if (!res.ok) throw new Error(`CouchDB ${res.status}`)
-  return res.json()
+  return couchFetch(config, `_changes?${params}`)
 }
 
 export async function couchDbAccessible(config: VaultConfig): Promise<boolean> {
