@@ -24,10 +24,10 @@ function makeRequest(body?: unknown) {
   })
 }
 
-it("GET returns 401 for non-admin", async () => {
+it("GET returns 403 for non-admin", async () => {
   mockAuth.mockResolvedValue({ role: "user", userId: "u1" })
   const res = await GET()
-  expect(res.status).toBe(401)
+  expect(res.status).toBe(403)
 })
 
 it("GET returns all grants for admin", async () => {
@@ -40,10 +40,10 @@ it("GET returns all grants for admin", async () => {
   expect(data).toHaveLength(1)
 })
 
-it("POST returns 401 for non-admin", async () => {
+it("POST returns 403 for non-admin", async () => {
   mockAuth.mockResolvedValue({ role: "user", userId: "u1" })
   const res = await POST(makeRequest({ grantorEmail: "a@x.com", granteeEmail: "b@x.com" }))
-  expect(res.status).toBe(401)
+  expect(res.status).toBe(403)
 })
 
 it("POST creates grant for admin", async () => {
@@ -51,6 +51,12 @@ it("POST creates grant for admin", async () => {
   ;(createAccessGrant as jest.Mock).mockResolvedValue({ id: "g1", grantorId: "u1", granteeId: "u2" })
   const res = await POST(makeRequest({ grantorEmail: "a@x.com", granteeEmail: "b@x.com" }))
   expect(res.status).toBe(201)
+})
+
+it("POST returns 422 when required fields missing", async () => {
+  mockAuth.mockResolvedValue({ role: "admin" })
+  const res = await POST(makeRequest({ grantorEmail: "a@x.com" })) // missing granteeEmail
+  expect(res.status).toBe(422)
 })
 
 it("POST returns 404 with grantor message when createAccessGrant returns grantor_not_found", async () => {
@@ -71,10 +77,10 @@ it("POST returns 404 with grantee message when createAccessGrant returns grantee
   expect(data.error).toContain("Grantee")
 })
 
-it("DELETE returns 401 for non-admin", async () => {
+it("DELETE returns 403 for non-admin", async () => {
   mockAuth.mockResolvedValue({ role: "user", userId: "u1" })
   const res = await DELETE(new NextRequest("http://localhost/"), { params: Promise.resolve({ id: "g1" }) })
-  expect(res.status).toBe(401)
+  expect(res.status).toBe(403)
 })
 
 it("DELETE revokes grant for admin", async () => {
