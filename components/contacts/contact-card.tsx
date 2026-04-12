@@ -9,9 +9,11 @@ interface ContactCardProps {
   healthScore: number
   lastInteraction: Date | null
   tags: string[]
+  isShared?: boolean
+  ownerName?: string | null
 }
 
-export function ContactCard({ id, name, type, healthScore, lastInteraction, tags }: ContactCardProps) {
+export function ContactCard({ id, name, type, healthScore, lastInteraction, tags, isShared, ownerName }: ContactCardProps) {
   const daysSince = lastInteraction
     ? Math.floor((Date.now() - new Date(lastInteraction).getTime()) / 86400000)
     : null
@@ -21,6 +23,9 @@ export function ContactCard({ id, name, type, healthScore, lastInteraction, tags
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="text-sm font-medium text-[#c0c0d0] truncate">{name}</p>
+          {isShared && ownerName && (
+            <p className="text-xs text-[#4488ff] mt-0.5">Shared by {ownerName}</p>
+          )}
           <p className="text-xs text-[#666688] mt-0.5">
             {daysSince === null ? "No interactions yet" : daysSince === 0 ? "Today" : `${daysSince}d ago`}
           </p>
