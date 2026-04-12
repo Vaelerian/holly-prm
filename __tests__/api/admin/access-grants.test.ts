@@ -77,6 +77,13 @@ it("POST returns 404 with grantee message when createAccessGrant returns grantee
   expect(data.error).toContain("Grantee")
 })
 
+it("POST returns 409 when grant already exists", async () => {
+  mockAuth.mockResolvedValue({ role: "admin" })
+  ;(createAccessGrant as jest.Mock).mockResolvedValue("already_exists")
+  const res = await POST(makeRequest({ grantorEmail: "a@x.com", granteeEmail: "b@x.com" }))
+  expect(res.status).toBe(409)
+})
+
 it("DELETE returns 403 for non-admin", async () => {
   mockAuth.mockResolvedValue({ role: "user", userId: "u1" })
   const res = await DELETE(new NextRequest("http://localhost/"), { params: Promise.resolve({ id: "g1" }) })

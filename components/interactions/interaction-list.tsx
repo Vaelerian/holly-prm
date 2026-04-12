@@ -11,6 +11,7 @@ interface Interaction {
   location: string | null
   occurredAt: Date
   createdByHolly: boolean
+  createdByUser?: { name: string } | null
 }
 
 export function InteractionList({ interactions }: { interactions: Interaction[] }) {
@@ -36,6 +37,9 @@ export function InteractionList({ interactions }: { interactions: Interaction[] 
           </div>
           <p className="text-sm text-[#c0c0d0] mt-2">{i.summary}</p>
           {i.outcome && <p className="text-sm text-[#c0c0d0] mt-1 italic">{i.outcome}</p>}
+          {i.createdByUser && (
+            <p className="text-xs text-[#666688] mt-1">Logged by {i.createdByUser.name}</p>
+          )}
         </div>
       ))}
     </div>

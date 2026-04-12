@@ -38,14 +38,26 @@ describe("createAccessGrant", () => {
     mockPrisma.user.findUnique
       .mockResolvedValueOnce({ id: "u1", name: "Alice" } as any)
       .mockResolvedValueOnce({ id: "u2", name: "Bob" } as any)
-    mockPrisma.userAccessGrant.create.mockResolvedValue({ id: "g1", grantorId: "u1", granteeId: "u2" } as any)
+    const grant = { id: "g1", grantorId: "u1", granteeId: "u2", grantor: { name: "Alice", email: "alice@x.com" }, grantee: { name: "Bob", email: "bob@x.com" } }
+    mockPrisma.userAccessGrant.create.mockResolvedValue(grant as any)
 
     const result = await createAccessGrant("alice@x.com", "bob@x.com")
 
-    expect(result).toEqual({ id: "g1", grantorId: "u1", granteeId: "u2" })
-    expect(mockPrisma.userAccessGrant.create).toHaveBeenCalledWith({
-      data: { grantorId: "u1", granteeId: "u2" },
-    })
+    expect(result).toEqual(grant)
+    expect(mockPrisma.userAccessGrant.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { grantorId: "u1", granteeId: "u2" }, include: expect.any(Object) })
+    )
+  })
+
+  it("returns 'already_exists' on duplicate grant", async () => {
+    mockPrisma.user.findUnique
+      .mockResolvedValueOnce({ id: "u1" } as any)
+      .mockResolvedValueOnce({ id: "u2" } as any)
+    const { Prisma } = jest.requireActual("@/app/generated/prisma/client")
+    const p2002 = new Prisma.PrismaClientKnownRequestError("unique constraint", { code: "P2002", clientVersion: "7" })
+    mockPrisma.userAccessGrant.create.mockRejectedValue(p2002)
+    const result = await createAccessGrant("alice@x.com", "bob@x.com")
+    expect(result).toBe("already_exists")
   })
 
   it("returns 'grantor_not_found' when grantor email not found", async () => {
@@ -100,10 +112,24 @@ describe("createContactShare", () => {
   it("creates share when contact is owned and target user exists", async () => {
     mockPrisma.contact.findFirst.mockResolvedValue({ id: "c1", userId: "owner-id" } as any)
     mockPrisma.user.findUnique.mockResolvedValue({ id: "u2" } as any)
-    mockPrisma.contactShare.create.mockResolvedValue({ id: "s1", contactId: "c1", userId: "u2" } as any)
+    const share = { id: "s1", contactId: "c1", userId: "u2", user: { name: "Bob", email: "bob@x.com" } }
+    mockPrisma.contactShare.create.mockResolvedValue(share as any)
 
     const result = await createContactShare("c1", "bob@x.com", "owner-id")
-    expect(result).toEqual({ id: "s1", contactId: "c1", userId: "u2" })
+    expect(result).toEqual(share)
+    expect(mockPrisma.contactShare.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { contactId: "c1", userId: "u2" }, include: expect.any(Object) })
+    )
+  })
+
+  it("returns 'already_exists' on duplicate share", async () => {
+    mockPrisma.contact.findFirst.mockResolvedValue({ id: "c1" } as any)
+    mockPrisma.user.findUnique.mockResolvedValue({ id: "u2" } as any)
+    const { Prisma } = jest.requireActual("@/app/generated/prisma/client")
+    const p2002 = new Prisma.PrismaClientKnownRequestError("unique constraint", { code: "P2002", clientVersion: "7" })
+    mockPrisma.contactShare.create.mockRejectedValue(p2002)
+    const result = await createContactShare("c1", "bob@x.com", "owner-id")
+    expect(result).toBe("already_exists")
   })
 
   it("returns null when contact not owned by caller", async () => {

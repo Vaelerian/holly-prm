@@ -28,5 +28,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const result = await createContactShare(id, email as string, userId)
   if (result === null) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   if (result === "user_not_found") return NextResponse.json({ error: "User not found" }, { status: 404 })
+  if (result === "already_exists") return NextResponse.json({ error: "Already shared with this user" }, { status: 409 })
   return NextResponse.json(result, { status: 201 })
 }

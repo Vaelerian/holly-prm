@@ -66,6 +66,14 @@ it("POST returns 403 when caller is not the contact owner", async () => {
   expect(res.status).toBe(403)
 })
 
+it("POST returns 409 when contact already shared with user", async () => {
+  mockAuth.mockResolvedValue({ userId: "owner-1" })
+  ;(createContactShare as jest.Mock).mockResolvedValue("already_exists")
+  const req = new NextRequest("http://localhost/", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: "bob@x.com" }) })
+  const res = await POST(req, contactParams)
+  expect(res.status).toBe(409)
+})
+
 it("DELETE removes share", async () => {
   mockAuth.mockResolvedValue({ userId: "owner-1" })
   ;(deleteContactShare as jest.Mock).mockResolvedValue(true)

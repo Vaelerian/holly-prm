@@ -58,7 +58,6 @@ export default async function ContactsPage({ searchParams }: PageProps) {
               healthScore={c.healthScore}
               lastInteraction={c.lastInteraction}
               tags={c.tags}
-              // @ts-expect-error Task 9 will add isShared/ownerName props to ContactCard
               isShared={c.userId !== userId}
               ownerName={c.userId !== userId ? (c.user?.name ?? null) : null}
             />
