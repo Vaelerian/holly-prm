@@ -107,7 +107,11 @@ export function AdminPanel({ users, grants: initialGrants }: Props) {
 
   async function revokeGrant(id: string) {
     const res = await fetch(`/api/admin/access-grants/${id}`, { method: "DELETE" })
-    if (res.ok) setGrants(prev => prev.filter(g => g.id !== id))
+    if (res.ok) {
+      setGrants(prev => prev.filter(g => g.id !== id))
+    } else {
+      setGrantError("Failed to revoke grant")
+    }
   }
 
   return (

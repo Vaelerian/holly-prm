@@ -15,5 +15,5 @@ export default async function AdminPage() {
     listAccessGrants(),
   ])
 
-  return <AdminPanel users={users} grants={grants as any} />
+  return <AdminPanel users={users} grants={grants} />
 }
