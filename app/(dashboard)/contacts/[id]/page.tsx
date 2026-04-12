@@ -1,21 +1,29 @@
-import { getContact } from "@/lib/services/contacts"
+import { auth } from "@/lib/auth"
+import { getContact, isContactOwner } from "@/lib/services/contacts"
+import { listContactShares } from "@/lib/services/sharing"
 import { InteractionList } from "@/components/interactions/interaction-list"
 import { ActionItemRow } from "@/components/action-items/action-item-row"
 import { AddActionItemForm } from "@/components/action-items/add-action-item-form"
 import { HealthScoreBadge } from "@/components/contacts/health-score-badge"
+import { SharingSection } from "@/components/contacts/sharing-section"
 import { Badge } from "@/components/ui/badge"
 import Link from "next/link"
-import { notFound } from "next/navigation"
-import { auth } from "@/lib/auth"
+import { notFound, redirect } from "next/navigation"
 
 export default async function ContactDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params
   const session = await auth()
-  const userId = session?.userId ?? ""
+  if (!session?.userId) redirect("/login")
+  const userId = session.userId
+
+  const { id } = await params
   const contact = await getContact(id, userId)
   if (!contact) notFound()
 
-  // Flatten all action items from all interactions for this contact
+  const owner = isContactOwner(contact.userId, userId)
+
+  // Load shares only for owner (contributors don't manage shares)
+  const shares = owner ? await listContactShares(id, userId) ?? [] : []
+
   const allActionItems = contact.interactions.flatMap(i =>
     (i.actionItems ?? []).map(ai => ({ ...ai, interactionId: i.id }))
   )
@@ -31,8 +39,13 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
             <HealthScoreBadge score={contact.healthScore} />
             {contact.isFamilyMember && <Badge variant="info">Family</Badge>}
           </div>
+          {!owner && contact.user && (
+            <p className="text-xs text-[#4488ff] mt-1">Shared by {contact.user.name}</p>
+          )}
         </div>
-        <Link href={`/contacts/${contact.id}/edit`} className="text-sm text-[#00ff88] hover:text-[#00cc6f]">Edit</Link>
+        {owner && (
+          <Link href={`/contacts/${contact.id}/edit`} className="text-sm text-[#00ff88] hover:text-[#00cc6f]">Edit</Link>
+        )}
       </div>
 
       {contact.notes && (
@@ -71,6 +84,13 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
         <InteractionList interactions={contact.interactions as any} />
         <AddActionItemForm />
       </div>
+
+      {owner && (
+        <SharingSection
+          contactId={id}
+          initialShares={shares.map(s => ({ id: s.id, user: (s as any).user, createdAt: s.createdAt.toISOString() }))}
+        />
+      )}
     </div>
   )
 }
