@@ -24,6 +24,27 @@ describe("contactAccessWhere", () => {
     const result = contactAccessWhere("user-1")
     expect(result.OR).toHaveLength(4)
     expect(result.OR[0]).toEqual({ userId: "user-1" })
+    expect(result.OR[1]).toEqual({ user: { grantedAccess: { some: { granteeId: "user-1" } } } })
+    expect(result.OR[2]).toEqual({ shares: { some: { userId: "user-1" } } })
+    expect(result.OR[3]).toEqual({ project: { OR: [{ userId: "user-1" }, { members: { some: { userId: "user-1" } } }] } })
+  })
+})
+
+describe("getContact", () => {
+  it("calls findFirst with id and access OR clause", async () => {
+    const contact = { id: "c1", name: "Alice", userId: "user-1", user: { id: "user-1", name: "Ian" }, interactions: [] }
+    mockPrisma.contact.findFirst.mockResolvedValue(contact as any)
+    const result = await getContact("c1", "user-1")
+    const call = (mockPrisma.contact.findFirst as jest.Mock).mock.calls[0][0]
+    expect(call.where.AND[0]).toEqual({ id: "c1" })
+    expect(call.where.AND[1]).toEqual(contactAccessWhere("user-1"))
+    expect(result).toEqual(contact)
+  })
+
+  it("returns null when contact not accessible to user", async () => {
+    mockPrisma.contact.findFirst.mockResolvedValue(null)
+    const result = await getContact("c1", "user-2")
+    expect(result).toBeNull()
   })
 })
 
@@ -44,9 +65,9 @@ describe("listContacts", () => {
     const contacts = [{ id: "1", name: "Alice", user: { id: "user-1", name: "Ian" } }]
     mockPrisma.contact.findMany.mockResolvedValue(contacts as any)
     const result = await listContacts({ userId: "user-1" })
-    expect(mockPrisma.contact.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ orderBy: { name: "asc" } })
-    )
+    const call = (mockPrisma.contact.findMany as jest.Mock).mock.calls[0][0]
+    expect(call.orderBy).toEqual({ name: "asc" })
+    expect(call.where).toEqual(contactAccessWhere("user-1"))
     expect(result).toEqual(contacts)
   })
 

@@ -42,7 +42,7 @@ export async function listContacts(opts: ListContactsOptions) {
 
 export async function getContact(id: string, userId: string) {
   return prisma.contact.findFirst({
-    where: { id, ...contactAccessWhere(userId) },
+    where: { AND: [{ id }, contactAccessWhere(userId)] },
     include: {
       user: { select: { id: true, name: true } },
       interactions: {
