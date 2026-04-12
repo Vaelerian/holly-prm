@@ -16,6 +16,9 @@ export async function deriveKey(passphrase: string): Promise<CryptoKey> {
     false,
     ["deriveKey"]
   )
+  // NOTE: salt = passphrase is the LiveSync protocol spec, not a general best practice.
+  // Do not copy this pattern for new encryption schemes - use a fixed app-specific salt
+  // or a per-user random salt stored alongside the ciphertext.
   return subtle.deriveKey(
     {
       name: "PBKDF2",

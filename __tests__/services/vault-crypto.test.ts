@@ -30,8 +30,10 @@ describe("vault-crypto", () => {
     await expect(decryptString(key2, encrypted)).rejects.toThrow()
   })
 
-  it("decrypting invalid base64 throws", async () => {
+  it("decrypting truncated ciphertext throws (too short for IV + auth tag)", async () => {
     const key = await deriveKey("test-passphrase")
-    await expect(decryptString(key, "not-valid-base64!!!")).rejects.toThrow()
+    // 20 bytes is less than the minimum valid size (12 IV + 16 auth tag = 28 bytes)
+    const tooShort = Buffer.alloc(20).toString("base64")
+    await expect(decryptString(key, tooShort)).rejects.toThrow()
   })
 })
