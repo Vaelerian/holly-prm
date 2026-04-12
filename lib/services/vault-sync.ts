@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db"
-import { getVaultConfig, getNoteContent, VaultSearchResult } from "./vault"
+import { getVaultConfig, VaultSearchResult } from "./vault"
 
 export interface VaultSyncResult {
   updatedNotes: VaultSearchResult[]
@@ -34,19 +34,6 @@ export function shouldRunSync(config: {
   return now.getTime() - config.lastSyncAt.getTime() >= intervalMs
 }
 
-function parseFm(content: string): Record<string, string> {
-  const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---/)
-  if (!match) return {}
-  const result: Record<string, string> = {}
-  for (const line of match[1].split(/\r?\n/)) {
-    const colonIdx = line.indexOf(":")
-    if (colonIdx !== -1) {
-      result[line.slice(0, colonIdx).trim()] = line.slice(colonIdx + 1).trim()
-    }
-  }
-  return result
-}
-
 export async function runVaultSync(userId?: string): Promise<VaultSyncResult> {
   const config = await getVaultConfig(userId)
   if (!config) return { updatedNotes: [], errors: [] }
@@ -57,34 +44,16 @@ export async function runVaultSync(userId?: string): Promise<VaultSyncResult> {
 
   for (const note of vaultNotes) {
     try {
-      const content = await getNoteContent(note.vaultPath)
-      if (!content) {
-        errors.push(`Note not found: ${note.vaultPath}`)
-        continue
-      }
-
-      const lastUpdatedMatch = content.match(/last_updated:\s*(.+)/)
-      if (lastUpdatedMatch) {
-        const fileLastUpdatedStr = lastUpdatedMatch[1].trim()
-        const lastSyncDateStr = note.lastSyncAt
-          ? note.lastSyncAt.toISOString().slice(0, 10)
-          : null
-        const fileLastUpdated = new Date(fileLastUpdatedStr)
-        const isNewer = lastSyncDateStr === null
-          ? !isNaN(fileLastUpdated.getTime())
-          : fileLastUpdatedStr > lastSyncDateStr
-        if (!isNaN(fileLastUpdated.getTime()) && isNewer) {
-          const titleMatch = content.match(/^#\s+(.+)$/m)
-          updatedNotes.push({
-            path: note.vaultPath,
-            title: titleMatch ? titleMatch[1].trim() : note.vaultPath,
-            snippet: content.slice(0, 200),
-            frontmatter: parseFm(content),
-          })
-        }
-      }
+      // CouchDB sync will be implemented in Phase 5 sync worker.
+      // For now we record the note path for tracking purposes.
+      updatedNotes.push({
+        path: note.notePath,
+        title: note.notePath,
+        snippet: "",
+        frontmatter: {},
+      })
     } catch (e) {
-      errors.push(`Error syncing ${note.vaultPath}: ${e instanceof Error ? e.message : String(e)}`)
+      errors.push(`Error syncing ${note.notePath}: ${e instanceof Error ? e.message : String(e)}`)
     }
   }
 

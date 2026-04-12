@@ -20,7 +20,11 @@ const VALID_WEEKEND_CRONS = [
 ]
 
 const ConfigSchema = z.object({
-  vaultPath: z.string().min(1),
+  couchDbUrl: z.string().url().default("http://localhost:5984"),
+  couchDbDatabase: z.string().min(1).default("obsidian"),
+  couchDbUsername: z.string().min(1),
+  couchDbPassword: z.string().min(1),
+  e2ePassphrase: z.string().min(1),
   workdayCron: z.string().refine(v => VALID_WORKDAY_CRONS.includes(v), {
     message: "Invalid workday cron expression",
   }),

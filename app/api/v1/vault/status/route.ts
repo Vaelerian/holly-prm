@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
-import { getVaultConfig, isVaultAccessible } from "@/lib/services/vault"
+import { getVaultConfig, isCouchDbAccessible } from "@/lib/services/vault"
 
 export async function GET(req: NextRequest) {
   const session = await auth()
@@ -13,16 +13,18 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ configured: false, accessible: false, config: null })
   }
 
-  const accessible = await isVaultAccessible(userId)
+  const accessible = await isCouchDbAccessible(userId)
   return NextResponse.json({
     configured: true,
     accessible,
     config: {
-      vaultPath: config.vaultPath,
+      couchDbUrl: config.couchDbUrl,
+      couchDbDatabase: config.couchDbDatabase,
       workdayCron: config.workdayCron,
       weekendCron: config.weekendCron,
       enabled: config.enabled,
       lastSyncAt: config.lastSyncAt,
+      lastSeq: config.lastSeq,
     },
   })
 }
