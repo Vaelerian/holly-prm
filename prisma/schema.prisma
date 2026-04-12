@@ -359,6 +359,7 @@ model VaultNote {
   user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@unique([entityType, entityId])
+  @@index([userId])
 }
 
 model PasswordResetToken {

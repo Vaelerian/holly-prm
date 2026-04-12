@@ -13,7 +13,6 @@ CREATE TABLE "VaultConfig" (
     "enabled" BOOLEAN NOT NULL DEFAULT true,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
-    "userId" TEXT,
     CONSTRAINT "VaultConfig_pkey" PRIMARY KEY ("id")
 );
 
@@ -26,12 +25,7 @@ CREATE TABLE "VaultNote" (
     "notePath" TEXT NOT NULL,
     "lastSyncAt" TIMESTAMP(3) NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "userId" TEXT,
     CONSTRAINT "VaultNote_pkey" PRIMARY KEY ("id")
 );
 
 CREATE UNIQUE INDEX "VaultNote_entityType_entityId_key" ON "VaultNote"("entityType", "entityId");
-CREATE UNIQUE INDEX "VaultConfig_userId_key" ON "VaultConfig"("userId");
-
-ALTER TABLE "VaultConfig" ADD CONSTRAINT "VaultConfig_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-ALTER TABLE "VaultNote" ADD CONSTRAINT "VaultNote_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
