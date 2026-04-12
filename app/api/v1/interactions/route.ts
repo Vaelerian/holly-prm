@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { listInteractions, createInteraction } from "@/lib/services/interactions"
+import { getContact } from "@/lib/services/contacts"
 import { CreateInteractionSchema } from "@/lib/validations/interaction"
 
 export async function GET(req: NextRequest) {
@@ -23,6 +24,14 @@ export async function POST(req: NextRequest) {
   const body = await req.json()
   const parsed = CreateInteractionSchema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: "Validation failed", code: "VALIDATION_ERROR", details: parsed.error.flatten() }, { status: 422 })
-  const interaction = await createInteraction(parsed.data, "ian", userId)
+
+  // Look up contact to verify access and determine owner for contributor mode
+  const contact = await getContact(parsed.data.contactId, userId)
+  if (!contact) return NextResponse.json({ error: "Not found", code: "NOT_FOUND" }, { status: 404 })
+
+  // If contributor: interaction.userId = contact owner, createdByUserId = contributor
+  const contactOwnerId = contact.userId !== userId ? (contact.userId ?? undefined) : undefined
+
+  const interaction = await createInteraction(parsed.data, "ian", userId, contactOwnerId)
   return NextResponse.json(interaction, { status: 201 })
 }
