@@ -108,6 +108,10 @@ model User {
   vaultConfig       VaultConfig?
   vaultNotes        VaultNote[]
   passwordResetTokens PasswordResetToken[]
+  grantedAccess       UserAccessGrant[]   @relation("Grantor")
+  receivedAccess      UserAccessGrant[]   @relation("Grantee")
+  createdInteractions Interaction[]       @relation("InteractionCreatedBy")
+  contactShares       ContactShare[]
 }
 
 model ProjectMember {
@@ -140,6 +144,9 @@ model Contact {
   updatedAt           DateTime      @updatedAt
   userId              String?
   user                User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  projectId           String?
+  project             Project?      @relation("ContactProject", fields: [projectId], references: [id], onDelete: SetNull)
+  shares              ContactShare[]
 
   @@index([name])
 }
@@ -165,6 +172,10 @@ model Interaction {
   createdAt         DateTime        @default(now())
   userId            String?
   user              User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+  projectId         String?
+  project           Project?        @relation("InteractionProject", fields: [projectId], references: [id], onDelete: SetNull)
+  createdByUserId   String?
+  createdByUser     User?           @relation("InteractionCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
 
   @@index([contactId])
   @@index([occurredAt])
@@ -204,7 +215,9 @@ model Project {
   updatedAt   DateTime        @updatedAt
   userId      String?
   user        User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
-  members     ProjectMember[]
+  members             ProjectMember[]
+  linkedContacts      Contact[]      @relation("ContactProject")
+  linkedInteractions  Interaction[]  @relation("InteractionProject")
 }
 
 model Task {
@@ -350,4 +363,28 @@ model PasswordResetToken {
   expiresAt  DateTime
   usedAt     DateTime?
   createdAt  DateTime  @default(now())
+}
+
+model UserAccessGrant {
+  id        String   @id @default(uuid())
+  grantorId String
+  granteeId String
+  createdAt DateTime @default(now())
+
+  grantor User @relation("Grantor", fields: [grantorId], references: [id], onDelete: Cascade)
+  grantee User @relation("Grantee", fields: [granteeId], references: [id], onDelete: Cascade)
+
+  @@unique([grantorId, granteeId])
+}
+
+model ContactShare {
+  id        String   @id @default(uuid())
+  contactId String
+  userId    String
+  createdAt DateTime @default(now())
+
+  contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([contactId, userId])
 }
