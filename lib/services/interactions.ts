@@ -3,6 +3,7 @@ import { Actor } from "@/app/generated/prisma/client"
 import { computeHealthScore } from "@/lib/health-score"
 import { publishSseEvent } from "@/lib/sse-events"
 import { upsertCalendarEvent, deleteCalendarEvent } from "@/lib/services/calendar-sync"
+import { contactAccessWhere } from "@/lib/services/contacts"
 import type { CreateInteractionInput, UpdateInteractionInput } from "@/lib/validations/interaction"
 
 interface ListInteractionsOptions {
@@ -13,8 +14,14 @@ interface ListInteractionsOptions {
 }
 
 export async function listInteractions(opts: ListInteractionsOptions) {
-  const where: Record<string, unknown> = { userId: opts.userId }
-  if (opts.contactId) where.contactId = opts.contactId
+  const where: Record<string, unknown> = {}
+  if (opts.contactId) {
+    // Allow owners and contributors to list interactions for a contact
+    where.contactId = opts.contactId
+    where.contact = contactAccessWhere(opts.userId)
+  } else {
+    where.userId = opts.userId
+  }
   if (opts.followUpRequired) {
     where.followUpRequired = true
     where.followUpCompleted = false
@@ -23,7 +30,10 @@ export async function listInteractions(opts: ListInteractionsOptions) {
     where,
     orderBy: { occurredAt: "desc" },
     take: opts.limit ?? 50,
-    include: { contact: { select: { id: true, name: true } } },
+    include: {
+      contact: { select: { id: true, name: true } },
+      createdByUser: { select: { name: true } },
+    },
   })
 }
 
@@ -31,11 +41,24 @@ export async function getInteraction(id: string, userId: string) {
   return prisma.interaction.findFirst({ where: { id, userId }, include: { actionItems: true } })
 }
 
-export async function createInteraction(data: CreateInteractionInput, actor: Actor, userId: string) {
+export async function getInteractionById(id: string) {
+  return prisma.interaction.findUnique({ where: { id } })
+}
+
+export async function createInteraction(
+  data: CreateInteractionInput,
+  actor: Actor,
+  userId: string,
+  contactOwnerId?: string
+) {
+  const ownerId = contactOwnerId ?? userId
+  const createdByUserId = ownerId !== userId ? userId : undefined
+
   const interaction = await prisma.interaction.create({
     data: {
       ...data,
-      userId,
+      userId: ownerId,
+      createdByUserId: createdByUserId ?? null,
       occurredAt: new Date(data.occurredAt),
       followUpDate: data.followUpDate ? new Date(data.followUpDate) : null,
       createdByHolly: actor === "holly",
@@ -54,7 +77,7 @@ export async function createInteraction(data: CreateInteractionInput, actor: Act
   })
 
   await prisma.auditLog.create({
-    data: { entity: "Interaction", entityId: interaction.id, action: "create", actor, userId },
+    data: { entity: "Interaction", entityId: interaction.id, action: "create", actor, userId: ownerId },
   })
 
   await publishSseEvent("interaction.created", {
