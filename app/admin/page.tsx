@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/db"
+import { listAccessGrants } from "@/lib/services/sharing"
 import { redirect, notFound } from "next/navigation"
 import { AdminPanel } from "@/components/admin/admin-panel"
 
@@ -9,7 +10,10 @@ export default async function AdminPage() {
   if (!session) redirect("/login")
   if (session.role !== "admin") notFound()
 
-  const users = await prisma.user.findMany({ orderBy: { createdAt: "desc" } })
+  const [users, grants] = await Promise.all([
+    prisma.user.findMany({ orderBy: { createdAt: "desc" } }),
+    listAccessGrants(),
+  ])
 
-  return <AdminPanel users={users} />
+  return <AdminPanel users={users} grants={grants as any} />
 }

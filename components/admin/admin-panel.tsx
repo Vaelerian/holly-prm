@@ -11,12 +11,21 @@ interface User {
   createdAt: Date
 }
 
-interface Props {
-  users: User[]
+interface Grant {
+  id: string
+  grantor: { name: string; email: string }
+  grantee: { name: string; email: string }
+  createdAt: Date
 }
 
-export function AdminPanel({ users }: Props) {
+interface Props {
+  users: User[]
+  grants: Grant[]
+}
+
+export function AdminPanel({ users, grants: initialGrants }: Props) {
   const [userList, setUserList] = useState(users)
+  const [grants, setGrants] = useState(initialGrants)
   const [claimUserId, setClaimUserId] = useState(() => {
     const first = users.find(u => u.status === "approved")
     return first?.id ?? ""
@@ -24,6 +33,9 @@ export function AdminPanel({ users }: Props) {
   const [claimResult, setClaimResult] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [working, setWorking] = useState<string | null>(null)
+  const [grantorEmail, setGrantorEmail] = useState("")
+  const [granteeEmail, setGranteeEmail] = useState("")
+  const [grantError, setGrantError] = useState<string | null>(null)
 
   const pending = userList.filter(u => u.status === "pending")
   const approved = userList.filter(u => u.status === "approved")
@@ -68,6 +80,34 @@ export function AdminPanel({ users }: Props) {
     } finally {
       setWorking(null)
     }
+  }
+
+  async function createGrant() {
+    if (!grantorEmail.trim() || !granteeEmail.trim()) return
+    setWorking("grant")
+    setGrantError(null)
+    try {
+      const res = await fetch("/api/admin/access-grants", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ grantorEmail: grantorEmail.trim(), granteeEmail: granteeEmail.trim() }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setGrantError(data.error ?? "Failed to create grant")
+        return
+      }
+      setGrants(prev => [data, ...prev])
+      setGrantorEmail("")
+      setGranteeEmail("")
+    } finally {
+      setWorking(null)
+    }
+  }
+
+  async function revokeGrant(id: string) {
+    const res = await fetch(`/api/admin/access-grants/${id}`, { method: "DELETE" })
+    if (res.ok) setGrants(prev => prev.filter(g => g.id !== id))
   }
 
   return (
@@ -140,6 +180,53 @@ export function AdminPanel({ users }: Props) {
           </Button>
           {claimResult && <p className="text-xs text-[#00ff88]">{claimResult}</p>}
         </div>
+      </section>
+
+      <section>
+        <h2 className="text-base font-semibold text-[#c0c0d0] mb-3">Access grants</h2>
+        <p className="text-sm text-[#666688] mb-3">Grant a user full read+contribute access to another user's contact book.</p>
+        <div className="bg-[#111125] border border-[rgba(0,255,136,0.15)] rounded-lg px-4 py-3 space-y-3 mb-3">
+          <div className="flex gap-2">
+            <input
+              value={grantorEmail}
+              onChange={e => setGrantorEmail(e.target.value)}
+              placeholder="Grantor email..."
+              className="flex-1 border border-[rgba(0,255,136,0.2)] rounded-lg px-3 py-1.5 text-sm bg-[#0a0a1a] text-[#c0c0d0] focus:outline-none focus:ring-1 focus:ring-[#00ff88]"
+            />
+            <input
+              value={granteeEmail}
+              onChange={e => setGranteeEmail(e.target.value)}
+              placeholder="Grantee email..."
+              className="flex-1 border border-[rgba(0,255,136,0.2)] rounded-lg px-3 py-1.5 text-sm bg-[#0a0a1a] text-[#c0c0d0] focus:outline-none focus:ring-1 focus:ring-[#00ff88]"
+            />
+            <Button onClick={createGrant} disabled={working === "grant"}>
+              {working === "grant" ? "Creating..." : "Create"}
+            </Button>
+          </div>
+          {grantError && <p className="text-xs text-[#ff4444]">{grantError}</p>}
+        </div>
+        {grants.length === 0 ? (
+          <p className="text-sm text-[#666688]">No access grants.</p>
+        ) : (
+          <div className="space-y-2">
+            {grants.map(g => (
+              <div key={g.id} className="bg-[#111125] border border-[rgba(0,255,136,0.15)] rounded-lg px-4 py-3 flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-[#c0c0d0]">
+                    <span className="font-medium">{g.grantor.name}</span>
+                    <span className="text-[#666688]"> ({g.grantor.email})</span>
+                    <span className="text-[#666688]"> granted to </span>
+                    <span className="font-medium">{g.grantee.name}</span>
+                    <span className="text-[#666688]"> ({g.grantee.email})</span>
+                  </p>
+                </div>
+                <Button size="sm" variant="danger" onClick={() => revokeGrant(g.id)}>
+                  Revoke
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
       </section>
     </div>
   )
