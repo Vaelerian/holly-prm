@@ -30,6 +30,12 @@ CREATE UNIQUE INDEX "UserAccessGrant_grantorId_granteeId_key" ON "UserAccessGran
 -- CreateIndex
 CREATE UNIQUE INDEX "ContactShare_contactId_userId_key" ON "ContactShare"("contactId", "userId");
 
+-- CreateIndex
+CREATE INDEX "UserAccessGrant_granteeId_idx" ON "UserAccessGrant"("granteeId");
+
+-- CreateIndex
+CREATE INDEX "ContactShare_userId_idx" ON "ContactShare"("userId");
+
 -- AddForeignKey
 ALTER TABLE "UserAccessGrant" ADD CONSTRAINT "UserAccessGrant_grantorId_fkey"
     FOREIGN KEY ("grantorId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
