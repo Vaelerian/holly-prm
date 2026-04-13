@@ -2,8 +2,8 @@
 const LIVESYNC_ENCRYPTED_PREFIX = "/\\:%="
 
 import { prisma } from "@/lib/db"
-import { couchAllDocs, couchDbAccessible, couchGet } from "@/lib/services/vault-couch"
-import { deriveKey, decryptString } from "@/lib/services/vault-crypto"
+import { couchAllDocs, couchDbAccessible, couchGet, couchPut } from "@/lib/services/vault-couch"
+import { deriveKey, decryptString, encryptString } from "@/lib/services/vault-crypto"
 import type { VaultConfig } from "@/app/generated/prisma/client"
 
 // PBKDF2 key derivation is deliberately expensive (100k iterations, ~100ms).
@@ -153,21 +153,80 @@ export async function getNoteContent(couchDbId: string, _userId?: string): Promi
   }
 }
 
-// Task 6: write-back to CouchDB vault (stub until Task 6 is implemented)
+// Only allow simple path-safe filenames: letters, digits, spaces, hyphens, underscores,
+// forward slashes, ending in .md. The character set excludes "." so ".." is impossible.
+const VALID_NOTE_PATH = /^[a-zA-Z0-9 \-_/]+\.md$/
+
 export async function createNote(
-  _notePath: string,
-  _entityType: string,
-  _entityId: string,
-  _content: string,
+  notePath: string,
+  entityType: string,
+  entityId: string,
+  content: string,
   _userId?: string
 ): Promise<string | null> {
-  return null
+  if (!VALID_NOTE_PATH.test(notePath)) return null
+
+  const config = await getVaultConfig()
+  if (!config) return null
+
+  const key = await getOrDeriveKey(config.e2ePassphrase)
+  const now = Date.now()
+  const today = new Date().toISOString().slice(0, 10)
+  const frontmatter = `---\nprm_entity: ${entityType}\nprm_id: ${entityId}\ncreated: ${today}\n---\n\n`
+  const fullContent = frontmatter + content
+
+  const couchDbId = await encryptString(key, notePath)
+  const encryptedContent = await encryptString(key, fullContent)
+
+  await couchPut(config, couchDbId, {
+    _id: couchDbId,
+    path: LIVESYNC_ENCRYPTED_PREFIX + couchDbId,
+    data: encryptedContent,
+    type: "newnote",
+    encrypted: true,
+    mtime: now,
+    ctime: now,
+    size: Buffer.byteLength(fullContent, "utf8"),
+    children: [],
+  })
+
+  await prisma.vaultNote.upsert({
+    where: { entityType_entityId: { entityType, entityId } },
+    create: { entityType, entityId, couchDbId, notePath, lastSyncAt: new Date() },
+    update: { couchDbId, notePath, lastSyncAt: new Date() },
+  })
+
+  return couchDbId
 }
 
 export async function updateNote(
-  _couchDbId: string,
-  _content: string,
+  couchDbId: string,
+  newBody: string,
   _userId?: string
 ): Promise<void> {
-  // stub - implemented in Task 6
+  const config = await getVaultConfig()
+  if (!config) return
+
+  const doc = await couchGet(config, couchDbId) as Record<string, unknown>
+  const key = await getOrDeriveKey(config.e2ePassphrase)
+  const existing = await decryptString(key, doc.data as string)
+
+  // Preserve frontmatter, replace body, update last_updated timestamp
+  const { frontmatter } = parseFrontmatter(existing)
+  frontmatter.last_updated = new Date().toISOString().slice(0, 10)
+  const fmLines = Object.entries(frontmatter).map(([k, v]) => `${k}: ${v}`).join("\n")
+  const updated = `---\n${fmLines}\n---\n\n${newBody}`
+
+  const encryptedContent = await encryptString(key, updated)
+  await couchPut(config, couchDbId, {
+    ...doc,
+    data: encryptedContent,
+    mtime: Date.now(),
+    size: Buffer.byteLength(updated, "utf8"),
+  })
+
+  await prisma.vaultNote.updateMany({
+    where: { couchDbId },
+    data: { lastSyncAt: new Date() },
+  })
 }

@@ -1,10 +1,13 @@
-import { getVaultConfig, isVaultAccessible, searchVault, getNoteContent } from "@/lib/services/vault"
+import { getVaultConfig, isVaultAccessible, searchVault, getNoteContent, createNote, updateNote } from "@/lib/services/vault"
 import { prisma } from "@/lib/db"
 import * as vaultCouch from "@/lib/services/vault-couch"
 import * as vaultCrypto from "@/lib/services/vault-crypto"
 
 jest.mock("@/lib/db", () => ({
-  prisma: { vaultConfig: { findFirst: jest.fn() } },
+  prisma: {
+    vaultConfig: { findFirst: jest.fn() },
+    vaultNote: { upsert: jest.fn(), updateMany: jest.fn() },
+  },
 }))
 jest.mock("@/lib/services/vault-couch")
 jest.mock("@/lib/services/vault-crypto")
@@ -220,5 +223,87 @@ describe("getNoteContent", () => {
     mockCouch.couchGet.mockResolvedValue({ _id: "f:abc", type: "newnote" })
     const result = await getNoteContent("f:abc")
     expect(result).toBeNull()
+  })
+})
+
+describe("createNote", () => {
+  it("encrypts path and content, writes to CouchDB, upserts VaultNote", async () => {
+    mockPrisma.vaultConfig.findFirst.mockResolvedValue(fakeConfig as any)
+    mockCrypto.encryptString
+      .mockResolvedValueOnce("enc_path")
+      .mockResolvedValueOnce("enc_content")
+    mockCouch.couchPut.mockResolvedValue(undefined)
+    mockPrisma.vaultNote.upsert.mockResolvedValue({} as any)
+
+    const result = await createNote("Holly/John.md", "contact", "uuid1", "# John\n\nContent")
+    expect(result).toBe("enc_path")
+    expect(mockCouch.couchPut).toHaveBeenCalledWith(
+      expect.anything(),
+      "enc_path",
+      expect.objectContaining({ data: "enc_content", encrypted: true })
+    )
+    expect(mockPrisma.vaultNote.upsert).toHaveBeenCalled()
+  })
+
+  it("returns null when no config", async () => {
+    mockPrisma.vaultConfig.findFirst.mockResolvedValue(null)
+    expect(await createNote("Holly/Note.md", "contact", "id1", "content")).toBeNull()
+  })
+
+  it("returns null for invalid notePath (path traversal chars)", async () => {
+    mockPrisma.vaultConfig.findFirst.mockResolvedValue(fakeConfig as any)
+    expect(await createNote("../../etc/passwd", "contact", "id1", "x")).toBeNull()
+  })
+
+  it("returns null for path without .md extension", async () => {
+    mockPrisma.vaultConfig.findFirst.mockResolvedValue(fakeConfig as any)
+    expect(await createNote("Holly/note.txt", "contact", "id1", "x")).toBeNull()
+  })
+
+  it("includes prm frontmatter in encrypted content", async () => {
+    mockPrisma.vaultConfig.findFirst.mockResolvedValue(fakeConfig as any)
+    mockCrypto.encryptString
+      .mockResolvedValueOnce("enc_path")
+      .mockImplementationOnce(async (_key, content) => {
+        expect(content).toContain("prm_entity: contact")
+        expect(content).toContain("prm_id: uuid1")
+        return "enc_content"
+      })
+    mockCouch.couchPut.mockResolvedValue(undefined)
+    mockPrisma.vaultNote.upsert.mockResolvedValue({} as any)
+    await createNote("Holly/John.md", "contact", "uuid1", "# John")
+  })
+})
+
+describe("updateNote", () => {
+  it("fetches, merges frontmatter, encrypts, and puts updated content", async () => {
+    mockPrisma.vaultConfig.findFirst.mockResolvedValue(fakeConfig as any)
+    mockCouch.couchGet.mockResolvedValue({
+      _id: "enc_id",
+      _rev: "2-abc",
+      data: "enc_old",
+      type: "newnote",
+      mtime: 1000,
+    })
+    mockCrypto.decryptString.mockResolvedValue("---\nprm_entity: contact\nprm_id: u1\n---\n\nOld body")
+    mockCrypto.encryptString.mockResolvedValue("enc_new")
+    mockCouch.couchPut.mockResolvedValue(undefined)
+    mockPrisma.vaultNote.updateMany.mockResolvedValue({ count: 1 } as any)
+
+    await updateNote("enc_id", "New body content")
+    expect(mockCouch.couchPut).toHaveBeenCalledWith(
+      expect.anything(),
+      "enc_id",
+      expect.objectContaining({ _rev: "2-abc", data: "enc_new" })
+    )
+    expect(mockPrisma.vaultNote.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { couchDbId: "enc_id" } })
+    )
+  })
+
+  it("does nothing when no config", async () => {
+    mockPrisma.vaultConfig.findFirst.mockResolvedValue(null)
+    await updateNote("enc_id", "content")
+    expect(mockCouch.couchPut).not.toHaveBeenCalled()
   })
 })
