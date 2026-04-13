@@ -18,6 +18,8 @@ async function getOrDeriveKey(passphrase: string): Promise<CryptoKey> {
   _keyCache = { passphrase, key }
   return key
 }
+// Exported for test isolation only - clears the in-process key cache
+export function clearKeyCache(): void { _keyCache = null }
 
 export interface VaultSearchResult {
   couchDbId: string
@@ -207,9 +209,17 @@ export async function updateNote(
   const config = await getVaultConfig()
   if (!config) return
 
-  const doc = await couchGet(config, couchDbId) as Record<string, unknown>
-  const key = await getOrDeriveKey(config.e2ePassphrase)
-  const existing = await decryptString(key, doc.data as string)
+  let doc: Record<string, unknown>
+  let existing: string
+  let key: CryptoKey
+  try {
+    doc = await couchGet(config, couchDbId) as Record<string, unknown>
+    key = await getOrDeriveKey(config.e2ePassphrase)
+    existing = await decryptString(key, doc.data as string)
+  } catch {
+    // Stale couchDbId or decryption failure - nothing to update
+    return
+  }
 
   // Preserve frontmatter, replace body, update last_updated timestamp
   const { frontmatter } = parseFrontmatter(existing)

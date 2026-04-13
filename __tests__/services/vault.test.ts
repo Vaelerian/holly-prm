@@ -306,4 +306,11 @@ describe("updateNote", () => {
     await updateNote("enc_id", "content")
     expect(mockCouch.couchPut).not.toHaveBeenCalled()
   })
+
+  it("silently returns when couchGet throws (stale couchDbId)", async () => {
+    mockPrisma.vaultConfig.findFirst.mockResolvedValue(fakeConfig as any)
+    mockCouch.couchGet.mockRejectedValue(new Error("CouchDB 404"))
+    await expect(updateNote("stale_id", "content")).resolves.toBeUndefined()
+    expect(mockCouch.couchPut).not.toHaveBeenCalled()
+  })
 })
