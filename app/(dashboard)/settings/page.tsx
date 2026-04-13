@@ -24,7 +24,11 @@ export default function SettingsPage() {
 
   const [googleStatus, setGoogleStatus] = useState<{ connected: boolean; email: string | null }>({ connected: false, email: null })
 
-  const [vaultPath, setVaultPath] = useState("")
+  const [vaultCouchDbUrl, setVaultCouchDbUrl] = useState("http://localhost:5984")
+  const [vaultCouchDbDatabase, setVaultCouchDbDatabase] = useState("obsidian")
+  const [vaultCouchDbUsername, setVaultCouchDbUsername] = useState("")
+  const [vaultCouchDbPassword, setVaultCouchDbPassword] = useState("")
+  const [vaultE2ePassphrase, setVaultE2ePassphrase] = useState("")
   const [vaultWorkdayCron, setVaultWorkdayCron] = useState("0 * * * 1-5")
   const [vaultWeekendCron, setVaultWeekendCron] = useState("0 */4 * * 0,6")
   const [vaultEnabled, setVaultEnabled] = useState(true)
@@ -44,7 +48,8 @@ export default function SettingsPage() {
     if (res.ok) {
       const data = await res.json()
       if (data.config) {
-        setVaultPath(data.config.vaultPath)
+        setVaultCouchDbUrl(data.config.couchDbUrl ?? "http://localhost:5984")
+        setVaultCouchDbDatabase(data.config.couchDbDatabase ?? "obsidian")
         setVaultWorkdayCron(data.config.workdayCron)
         setVaultWeekendCron(data.config.weekendCron)
         setVaultEnabled(data.config.enabled)
@@ -92,11 +97,20 @@ export default function SettingsPage() {
   async function testVaultConnection() {
     setVaultTestStatus("testing")
     try {
-      // Save current config so the status check reflects the path in the input
+      // Save current config so the status check reflects the inputs
       await fetch("/api/v1/vault/config", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ vaultPath, workdayCron: vaultWorkdayCron, weekendCron: vaultWeekendCron, enabled: vaultEnabled }),
+        body: JSON.stringify({
+          couchDbUrl: vaultCouchDbUrl,
+          couchDbDatabase: vaultCouchDbDatabase,
+          couchDbUsername: vaultCouchDbUsername,
+          couchDbPassword: vaultCouchDbPassword,
+          e2ePassphrase: vaultE2ePassphrase,
+          workdayCron: vaultWorkdayCron,
+          weekendCron: vaultWeekendCron,
+          enabled: vaultEnabled,
+        }),
       })
       const res = await fetch("/api/v1/vault/status")
       if (res.ok) {
@@ -116,7 +130,16 @@ export default function SettingsPage() {
       await fetch("/api/v1/vault/config", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ vaultPath, workdayCron: vaultWorkdayCron, weekendCron: vaultWeekendCron, enabled: vaultEnabled }),
+        body: JSON.stringify({
+          couchDbUrl: vaultCouchDbUrl,
+          couchDbDatabase: vaultCouchDbDatabase,
+          couchDbUsername: vaultCouchDbUsername,
+          couchDbPassword: vaultCouchDbPassword,
+          e2ePassphrase: vaultE2ePassphrase,
+          workdayCron: vaultWorkdayCron,
+          weekendCron: vaultWeekendCron,
+          enabled: vaultEnabled,
+        }),
       })
     } catch (e) {
       console.error("[settings] save vault config failed", e)
@@ -286,21 +309,64 @@ export default function SettingsPage() {
         <p className="text-sm text-[#666688] mb-4">Connect your Obsidian vault for note search and sync.</p>
 
         <div className="space-y-3">
-          {/* Vault path */}
-          <div className="bg-[#111125] border border-[rgba(0,255,136,0.15)] rounded-lg px-4 py-3">
-            <p className="text-sm font-medium text-[#c0c0d0] mb-2">Vault path</p>
-            <div className="flex gap-2">
-              <Input
-                placeholder="/home/user/vault"
-                value={vaultPath}
-                onChange={e => setVaultPath(e.target.value)}
-              />
-              <Button onClick={testVaultConnection} disabled={vaultTestStatus === "testing" || !vaultPath.trim()}>
-                {vaultTestStatus === "testing" ? "Testing..." : "Test"}
-              </Button>
+          {/* CouchDB connection */}
+          <div className="bg-[#111125] border border-[rgba(0,255,136,0.15)] rounded-lg px-4 py-3 space-y-3">
+            <p className="text-sm font-medium text-[#c0c0d0]">CouchDB connection</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <p className="text-xs text-[#666688] mb-1">URL</p>
+                <Input
+                  placeholder="http://localhost:5984"
+                  value={vaultCouchDbUrl}
+                  onChange={e => setVaultCouchDbUrl(e.target.value)}
+                />
+              </div>
+              <div>
+                <p className="text-xs text-[#666688] mb-1">Database</p>
+                <Input
+                  placeholder="obsidian"
+                  value={vaultCouchDbDatabase}
+                  onChange={e => setVaultCouchDbDatabase(e.target.value)}
+                />
+              </div>
+              <div>
+                <p className="text-xs text-[#666688] mb-1">Username</p>
+                <Input
+                  placeholder="admin"
+                  value={vaultCouchDbUsername}
+                  onChange={e => setVaultCouchDbUsername(e.target.value)}
+                />
+              </div>
+              <div>
+                <p className="text-xs text-[#666688] mb-1">Password</p>
+                <Input
+                  type="password"
+                  placeholder="password"
+                  value={vaultCouchDbPassword}
+                  onChange={e => setVaultCouchDbPassword(e.target.value)}
+                />
+              </div>
             </div>
-            {vaultTestStatus === "ok" && <p className="text-xs text-[#00ff88] mt-1">Connected</p>}
-            {vaultTestStatus === "fail" && <p className="text-xs text-[#ff4444] mt-1">Not accessible</p>}
+            <div>
+              <p className="text-xs text-[#666688] mb-1">E2E passphrase</p>
+              <div className="flex gap-2">
+                <Input
+                  type="password"
+                  placeholder="LiveSync E2E encryption passphrase"
+                  value={vaultE2ePassphrase}
+                  onChange={e => setVaultE2ePassphrase(e.target.value)}
+                  className="flex-1"
+                />
+                <Button
+                  onClick={testVaultConnection}
+                  disabled={vaultTestStatus === "testing" || !vaultCouchDbUsername.trim() || !vaultCouchDbPassword.trim()}
+                >
+                  {vaultTestStatus === "testing" ? "Testing..." : "Test"}
+                </Button>
+              </div>
+            </div>
+            {vaultTestStatus === "ok" && <p className="text-xs text-[#00ff88]">Connected</p>}
+            {vaultTestStatus === "fail" && <p className="text-xs text-[#ff4444]">Not accessible</p>}
           </div>
 
           {/* Sync schedule */}
