@@ -1,87 +1,153 @@
+// LiveSync encrypted path prefix - docs with this prefix in the path field are E2E encrypted notes
+const LIVESYNC_ENCRYPTED_PREFIX = "/\\:%="
+
 import { prisma } from "@/lib/db"
+import { couchAllDocs, couchDbAccessible, couchGet } from "@/lib/services/vault-couch"
+import { deriveKey, decryptString } from "@/lib/services/vault-crypto"
+import type { VaultConfig } from "@/app/generated/prisma/client"
 
 export interface VaultSearchResult {
+  couchDbId: string
   path: string
   title: string
   snippet: string
-  frontmatter: Record<string, string>
+  frontmatter: Record<string, unknown>
 }
 
-export async function getVaultConfig(userId?: string) {
-  if (!userId) return null
-  return prisma.vaultConfig.findFirst({ where: { userId } })
+// Phase 5: single global VaultConfig; userId param accepted for API compatibility
+// but ignored until Phase 6 adds per-user vault support.
+export async function getVaultConfig(_userId?: string): Promise<VaultConfig | null> {
+  return prisma.vaultConfig.findFirst()
 }
 
-export async function isCouchDbAccessible(userId?: string): Promise<boolean> {
-  const config = await getVaultConfig(userId)
+export async function isVaultAccessible(_userId?: string): Promise<boolean> {
+  const config = await getVaultConfig()
   if (!config) return false
-  try {
-    const url = `${config.couchDbUrl}/${config.couchDbDatabase}`
-    const res = await fetch(url, {
-      headers: {
-        Authorization:
-          "Basic " +
-          Buffer.from(`${config.couchDbUsername}:${config.couchDbPassword}`).toString("base64"),
-      },
+  return couchDbAccessible(config)
+}
+
+// Legacy alias for existing callers
+export const isCouchDbAccessible = isVaultAccessible
+
+function stripEncryptedPrefix(value: string): string | null {
+  if (!value.startsWith(LIVESYNC_ENCRYPTED_PREFIX)) return null
+  return value.slice(LIVESYNC_ENCRYPTED_PREFIX.length)
+}
+
+function parseFrontmatter(content: string): { frontmatter: Record<string, unknown>; body: string } {
+  const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/)
+  if (!match) return { frontmatter: {}, body: content }
+  const frontmatter: Record<string, unknown> = {}
+  for (const line of match[1].split(/\r?\n/)) {
+    const colonIdx = line.indexOf(":")
+    if (colonIdx === -1) continue
+    const key = line.slice(0, colonIdx).trim()
+    const value = line.slice(colonIdx + 1).trim()
+    frontmatter[key] = value
+  }
+  return { frontmatter, body: match[2] }
+}
+
+function extractTitle(content: string, path: string): string {
+  const h1 = content.match(/^#\s+(.+)$/m)
+  if (h1) return h1[1].trim()
+  const filename = path.split("/").pop() ?? path
+  return filename.replace(/\.md$/, "")
+}
+
+function extractSnippet(content: string, query: string): string {
+  const lower = content.toLowerCase()
+  const idx = lower.indexOf(query.toLowerCase())
+  if (idx === -1) return content.slice(0, 200)
+  const start = Math.max(0, idx - 80)
+  const end = Math.min(content.length, idx + 120)
+  return (start > 0 ? "..." : "") + content.slice(start, end) + (end < content.length ? "..." : "")
+}
+
+export async function searchVault(query: string, limit = 10, _userId?: string): Promise<VaultSearchResult[]> {
+  const config = await getVaultConfig()
+  if (!config) return []
+  if (!(await couchDbAccessible(config))) return []
+
+  const key = await deriveKey(config.e2ePassphrase)
+  const allDocs = await couchAllDocs(config, { include_docs: true })
+  const results: VaultSearchResult[] = []
+
+  for (const row of allDocs.rows) {
+    if (results.length >= limit) break
+    const doc = row.doc as Record<string, unknown> | undefined
+    if (!doc) continue
+
+    // LiveSync stores the encrypted file path in doc.path (not in _id)
+    const rawPath = doc.path as string | undefined
+    if (!rawPath) continue
+    const encryptedPath = stripEncryptedPrefix(rawPath)
+    if (!encryptedPath) continue  // no prefix = not an encrypted note
+
+    let path: string
+    try {
+      path = await decryptString(key, encryptedPath)
+    } catch {
+      continue
+    }
+
+    if (!path.endsWith(".md")) continue
+
+    const rawData = doc.data as string | undefined
+    if (!rawData) continue
+
+    let content: string
+    try {
+      content = await decryptString(key, rawData)
+    } catch {
+      continue
+    }
+
+    if (!content.toLowerCase().includes(query.toLowerCase())) continue
+
+    const { frontmatter, body } = parseFrontmatter(content)
+    results.push({
+      couchDbId: row.id,
+      path,
+      title: extractTitle(body, path),
+      snippet: extractSnippet(content, query),
+      frontmatter,
     })
-    return res.ok
+  }
+
+  return results
+}
+
+export async function getNoteContent(couchDbId: string, _userId?: string): Promise<string | null> {
+  const config = await getVaultConfig()
+  if (!config) return null
+
+  try {
+    const doc = await couchGet(config, couchDbId) as Record<string, unknown>
+    const rawData = doc.data as string | undefined
+    if (!rawData) return null
+    const key = await deriveKey(config.e2ePassphrase)
+    return decryptString(key, rawData)
   } catch {
-    return false
+    return null
   }
 }
 
-// Legacy alias kept for any callers that used the old name
-export const isVaultAccessible = isCouchDbAccessible
-
+// Task 6: write-back to CouchDB vault (stub until Task 6 is implemented)
 export async function createNote(
-  filename: string,
-  entityType: string,
-  entityId: string,
-  content: string,
-  userId?: string
-): Promise<string> {
-  const config = await getVaultConfig(userId)
-  if (!config) throw new Error("Vault not configured")
-
-  const notePath = `Holly/${filename}.md`
-
-  await prisma.vaultNote.upsert({
-    where: { entityType_entityId: { entityType, entityId } },
-    create: {
-      entityType,
-      entityId,
-      couchDbId: `${entityType}_${entityId}`,
-      notePath,
-      lastSyncAt: new Date(),
-      userId: userId ?? null,
-    },
-    update: {
-      notePath,
-      lastSyncAt: new Date(),
-    },
-  })
-
-  return notePath
-}
-
-export async function updateNote(notePath: string, _content: string, userId?: string): Promise<void> {
-  const config = await getVaultConfig(userId)
-  if (!config) throw new Error("Vault not configured")
-
-  const normalizedPath = notePath.replace(/\\/g, "/")
-  await prisma.vaultNote.updateMany({
-    where: { notePath: normalizedPath },
-    data: { lastSyncAt: new Date() },
-  })
-}
-
-export async function getNoteContent(_relativePath: string, _userId?: string): Promise<string | null> {
-  // CouchDB-based vault: note content is stored in CouchDB, not the local filesystem.
-  // This stub returns null until the CouchDB sync layer is implemented in Phase 5.
+  _notePath: string,
+  _entityType: string,
+  _entityId: string,
+  _content: string,
+  _userId?: string
+): Promise<string | null> {
   return null
 }
 
-export async function searchVault(_query: string, _limit = 10, _userId?: string): Promise<VaultSearchResult[]> {
-  // CouchDB-based vault: search is performed against CouchDB in Phase 5.
-  return []
+export async function updateNote(
+  _couchDbId: string,
+  _content: string,
+  _userId?: string
+): Promise<void> {
+  // stub - implemented in Task 6
 }
