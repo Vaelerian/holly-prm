@@ -15,6 +15,7 @@ export async function GET(req: NextRequest) {
     assignedTo: searchParams.get("assignedTo") ?? undefined,
     status: searchParams.get("status") ?? undefined,
     milestoneOnly: searchParams.get("milestoneOnly") === "true",
+    userId: authResult.userId,
   })
   return NextResponse.json(tasks)
 }
@@ -33,6 +34,6 @@ export async function POST(req: NextRequest) {
   }
   const parsed = CreateTaskSchema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: "Validation failed", code: "VALIDATION_ERROR", details: parsed.error.flatten() }, { status: 422 })
-  const task = await createTask(parsed.data, "holly")
+  const task = await createTask(parsed.data, "holly", authResult.userId)
   return NextResponse.json(task, { status: 201 })
 }

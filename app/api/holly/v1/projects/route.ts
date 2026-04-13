@@ -12,6 +12,7 @@ export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl
   const projects = await listProjects({
     status: searchParams.get("status") ?? undefined,
+    userId: authResult.userId,
   })
   return NextResponse.json(projects)
 }
@@ -30,6 +31,6 @@ export async function POST(req: NextRequest) {
   }
   const parsed = CreateProjectSchema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: "Validation failed", code: "VALIDATION_ERROR", details: parsed.error.flatten() }, { status: 422 })
-  const project = await createProject(parsed.data, "holly")
+  const project = await createProject(parsed.data, "holly", authResult.userId)
   return NextResponse.json(project, { status: 201 })
 }

@@ -10,7 +10,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     return NextResponse.json({ error: "Unauthorized", code: "UNAUTHORIZED" }, { status: 401 })
   }
   const { id } = await params
-  const project = await getProject(id)
+  const project = await getProject(id, authResult.userId)
   if (!project) return NextResponse.json({ error: "Not found", code: "NOT_FOUND" }, { status: 404 })
 
   const tasksTotal = project.tasks.length
@@ -40,8 +40,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
   const parsed = UpdateProjectSchema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: "Validation failed", code: "VALIDATION_ERROR", details: parsed.error.flatten() }, { status: 422 })
-  const existing = await getProject(id)
+  const existing = await getProject(id, authResult.userId)
   if (!existing) return NextResponse.json({ error: "Not found", code: "NOT_FOUND" }, { status: 404 })
-  const project = await updateProject(id, parsed.data, "holly")
+  const project = await updateProject(id, parsed.data, "holly", authResult.userId)
   return NextResponse.json(project)
 }

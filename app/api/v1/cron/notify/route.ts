@@ -49,10 +49,18 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // 2. Gmail poll - cache recent emails for briefing
+  // 2. Gmail poll - cache recent emails per user with connected Google accounts
   try {
-    const recentEmails = await fetchRecentEmails({ hours: 24 })
-    await redis.set("gmail:recent", JSON.stringify(recentEmails), "EX", 3600)
+    const googleUsers = await prisma.googleToken.findMany({ where: { userId: { not: null } }, select: { userId: true } })
+    for (const { userId } of googleUsers) {
+      if (!userId) continue
+      try {
+        const recentEmails = await fetchRecentEmails({ hours: 24, userId })
+        await redis.set(`gmail:recent:${userId}`, JSON.stringify(recentEmails), "EX", 3600)
+      } catch (e) {
+        console.error("[cron/notify] gmail poll failed for user", userId, e)
+      }
+    }
   } catch (e) {
     console.error("[cron/notify] gmail poll failed", e)
   }

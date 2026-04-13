@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 })
   }
   if (!grantorEmail || !granteeEmail) return NextResponse.json({ error: "grantorEmail and granteeEmail required" }, { status: 422 })
-  const result = await createAccessGrant(grantorEmail, granteeEmail)
+  const result = await createAccessGrant(grantorEmail as string, granteeEmail as string)
   if (result === "grantor_not_found") return NextResponse.json({ error: "Grantor not found" }, { status: 404 })
   if (result === "grantee_not_found") return NextResponse.json({ error: "Grantee not found" }, { status: 404 })
   if (result === "already_exists") return NextResponse.json({ error: "Grant already exists" }, { status: 409 })

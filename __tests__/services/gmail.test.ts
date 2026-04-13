@@ -24,14 +24,14 @@ beforeEach(() => jest.clearAllMocks())
 describe("fetchRecentEmails", () => {
   it("returns empty array when Google not connected", async () => {
     mockGetGoogleClient.mockRejectedValue(new GoogleNotConnectedError())
-    const result = await fetchRecentEmails()
+    const result = await fetchRecentEmails({ userId: "user1" })
     expect(result).toEqual([])
   })
 
   it("returns empty array when no contacts have emails", async () => {
     mockGetGoogleClient.mockResolvedValue({} as any)
     mockPrisma.contact.findMany.mockResolvedValue([])
-    const result = await fetchRecentEmails()
+    const result = await fetchRecentEmails({ userId: "user1" })
     expect(result).toEqual([])
   })
 })
@@ -39,7 +39,7 @@ describe("fetchRecentEmails", () => {
 describe("getEmailThread", () => {
   it("returns null when Google not connected", async () => {
     mockGetGoogleClient.mockRejectedValue(new GoogleNotConnectedError())
-    const result = await getEmailThread("thread-123")
+    const result = await getEmailThread("thread-123", "user1")
     expect(result).toBeNull()
   })
 })

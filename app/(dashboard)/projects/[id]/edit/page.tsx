@@ -1,12 +1,15 @@
 import { getProject } from "@/lib/services/projects"
 import { ProjectForm } from "@/components/projects/project-form"
-import { notFound } from "next/navigation"
+import { notFound, redirect } from "next/navigation"
+import { auth } from "@/lib/auth"
 
 interface PageProps { params: Promise<{ id: string }> }
 
 export default async function EditProjectPage({ params }: PageProps) {
+  const session = await auth()
+  if (!session?.userId) redirect("/login")
   const { id } = await params
-  const project = await getProject(id)
+  const project = await getProject(id, session.userId)
   if (!project) notFound()
 
   return (

@@ -18,6 +18,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
   const parsed = UpdateTaskSchema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: "Validation failed", code: "VALIDATION_ERROR", details: parsed.error.flatten() }, { status: 422 })
-  const task = await updateTask(id, parsed.data, "holly")
+  const task = await updateTask(id, parsed.data, "holly", authResult.userId)
   return NextResponse.json(task)
 }

@@ -55,10 +55,10 @@ function decodeBody(part: GmailPart): string {
   return ""
 }
 
-export async function fetchRecentEmails(options: { hours?: number } = {}): Promise<GmailEmail[]> {
+export async function fetchRecentEmails(options: { hours?: number; userId: string }): Promise<GmailEmail[]> {
   const hours = options.hours ?? 24
   try {
-    const client = await getGoogleClient()
+    const client = await getGoogleClient(options.userId)
     const gmail = google.gmail({ version: "v1", auth: client })
 
     // Get all contact email addresses
@@ -123,9 +123,9 @@ export async function fetchRecentEmails(options: { hours?: number } = {}): Promi
   }
 }
 
-export async function getEmailThread(threadId: string): Promise<GmailThread | null> {
+export async function getEmailThread(threadId: string, userId: string): Promise<GmailThread | null> {
   try {
-    const client = await getGoogleClient()
+    const client = await getGoogleClient(userId)
     const gmail = google.gmail({ version: "v1", auth: client })
 
     const thread = await gmail.users.threads.get({ userId: "me", id: threadId, format: "full" })

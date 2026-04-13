@@ -1,10 +1,14 @@
 import { getHealthAnalytics, getVelocityAnalytics, getCompletionAnalytics } from "@/lib/services/analytics"
+import { auth } from "@/lib/auth"
+import { redirect } from "next/navigation"
 
 interface PageProps {
   searchParams: Promise<{ days?: string }>
 }
 
 export default async function ReportsPage({ searchParams }: PageProps) {
+  const session = await auth()
+  if (!session?.userId) redirect("/login")
   const { days: daysParam } = await searchParams
   const days = Math.min(365, Math.max(7, parseInt(daysParam ?? "30", 10) || 30))
 
@@ -15,9 +19,9 @@ export default async function ReportsPage({ searchParams }: PageProps) {
 
   try {
     ;[health, velocity, completion] = await Promise.all([
-      getHealthAnalytics(days),
-      getVelocityAnalytics(days),
-      getCompletionAnalytics(days),
+      getHealthAnalytics(days, session.userId),
+      getVelocityAnalytics(days, session.userId),
+      getCompletionAnalytics(days, session.userId),
     ])
   } catch (e) {
     console.error("[reports page]", e)

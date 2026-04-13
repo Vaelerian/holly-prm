@@ -3,12 +3,16 @@ import { StatsRow } from "@/components/dashboard/stats-row"
 import { ActionItemRow } from "@/components/action-items/action-item-row"
 import { Badge } from "@/components/ui/badge"
 import Link from "next/link"
+import { auth } from "@/lib/auth"
+import { redirect } from "next/navigation"
 
 export default async function DashboardPage() {
+  const session = await auth()
+  if (!session?.userId) redirect("/login")
   let data: Awaited<ReturnType<typeof getBriefing>> | null = null
   let dbError = false
   try {
-    data = await getBriefing()
+    data = await getBriefing(session.userId)
   } catch (e) {
     console.error("[dashboard]", e)
     dbError = true

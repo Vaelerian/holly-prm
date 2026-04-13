@@ -1,10 +1,13 @@
 import { getContact } from "@/lib/services/contacts"
 import { ContactForm } from "@/components/contacts/contact-form"
-import { notFound } from "next/navigation"
+import { notFound, redirect } from "next/navigation"
+import { auth } from "@/lib/auth"
 
 export default async function EditContactPage({ params }: { params: Promise<{ id: string }> }) {
+  const session = await auth()
+  if (!session?.userId) redirect("/login")
   const { id } = await params
-  const contact = await getContact(id)
+  const contact = await getContact(id, session.userId)
   if (!contact) notFound()
 
   return (

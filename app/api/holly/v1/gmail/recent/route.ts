@@ -10,12 +10,12 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized", code: "UNAUTHORIZED" }, { status: 401 })
   }
 
-  const connected = await isGoogleConnected()
+  const connected = await isGoogleConnected(authResult.userId)
   if (!connected) {
     return NextResponse.json({ emails: [], googleConnected: false })
   }
 
   const hours = Math.min(168, Math.max(1, parseInt(req.nextUrl.searchParams.get("hours") ?? "24", 10) || 24))
-  const emails = await fetchRecentEmails({ hours })
+  const emails = await fetchRecentEmails({ hours, userId: authResult.userId })
   return NextResponse.json({ emails, googleConnected: true, fetchedAt: new Date().toISOString() })
 }
