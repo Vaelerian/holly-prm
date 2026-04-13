@@ -53,7 +53,7 @@ function stripEncryptedPrefix(value: string): string | null {
 // Does not handle multi-line values, quoted strings with colons, or YAML sequences.
 // This is sufficient for the PRM use case (prm_entity, prm_id, last_updated are
 // always simple scalars). Do not use this for general-purpose YAML parsing.
-function parseFrontmatter(content: string): { frontmatter: Record<string, unknown>; body: string } {
+export function parseFrontmatter(content: string): { frontmatter: Record<string, unknown>; body: string } {
   const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/)
   if (!match) return { frontmatter: {}, body: content }
   const frontmatter: Record<string, unknown> = {}
@@ -67,14 +67,14 @@ function parseFrontmatter(content: string): { frontmatter: Record<string, unknow
   return { frontmatter, body: match[2] }
 }
 
-function extractTitle(content: string, path: string): string {
+export function extractTitle(content: string, path: string): string {
   const h1 = content.match(/^#\s+(.+)$/m)
   if (h1) return h1[1].trim()
   const filename = path.split("/").pop() ?? path
   return filename.replace(/\.md$/, "")
 }
 
-function extractSnippet(content: string, query: string): string {
+export function extractSnippet(content: string, query: string): string {
   const lower = content.toLowerCase()
   const idx = lower.indexOf(query.toLowerCase())
   if (idx === -1) return content.slice(0, 200)

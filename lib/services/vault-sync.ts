@@ -1,9 +1,19 @@
 import { prisma } from "@/lib/db"
-import { getVaultConfig, VaultSearchResult } from "./vault"
+import { getVaultConfig, parseFrontmatter, extractTitle, VaultSearchResult } from "@/lib/services/vault"
+import { couchChanges, couchDbAccessible } from "@/lib/services/vault-couch"
+import { deriveKey, decryptString } from "@/lib/services/vault-crypto"
 
 export interface VaultSyncResult {
   updatedNotes: VaultSearchResult[]
   errors: string[]
+}
+
+// LiveSync encrypted path prefix (same constant as in vault.ts)
+const LIVESYNC_ENCRYPTED_PREFIX = "/\\:%="
+
+function stripEncryptedPrefix(value: string): string | null {
+  if (!value.startsWith(LIVESYNC_ENCRYPTED_PREFIX)) return null
+  return value.slice(LIVESYNC_ENCRYPTED_PREFIX.length)
 }
 
 function cronToIntervalMs(cron: string): number {
@@ -34,32 +44,59 @@ export function shouldRunSync(config: {
   return now.getTime() - config.lastSyncAt.getTime() >= intervalMs
 }
 
-export async function runVaultSync(userId?: string): Promise<VaultSyncResult> {
-  const config = await getVaultConfig(userId)
-  if (!config) return { updatedNotes: [], errors: [] }
+export async function runVaultSync(): Promise<VaultSyncResult> {
+  const config = await getVaultConfig()
+  if (!config || !config.enabled) return { updatedNotes: [], errors: [] }
+  if (!(await couchDbAccessible(config))) return { updatedNotes: [], errors: [] }
 
-  const vaultNotes = await prisma.vaultNote.findMany()
+  const key = await deriveKey(config.e2ePassphrase)
+  const changes = await couchChanges(config, config.lastSeq)
   const updatedNotes: VaultSearchResult[] = []
   const errors: string[] = []
 
-  for (const note of vaultNotes) {
+  for (const change of changes.results) {
+    if (change.deleted) continue
+    const doc = change.doc as Record<string, unknown> | undefined
+    if (!doc) continue
+
+    // LiveSync stores the encrypted file path in doc.path (not in change.id)
+    const rawPath = doc.path as string | undefined
+    if (!rawPath) continue
+    const encryptedPath = stripEncryptedPrefix(rawPath)
+    if (!encryptedPath) continue
+
+    let path: string
     try {
-      // CouchDB sync will be implemented in Phase 5 sync worker.
-      // For now we record the note path for tracking purposes.
-      updatedNotes.push({
-        path: note.notePath,
-        title: note.notePath,
-        snippet: "",
-        frontmatter: {},
-      })
-    } catch (e) {
-      errors.push(`Error syncing ${note.notePath}: ${e instanceof Error ? e.message : String(e)}`)
+      path = await decryptString(key, encryptedPath)
+    } catch {
+      continue
     }
+    if (!path.endsWith(".md")) continue
+
+    const rawData = doc.data as string | undefined
+    if (!rawData) continue
+
+    let content: string
+    try {
+      content = await decryptString(key, rawData)
+    } catch (e) {
+      errors.push(`Failed to decrypt ${change.id}: ${e instanceof Error ? e.message : String(e)}`)
+      continue
+    }
+
+    const { frontmatter, body } = parseFrontmatter(content)
+    updatedNotes.push({
+      couchDbId: change.id,
+      path,
+      title: extractTitle(body, path),
+      snippet: body.slice(0, 200),
+      frontmatter,
+    })
   }
 
   await prisma.vaultConfig.update({
     where: { id: config.id },
-    data: { lastSyncAt: new Date() },
+    data: { lastSyncAt: new Date(), lastSeq: changes.last_seq },
   })
 
   return { updatedNotes, errors }
