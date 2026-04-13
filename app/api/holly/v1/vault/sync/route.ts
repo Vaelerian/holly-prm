@@ -14,6 +14,6 @@ export async function POST(req: NextRequest) {
   const accessible = await isVaultAccessible(userId)
   if (!accessible) return NextResponse.json({ error: "vault_not_configured", code: "VAULT_NOT_CONFIGURED" }, { status: 503 })
 
-  const result = await runVaultSync(userId)
+  const result = await runVaultSync()
   return NextResponse.json(result)
 }
