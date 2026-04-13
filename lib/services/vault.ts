@@ -6,6 +6,19 @@ import { couchAllDocs, couchDbAccessible, couchGet } from "@/lib/services/vault-
 import { deriveKey, decryptString } from "@/lib/services/vault-crypto"
 import type { VaultConfig } from "@/app/generated/prisma/client"
 
+// PBKDF2 key derivation is deliberately expensive (100k iterations, ~100ms).
+// Cache the derived key per passphrase so searchVault and getNoteContent don't
+// re-derive on every call. The derived key is non-exportable and safe to hold
+// in memory for the process lifetime since it is equally sensitive whether held
+// for 1 ms or indefinitely.
+let _keyCache: { passphrase: string; key: CryptoKey } | null = null
+async function getOrDeriveKey(passphrase: string): Promise<CryptoKey> {
+  if (_keyCache?.passphrase === passphrase) return _keyCache.key
+  const key = await deriveKey(passphrase)
+  _keyCache = { passphrase, key }
+  return key
+}
+
 export interface VaultSearchResult {
   couchDbId: string
   path: string
@@ -34,6 +47,10 @@ function stripEncryptedPrefix(value: string): string | null {
   return value.slice(LIVESYNC_ENCRYPTED_PREFIX.length)
 }
 
+// Simple frontmatter parser for flat key: value YAML pairs only.
+// Does not handle multi-line values, quoted strings with colons, or YAML sequences.
+// This is sufficient for the PRM use case (prm_entity, prm_id, last_updated are
+// always simple scalars). Do not use this for general-purpose YAML parsing.
 function parseFrontmatter(content: string): { frontmatter: Record<string, unknown>; body: string } {
   const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/)
   if (!match) return { frontmatter: {}, body: content }
@@ -69,7 +86,10 @@ export async function searchVault(query: string, limit = 10, _userId?: string): 
   if (!config) return []
   if (!(await couchDbAccessible(config))) return []
 
-  const key = await deriveKey(config.e2ePassphrase)
+  const key = await getOrDeriveKey(config.e2ePassphrase)
+  // NOTE: couchAllDocs fetches every document in the database. With E2E encryption
+  // CouchDB cannot filter by path server-side, so client-side filtering is required.
+  // For Phase 5 this is acceptable; Phase 6 should add pagination or a search index.
   const allDocs = await couchAllDocs(config, { include_docs: true })
   const results: VaultSearchResult[] = []
 
@@ -110,7 +130,7 @@ export async function searchVault(query: string, limit = 10, _userId?: string): 
       couchDbId: row.id,
       path,
       title: extractTitle(body, path),
-      snippet: extractSnippet(content, query),
+      snippet: extractSnippet(body, query),
       frontmatter,
     })
   }
@@ -126,7 +146,7 @@ export async function getNoteContent(couchDbId: string, _userId?: string): Promi
     const doc = await couchGet(config, couchDbId) as Record<string, unknown>
     const rawData = doc.data as string | undefined
     if (!rawData) return null
-    const key = await deriveKey(config.e2ePassphrase)
+    const key = await getOrDeriveKey(config.e2ePassphrase)
     return decryptString(key, rawData)
   } catch {
     return null

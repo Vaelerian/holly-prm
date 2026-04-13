@@ -191,6 +191,7 @@ describe("searchVault", () => {
       .mockResolvedValueOnce("B.md").mockResolvedValueOnce("query content")
     const results = await searchVault("query", 2)
     expect(results).toHaveLength(2)
+    expect(mockCrypto.decryptString).toHaveBeenCalledTimes(4)
   })
 })
 
