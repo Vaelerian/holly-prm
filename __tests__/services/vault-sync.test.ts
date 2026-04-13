@@ -190,6 +190,23 @@ describe("runVaultSync", () => {
     expect(result.errors[0]).toContain("f:bad")
   })
 
+  it("records error when data field is missing on a .md document", async () => {
+    mockGetVaultConfig.mockResolvedValue(baseConfig as any)
+    mockCouch.couchDbAccessible.mockResolvedValue(true)
+    mockCrypto.deriveKey.mockResolvedValue({} as CryptoKey)
+    mockCouch.couchChanges.mockResolvedValue({
+      results: [{ id: "f:nodata", seq: "6-x", doc: { _id: "f:nodata", path: ENC_PREFIX + "enc" } }],
+      last_seq: "6-x",
+    })
+    mockCrypto.decryptString.mockResolvedValueOnce("Holly/Note.md")
+    mockPrisma.vaultConfig.update.mockResolvedValue({} as any)
+
+    const result = await runVaultSync()
+    expect(result.updatedNotes).toHaveLength(0)
+    expect(result.errors).toHaveLength(1)
+    expect(result.errors[0]).toContain("f:nodata")
+  })
+
   it("skips deleted changes", async () => {
     mockGetVaultConfig.mockResolvedValue(baseConfig as any)
     mockCouch.couchDbAccessible.mockResolvedValue(true)

@@ -74,7 +74,10 @@ export async function runVaultSync(): Promise<VaultSyncResult> {
     if (!path.endsWith(".md")) continue
 
     const rawData = doc.data as string | undefined
-    if (!rawData) continue
+    if (!rawData) {
+      errors.push(`Missing data field for ${change.id}`)
+      continue
+    }
 
     let content: string
     try {
