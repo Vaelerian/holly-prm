@@ -27,7 +27,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (adminEmail && adminHash && email === adminEmail) {
           const valid = await bcrypt.compare(password, adminHash)
           if (!valid) return null
-          return { id: "admin", email: adminEmail, name: "Admin", role: "admin" } as any
+          // Ensure admin has a DB User record so they get a real userId in session
+          const adminUser = await prisma.user.upsert({
+            where: { email: adminEmail },
+            create: { email: adminEmail, name: "Admin", status: "approved" },
+            update: {},
+          })
+          return { id: adminUser.id, email: adminEmail, name: "Admin", role: "admin" } as any
         }
 
         // Regular user (DB-based)
@@ -64,6 +70,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const role = (user as any).role as "user" | "admin" | undefined
         if (role === "admin") {
           token.role = "admin"
+          token.userId = user.id
         } else {
           token.role = "user"
           if (account?.provider === "google" && token.email) {
