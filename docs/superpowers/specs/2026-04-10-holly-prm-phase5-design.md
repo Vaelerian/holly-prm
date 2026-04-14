@@ -1,6 +1,6 @@
 # Holly PRM - Phase 5 Design Spec
 
-**Date:** 2026-04-10
+**Date:** 2026-04-10 (revised 2026-04-12)
 **Status:** Approved
 **Scope:** Phase 5 - Obsidian Bridge
 
@@ -8,16 +8,22 @@
 
 ## Overview
 
-Phase 5 adds a bidirectional Obsidian bridge. The vault lives on the same VPS as Holly, accessible as a local filesystem path. The bridge lets Holly search and read notes from the vault for context, and create or update notes in the vault from PRM data. A configurable sync schedule (separate cadences for work days and weekends) keeps linked notes up to date automatically. On-demand sync is also available.
+Phase 5 adds a bidirectional Obsidian vault bridge. The vault is stored in a self-hosted CouchDB instance (running on the same VPS as Holly) via the Obsidian LiveSync community plugin. Holly connects to CouchDB directly over the internal network, decrypts note content using the LiveSync E2E passphrase, and can create or update notes in the vault (encrypted and written back to CouchDB in LiveSync-compatible format). A configurable sync schedule (separate cadences for work days and weekends) keeps linked notes up to date automatically. On-demand sync is also available.
+
+**CouchDB is on the same VPS.** Holly connects via `http://localhost:5984`, not through the public `https://sync.vaelerian.uk` endpoint. This avoids an unnecessary round-trip through Cloudflare.
+
+**E2E encryption is enabled.** All vault data in CouchDB is encrypted with AES-GCM using a passphrase-derived key. Holly must decrypt documents to read them and encrypt content before writing. This uses Node.js's built-in `crypto.subtle` (WebCrypto API).
 
 ---
 
 ## Pillars
 
-1. **Vault Reader** - filesystem-based search and note retrieval exposed via Holly API
-2. **Note Writer** - create notes in `Holly/` folder, update notes anywhere in the vault, frontmatter tracks PRM entity linkage
-3. **Sync Service** - scheduled sync wired into existing cron infrastructure, on-demand sync endpoint
-4. **Config and Settings UI** - `VaultConfig` table, Settings page section for vault path and sync schedule
+1. **CouchDB Client** - HTTP wrapper around CouchDB's REST API, internal only
+2. **Crypto Layer** - AES-GCM encrypt/decrypt matching LiveSync's format, passphrase-derived key via PBKDF2
+3. **Vault Reader** - search and note retrieval via CouchDB queries + decryption, exposed via Holly API
+4. **Note Writer** - create/update notes in CouchDB (encrypted), track linkage in VaultNote table
+5. **Sync Service** - CouchDB `_changes` feed for change detection, cron-driven, on-demand endpoint
+6. **Config and Settings UI** - `VaultConfig` table, Settings page section for connection details and sync schedule
 
 ---
 
@@ -27,29 +33,35 @@ Two new tables. No changes to existing tables.
 
 ### VaultConfig
 
-Stores the vault connection and schedule. At most one row exists (single-user app).
+Stores the CouchDB connection details and sync schedule. At most one row exists.
 
 | Field | Type | Notes |
 |-------|------|-------|
 | id | UUID | Primary key |
-| vaultPath | String | Absolute path to vault root on VPS |
+| couchDbUrl | String | CouchDB URL, default `http://localhost:5984` |
+| couchDbDatabase | String | Database name, default `obsidian` |
+| couchDbUsername | String | CouchDB username |
+| couchDbPassword | String | CouchDB password (stored in DB for settings manageability) |
+| e2ePassphrase | String | LiveSync E2E passphrase for decrypt/encrypt |
 | workdayCron | String | Cron for Mon-Fri, default `0 * * * 1-5` (hourly) |
 | weekendCron | String | Cron for Sat-Sun, default `0 */4 * * 0,6` (every 4 hours) |
 | lastSyncAt | DateTime? | Null until first sync completes |
-| enabled | Boolean | Default true. Set false to pause sync without deleting config |
+| lastSeq | String | CouchDB changes feed sequence, default `"0"` |
+| enabled | Boolean | Default true |
 | createdAt | DateTime | |
 | updatedAt | DateTime | |
 
 ### VaultNote
 
-Tracks which PRM entities have linked vault notes. Allows the sync service to check only known-linked notes rather than scanning all frontmatter on every run.
+Tracks which PRM entities have linked vault notes. Stores both the CouchDB document ID (encrypted path, used for API calls) and the decrypted note path (for display).
 
 | Field | Type | Notes |
 |-------|------|-------|
 | id | UUID | Primary key |
 | entityType | String | `contact`, `project`, `interaction` |
 | entityId | String | UUID of the PRM entity |
-| vaultPath | String | Relative path from vault root |
+| couchDbId | String | Document `_id` in CouchDB (encrypted path) |
+| notePath | String | Decrypted relative path (for display) |
 | lastSyncAt | DateTime | When this note was last synced |
 | createdAt | DateTime | |
 
@@ -61,10 +73,15 @@ Tracks which PRM entities have linked vault notes. Allows the sync service to ch
 -- VaultConfig
 CREATE TABLE "VaultConfig" (
     "id" TEXT NOT NULL,
-    "vaultPath" TEXT NOT NULL,
+    "couchDbUrl" TEXT NOT NULL DEFAULT 'http://localhost:5984',
+    "couchDbDatabase" TEXT NOT NULL DEFAULT 'obsidian',
+    "couchDbUsername" TEXT NOT NULL,
+    "couchDbPassword" TEXT NOT NULL,
+    "e2ePassphrase" TEXT NOT NULL,
     "workdayCron" TEXT NOT NULL DEFAULT '0 * * * 1-5',
     "weekendCron" TEXT NOT NULL DEFAULT '0 */4 * * 0,6',
     "lastSyncAt" TIMESTAMP(3),
+    "lastSeq" TEXT NOT NULL DEFAULT '0',
     "enabled" BOOLEAN NOT NULL DEFAULT true,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
@@ -76,7 +93,8 @@ CREATE TABLE "VaultNote" (
     "id" TEXT NOT NULL,
     "entityType" TEXT NOT NULL,
     "entityId" TEXT NOT NULL,
-    "vaultPath" TEXT NOT NULL,
+    "couchDbId" TEXT NOT NULL,
+    "notePath" TEXT NOT NULL,
     "lastSyncAt" TIMESTAMP(3) NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "VaultNote_pkey" PRIMARY KEY ("id")
@@ -87,46 +105,91 @@ CREATE UNIQUE INDEX "VaultNote_entityType_entityId_key" ON "VaultNote"("entityTy
 
 ---
 
+## CouchDB Client
+
+### `lib/services/vault-couch.ts`
+
+Thin HTTP wrapper around CouchDB's REST API. All calls use the credentials from `VaultConfig`. Does not do any encryption - that is the crypto layer's responsibility.
+
+```ts
+couchGet(config: VaultConfig, path: string): Promise<unknown>
+couchPut(config: VaultConfig, path: string, body: unknown): Promise<unknown>
+couchAllDocs(config: VaultConfig, options?: { include_docs?: boolean }): Promise<CouchAllDocsResult>
+couchChanges(config: VaultConfig, since: string): Promise<CouchChangesResult>
+couchDbAccessible(config: VaultConfig): Promise<boolean>
+```
+
+All functions accept `VaultConfig` directly (no global state). Auth is HTTP Basic using `couchDbUsername` and `couchDbPassword`.
+
+`couchDbAccessible` calls `GET /{database}` and returns `true` on 200, `false` on any error.
+
+---
+
+## Crypto Layer
+
+### `lib/services/vault-crypto.ts`
+
+Implements AES-GCM encrypt/decrypt matching LiveSync's E2E format, using Node.js `crypto.subtle` (WebCrypto API, available in Node 18+). The passphrase comes from `VaultConfig.e2ePassphrase`.
+
+```ts
+deriveKey(passphrase: string): Promise<CryptoKey>
+encryptString(key: CryptoKey, plaintext: string): Promise<string>
+decryptString(key: CryptoKey, ciphertext: string): Promise<string>
+```
+
+**Key derivation:**
+- PBKDF2 with SHA-256, 100,000 iterations
+- Salt: `new TextEncoder().encode(passphrase)` (LiveSync derives salt from passphrase itself)
+- Output: AES-GCM 256-bit key
+
+**Encryption output format:** `base64(iv[12 bytes] + ciphertext + auth_tag[16 bytes])`
+
+**Note on format verification:** The exact binary layout of LiveSync's encrypted documents must be confirmed by inspecting a live document from the CouchDB instance before implementation. Task 2 in the implementation plan is a discovery step that fetches a raw document and reverse-engineers the format. The above describes the expected format based on LiveSync's source; if it differs, the crypto layer is updated before Tasks 3-10 proceed.
+
+---
+
 ## Vault Reader
 
 ### `lib/services/vault.ts`
 
-All filesystem operations live here. The vault root path comes from `VaultConfig`. All paths are validated to stay within the vault root (path traversal prevention).
+Reads vault notes via CouchDB. Decrypts document IDs and content using the crypto layer.
 
 ```ts
-searchVault(query: string, limit?: number): Promise<VaultSearchResult[]>
-getNoteContent(relativePath: string): Promise<string | null>
 getVaultConfig(): Promise<VaultConfig | null>
 isVaultAccessible(): Promise<boolean>
+searchVault(query: string, limit?: number): Promise<VaultSearchResult[]>
+getNoteContent(couchDbId: string): Promise<string | null>
 ```
 
-**`searchVault`**
-- Reads `VaultConfig`. Returns `[]` if not configured or vault not accessible.
-- Uses Node.js `fs` + recursive directory walk to find all `.md` files.
-- Greps each file for the query string (case-insensitive).
-- Returns up to `limit` (default 10) results: `{ path, title, snippet, frontmatter }`.
-- Title is extracted from the first H1 heading, or filename if no H1.
-- Snippet is up to 200 characters of context around the match.
-- Frontmatter is parsed from YAML between `---` delimiters if present.
+**`searchVault`:**
+- Loads `VaultConfig`. Returns `[]` if not configured or inaccessible.
+- Calls `couchAllDocs` with `include_docs: true` to fetch all documents.
+- For each document: decrypts the `_id` to get the file path; skips documents where decryption fails (non-note documents). Decrypts the `data` field to get the content.
+- Filters to documents whose decrypted path ends in `.md` and whose decrypted content contains the query string (case-insensitive).
+- Returns up to `limit` (default 10) results: `{ couchDbId, path, title, snippet, frontmatter }`.
+- Title: first H1 heading from decrypted content, or filename if no H1.
+- Snippet: up to 200 characters of context around the first match.
+- Frontmatter: parsed from YAML between `---` delimiters in decrypted content.
 
-**`getNoteContent`**
-- Validates path stays within vault root.
-- Returns full file content as string, or null if not found.
+**`getNoteContent`:**
+- Calls `couchGet` for the document by `couchDbId`.
+- Decrypts the `data` field and returns the plaintext, or null if the document does not exist.
 
 ### Holly API Routes
 
 ```
 GET  /api/holly/v1/vault/search?q=<query>&limit=<n>
-GET  /api/holly/v1/vault/note?path=<encoded-relative-path>
+GET  /api/holly/v1/vault/note?id=<couchDbId>
 ```
 
-Both require `X-Holly-API-Key`. Both return `{ error: "vault_not_configured" }` with 503 if vault path is not set or not accessible.
+Both require `X-Holly-API-Key`. Return `{ error: "vault_not_configured" }` with 503 if config is absent or inaccessible.
 
 **Search response:**
 ```json
 {
   "results": [
     {
+      "couchDbId": "encryptedDocId",
       "path": "People/John Smith.md",
       "title": "John Smith",
       "snippet": "...discussed the Walker project in detail...",
@@ -141,6 +204,7 @@ Both require `X-Holly-API-Key`. Both return `{ error: "vault_not_configured" }` 
 **Get note response:**
 ```json
 {
+  "couchDbId": "encryptedDocId",
   "path": "People/John Smith.md",
   "content": "# John Smith\n\n..."
 }
@@ -153,14 +217,13 @@ Both require `X-Holly-API-Key`. Both return `{ error: "vault_not_configured" }` 
 ### `lib/services/vault.ts` (continued)
 
 ```ts
-createNote(filename: string, entityType: string, entityId: string, content: string): Promise<string>
-updateNote(relativePath: string, content: string): Promise<void>
+createNote(notePath: string, entityType: string, entityId: string, content: string): Promise<string>
+updateNote(couchDbId: string, content: string): Promise<void>
 ```
 
-**`createNote`**
-- Validates filename (alphanumeric, spaces, hyphens, underscores only - no path separators).
-- Creates file at `Holly/<filename>.md` (creates `Holly/` directory if missing).
-- Prepends frontmatter:
+**`createNote`:**
+- Validates `notePath`: alphanumeric, spaces, hyphens, underscores, forward slashes only. Must end in `.md`.
+- Prepends frontmatter to content:
   ```yaml
   ---
   prm_entity: contact
@@ -168,14 +231,19 @@ updateNote(relativePath: string, content: string): Promise<void>
   created: 2026-04-10
   ---
   ```
-- Inserts a `VaultNote` row pointing to the new file.
-- Returns the relative path of the created note.
-- Throws if file already exists (caller should use updateNote instead).
+- Encrypts `notePath` to produce `couchDbId`.
+- Encrypts the full content (with frontmatter).
+- Constructs a LiveSync-compatible document: `{ _id: couchDbId, data: encryptedContent, type: "newnote", mtime: Date.now(), ctime: Date.now(), size: byteLength, encrypted: true }`.
+- `couchPut`s the document. Returns 409 if already exists.
+- Inserts a `VaultNote` row linking the entity to the note.
+- Returns `couchDbId`.
 
-**`updateNote`**
-- Validates path stays within vault root.
-- Reads existing file, preserves frontmatter block, replaces body content.
+**`updateNote`:**
+- Fetches the existing document to get `_rev` (required for CouchDB updates).
+- Decrypts the existing content, preserves the frontmatter block, replaces the body.
 - Adds or updates `last_updated` field in frontmatter.
+- Encrypts the updated content.
+- `couchPut`s the document with the existing `_rev`.
 - Updates `VaultNote.lastSyncAt` if a matching row exists.
 
 ### Holly API Routes
@@ -190,7 +258,7 @@ Both require `X-Holly-API-Key`.
 **Create request body:**
 ```json
 {
-  "filename": "John Smith",
+  "notePath": "Holly/John Smith.md",
   "entityType": "contact",
   "entityId": "uuid",
   "content": "# John Smith\n\nJohn is the CTO at Acme..."
@@ -200,12 +268,12 @@ Both require `X-Holly-API-Key`.
 **Update request body:**
 ```json
 {
-  "path": "Holly/John Smith.md",
+  "couchDbId": "encryptedDocId",
   "content": "# John Smith\n\nUpdated narrative..."
 }
 ```
 
-Holly generates the `content` narrative using its own AI reasoning before calling these endpoints. The PRM does not call the AI - it only stores and retrieves.
+Holly generates the `content` narrative using its own AI reasoning before calling these endpoints.
 
 ---
 
@@ -218,20 +286,21 @@ runVaultSync(): Promise<VaultSyncResult>
 shouldRunSync(config: VaultConfig): boolean
 ```
 
-**`shouldRunSync`**
-- Checks `config.enabled`. Returns false if disabled.
-- Determines if current time is a workday (Mon-Fri) or weekend (Sat-Sun).
-- Parses the appropriate cron expression and checks if the sync is due based on `lastSyncAt`.
-- Uses a simple cron-next-run calculation (no external cron library - the allowed values are constrained to the UI dropdowns).
-
-**`runVaultSync`**
-1. Loads all `VaultNote` rows.
-2. For each linked note: reads the file, checks `last_updated` frontmatter vs `VaultNote.lastSyncAt`.
-3. If the file has been modified since last sync: includes it in the result as a "vault update" for Holly to process.
-4. Updates `VaultConfig.lastSyncAt` on completion.
+**`runVaultSync`:**
+1. Loads `VaultConfig`. Returns early if disabled or inaccessible.
+2. Calls `couchChanges(config, config.lastSeq)` to get all documents changed since the last sync.
+3. For each changed document: decrypts the `_id` to get the path. If decryption fails, skip (not a LiveSync note document). Decrypts the `data` field to get the content.
+4. Cross-references changed document IDs against `VaultNote` rows to identify which PRM entities are affected.
 5. Returns `{ updatedNotes: VaultSearchResult[], errors: string[] }`.
+6. Updates `VaultConfig.lastSyncAt` and `VaultConfig.lastSeq` to the new sequence value from the changes feed.
 
-The sync service **does not auto-create or auto-update PRM records**. It surfaces changed notes as data for Holly to reason about. Holly decides what action to take.
+The sync service does not auto-create or auto-update PRM records. It surfaces changed notes as data for Holly to reason about.
+
+**`shouldRunSync`:**
+- Returns `false` if `config.enabled` is false.
+- Checks if current time is a workday or weekend.
+- Parses the appropriate cron expression and checks if sync is due based on `lastSyncAt`.
+- No external cron library: allowed values are constrained to UI dropdowns.
 
 ### Cron Integration
 
@@ -262,7 +331,7 @@ Results are cached in Redis under `vault:sync:latest` (TTL 2 hours) for inclusio
 POST /api/holly/v1/vault/sync
 ```
 
-Requires `X-Holly-API-Key`. Calls `runVaultSync()` directly, bypassing the schedule check. Returns the sync result.
+Requires `X-Holly-API-Key`. Calls `runVaultSync()` directly, bypassing the schedule check.
 
 ---
 
@@ -272,7 +341,12 @@ Requires `X-Holly-API-Key`. Calls `runVaultSync()` directly, bypassing the sched
 
 A new "Obsidian Vault" section in `app/(dashboard)/settings/page.tsx`:
 
-- **Vault path** - text input for the absolute path, with a "Test connection" button that calls `GET /api/v1/vault/status` and shows accessible/not found.
+- **CouchDB URL** - text input, default `http://localhost:5984`
+- **Database name** - text input, default `obsidian`
+- **Username** - text input
+- **Password** - password input (masked, write-only: shows placeholder if set)
+- **E2E passphrase** - password input (masked, write-only)
+- **Test connection** button - calls `GET /api/v1/vault/status`
 - **Sync schedule** - two dropdowns (Work days, Weekends) with friendly options:
   - Every hour
   - Every 2 hours
@@ -281,17 +355,35 @@ A new "Obsidian Vault" section in `app/(dashboard)/settings/page.tsx`:
   - Once daily (9am)
 - **Enabled** toggle
 - **Last synced** - read-only timestamp, shows "Never" if null
-- **Sync now** button - calls `POST /api/v1/vault/sync` (the web session version, not the Holly API version)
+- **Sync now** button - calls `POST /api/v1/vault/sync`
 
 ### New API Routes (web session)
 
 ```
-GET   /api/v1/vault/status          Check vault accessibility
-POST  /api/v1/vault/config          Save VaultConfig (path, schedules, enabled)
+GET   /api/v1/vault/status          Check CouchDB accessibility + return non-secret config
+POST  /api/v1/vault/config          Save VaultConfig (all fields)
 POST  /api/v1/vault/sync            Trigger on-demand sync from UI
 ```
 
-All require active session (existing auth middleware).
+`GET /api/v1/vault/status` returns:
+```json
+{
+  "configured": true,
+  "accessible": true,
+  "couchDbUrl": "http://localhost:5984",
+  "couchDbDatabase": "obsidian",
+  "couchDbUsername": "vaelerian",
+  "passwordSet": true,
+  "e2ePassphraseSet": true,
+  "lastSyncAt": "2026-04-12T10:00:00Z",
+  "lastSeq": "42-abc",
+  "enabled": true,
+  "workdayCron": "0 * * * 1-5",
+  "weekendCron": "0 */4 * * 0,6"
+}
+```
+
+Password and passphrase are never returned. `passwordSet` and `e2ePassphraseSet` are boolean flags only.
 
 ---
 
@@ -315,31 +407,31 @@ POST  /api/v1/vault/sync            On-demand sync (web)
 | Scenario | Behaviour |
 |----------|-----------|
 | `VaultConfig` not set | All vault operations return `{ error: "vault_not_configured" }` with 503 |
-| Vault path does not exist or not readable | Same as not configured - 503 |
-| Note not found on read/update | 404, no crash |
-| Path traversal attempt | 400, request rejected |
-| Filename invalid characters on create | 422 with validation error |
-| File already exists on create | 409, Holly should use PATCH instead |
-| Sync failure | Logged, `lastSyncAt` not updated, next scheduled run retries |
-| Redis unavailable for sync cache | Logged, vault sync result not cached - next briefing gets empty `vaultUpdates` |
+| CouchDB unreachable | Same as not configured - 503 |
+| Decryption fails for a document | Document is silently skipped (not a LiveSync note, or corrupted) |
+| Document not found on read/update | 404 |
+| Invalid `notePath` characters on create | 422 |
+| Document already exists on create | 409 |
+| Wrong `_rev` on update (CouchDB conflict) | 409, Holly should re-fetch and retry |
+| Sync failure | Logged, `lastSyncAt` and `lastSeq` not updated, next run retries |
+| Redis unavailable | Logged, sync result not cached - next briefing gets empty `vaultUpdates` |
 
 ---
 
 ## Security
 
-- All file paths are resolved with `path.resolve()` and checked to start with the configured vault root before any read or write operation.
-- Filenames for new notes are validated against an allowlist pattern before use.
-- The vault root itself is set by the authenticated user in Settings - it is never derived from request input.
-- Holly API routes require `X-Holly-API-Key` (existing middleware).
-- Web routes require active session (existing middleware).
+- CouchDB is accessed via `http://localhost:5984` (internal only, not the public Cloudflare endpoint). No traffic leaves the VPS.
+- Credentials (`couchDbPassword`, `e2ePassphrase`) are stored in the `VaultConfig` database table. This is an accepted trade-off for a self-hosted single-user app where the settings UI needs to manage them. They are never returned in API responses.
+- Holly API routes require `X-Holly-API-Key`.
+- Web session routes require active session.
+- Note paths are validated against an allowlist pattern before encryption and write.
 
 ---
 
 ## Out of Scope for Phase 5
 
-- Real-time vault watching (inotify / chokidar) - scheduled sync is sufficient
-- Obsidian plugin integration (Dataview queries, Templater templates)
-- Syncing to/from Obsidian Sync or cloud-hosted vaults
+- CouchDB document ID format: the exact encrypted `_id` format is confirmed during implementation (Task 2 discovery step) before any read or write code is finalised
+- Real-time vault watching (CouchDB `_changes` long-poll or feed) - scheduled sync is sufficient
 - Multi-vault support
 - Note deletion via API
-- Multi-user (Phase 6)
+- Multi-user vault routing (Phase 6)

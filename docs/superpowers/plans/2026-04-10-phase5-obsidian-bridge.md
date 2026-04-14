@@ -2,11 +2,13 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add a bidirectional Obsidian vault bridge - filesystem-based search/read, Holly-driven note creation/update, scheduled sync with workday/weekend cadences, and a Settings UI to configure it.
+**Goal:** Add a bidirectional Obsidian vault bridge via CouchDB (self-hosted LiveSync), with E2E decryption, scheduled sync via the changes feed, and a Settings UI to configure the connection.
 
-**Architecture:** All filesystem operations live in `lib/services/vault.ts`, validated against the configured vault root. Sync logic lives in `lib/services/vault-sync.ts`, which surfaces changed notes as data without auto-mutating PRM records. Five Holly API routes and three web session routes expose the functionality; the cron job drives periodic sync and caches results in Redis for briefing inclusion.
+**Architecture:** Holly connects to CouchDB at `http://localhost:5984` (internal, same VPS). A thin HTTP client (`vault-couch.ts`) handles CouchDB REST calls. A crypto layer (`vault-crypto.ts`) implements AES-GCM encrypt/decrypt matching LiveSync's E2E format. All vault operations live in `lib/services/vault.ts`. Sync logic lives in `lib/services/vault-sync.ts`, surfacing changed notes for Holly without auto-mutating PRM records. Five Holly API routes and three web session routes expose the functionality. The cron job drives periodic sync and caches results in Redis.
 
-**Tech Stack:** Node.js `fs/promises`, Prisma (VaultConfig + VaultNote), Redis (vault:sync:latest TTL 7200), Next.js App Router, Zod, Tailwind CSS.
+**Tech Stack:** Node.js `crypto.subtle` (WebCrypto), `fetch` (Node 18+ built-in), Prisma (VaultConfig + VaultNote), Redis (vault:sync:latest TTL 7200), Next.js App Router, Zod, Tailwind CSS.
+
+**Important:** Task 2 is a discovery step. It inspects a live CouchDB document to confirm the exact encrypted format before any read/write code is written. Tasks 3-10 depend on that confirmed format.
 
 ---
 
@@ -14,7 +16,9 @@
 
 **Create:**
 - `prisma/migrations/20260410000004_phase5_vault/migration.sql` - SQL for VaultConfig and VaultNote tables
-- `lib/services/vault.ts` - All filesystem operations (read + write)
+- `lib/services/vault-couch.ts` - CouchDB HTTP client (no encryption)
+- `lib/services/vault-crypto.ts` - AES-GCM encrypt/decrypt (LiveSync-compatible)
+- `lib/services/vault.ts` - Vault reader and writer (uses couch + crypto)
 - `lib/services/vault-sync.ts` - Sync scheduling and execution
 - `app/api/holly/v1/vault/search/route.ts` - Holly: search vault
 - `app/api/holly/v1/vault/note/route.ts` - Holly: GET / POST / PATCH note
@@ -22,13 +26,14 @@
 - `app/api/v1/vault/status/route.ts` - Web: accessibility check + config fetch
 - `app/api/v1/vault/config/route.ts` - Web: save config
 - `app/api/v1/vault/sync/route.ts` - Web: trigger sync from UI
-- `__tests__/services/vault.test.ts` - Service tests (reader + writer)
+- `__tests__/services/vault-crypto.test.ts` - Crypto round-trip tests
+- `__tests__/services/vault.test.ts` - Vault service tests (reader + writer)
 - `__tests__/services/vault-sync.test.ts` - Sync service tests
 
 **Modify:**
 - `prisma/schema.prisma` - Add VaultConfig and VaultNote models
-- `app/api/v1/cron/notify/route.ts` - Add vault sync step (step 4) after Gmail poll
-- `lib/services/briefing.ts` - Add vaultUpdates field from Redis cache
+- `app/api/v1/cron/notify/route.ts` - Add vault sync step (step 4)
+- `lib/services/briefing.ts` - Add vaultUpdates field from Redis
 - `app/(dashboard)/settings/page.tsx` - Add Obsidian Vault section
 
 ---
@@ -45,21 +50,27 @@ Append to the end of `prisma/schema.prisma`:
 
 ```prisma
 model VaultConfig {
-  id          String    @id @default(uuid())
-  vaultPath   String
-  workdayCron String    @default("0 * * * 1-5")
-  weekendCron String    @default("0 */4 * * 0,6")
-  lastSyncAt  DateTime?
-  enabled     Boolean   @default(true)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id              String    @id @default(uuid())
+  couchDbUrl      String    @default("http://localhost:5984")
+  couchDbDatabase String    @default("obsidian")
+  couchDbUsername String
+  couchDbPassword String
+  e2ePassphrase   String
+  workdayCron     String    @default("0 * * * 1-5")
+  weekendCron     String    @default("0 */4 * * 0,6")
+  lastSyncAt      DateTime?
+  lastSeq         String    @default("0")
+  enabled         Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 }
 
 model VaultNote {
   id         String   @id @default(uuid())
   entityType String
   entityId   String
-  vaultPath  String
+  couchDbId  String
+  notePath   String
   lastSyncAt DateTime
   createdAt  DateTime @default(now())
 
@@ -75,10 +86,15 @@ Create directory `prisma/migrations/20260410000004_phase5_vault/` and write `mig
 -- VaultConfig
 CREATE TABLE "VaultConfig" (
     "id" TEXT NOT NULL,
-    "vaultPath" TEXT NOT NULL,
+    "couchDbUrl" TEXT NOT NULL DEFAULT 'http://localhost:5984',
+    "couchDbDatabase" TEXT NOT NULL DEFAULT 'obsidian',
+    "couchDbUsername" TEXT NOT NULL,
+    "couchDbPassword" TEXT NOT NULL,
+    "e2ePassphrase" TEXT NOT NULL,
     "workdayCron" TEXT NOT NULL DEFAULT '0 * * * 1-5',
     "weekendCron" TEXT NOT NULL DEFAULT '0 */4 * * 0,6',
     "lastSyncAt" TIMESTAMP(3),
+    "lastSeq" TEXT NOT NULL DEFAULT '0',
     "enabled" BOOLEAN NOT NULL DEFAULT true,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
@@ -90,7 +106,8 @@ CREATE TABLE "VaultNote" (
     "id" TEXT NOT NULL,
     "entityType" TEXT NOT NULL,
     "entityId" TEXT NOT NULL,
-    "vaultPath" TEXT NOT NULL,
+    "couchDbId" TEXT NOT NULL,
+    "notePath" TEXT NOT NULL,
     "lastSyncAt" TIMESTAMP(3) NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "VaultNote_pkey" PRIMARY KEY ("id")
@@ -105,7 +122,7 @@ CREATE UNIQUE INDEX "VaultNote_entityType_entityId_key" ON "VaultNote"("entityTy
 npx prisma generate
 ```
 
-Expected: "Generated Prisma Client" output with no errors.
+Expected: "Generated Prisma Client" with no errors.
 
 - [ ] **Step 4: TypeScript compile check**
 
@@ -124,54 +141,463 @@ git commit -m "feat: add VaultConfig and VaultNote schema for Phase 5"
 
 ---
 
-### Task 2: Vault Reader
+### Task 2: Document Format Discovery
+
+**Files:**
+- No files created or modified. This task is research only.
+
+This task confirms the exact binary layout of LiveSync's encrypted documents before any crypto code is written. The CouchDB instance at `http://localhost:5984` contains real encrypted data. Inspect it to confirm the format.
+
+- [ ] **Step 1: Fetch a raw document from CouchDB**
+
+On the VPS (or via the Holly dev environment if it has network access to the VPS):
+
+```bash
+# List all document IDs in the obsidian database
+curl -s "http://vaelerian:1ndiaLima0bsCouch06042026@localhost:5984/obsidian/_all_docs?limit=5" | jq .
+
+# Fetch one specific document (use an _id from the above output)
+curl -s "http://vaelerian:1ndiaLima0bsCouch06042026@localhost:5984/obsidian/<doc_id>" | jq .
+```
+
+Record the full JSON structure of a real document. Note:
+- What does `_id` look like? (is it a base64 string, a path, something else?)
+- What fields are present? (`data`, `type`, `mtime`, `ctime`, `size`, `encrypted`, `children`, etc.)
+- Is `data` a string or an array?
+- Is there a `datatype` or `type` field that indicates encryption?
+
+- [ ] **Step 2: Confirm the encryption format**
+
+The expected format (based on LiveSync source) is:
+- `_id`: base64-encoded AES-GCM encrypted file path
+- `data`: base64-encoded AES-GCM encrypted content (format: `base64(iv[12] + ciphertext + tag[16])`)
+- `type`: `"newnote"` or similar
+- `encrypted`: `true`
+
+If the actual format differs from this, document the actual format here before proceeding. The crypto layer in Task 3 must match whatever format is actually in the database.
+
+- [ ] **Step 3: Confirm key derivation parameters**
+
+Check the LiveSync plugin source at `https://github.com/vrtmrz/obsidian-livesync` (or the installed plugin files in the Obsidian vault) for the exact PBKDF2 parameters:
+- Number of iterations (expected: 100,000)
+- Salt strategy (expected: derived from passphrase, not random)
+- IV length (expected: 12 bytes)
+
+Record any differences from the expected values.
+
+- [ ] **Step 4: Manual decryption test**
+
+Write a one-off Node.js script (do not commit it) to verify that the known passphrase (`Wolverhampton`) can decrypt a real document fetched in Step 1:
+
+```ts
+// test-decrypt.ts (temporary, not committed)
+import { webcrypto } from "node:crypto"
+const { subtle } = webcrypto
+
+async function deriveKey(passphrase: string) {
+  const enc = new TextEncoder()
+  const keyMaterial = await subtle.importKey("raw", enc.encode(passphrase), "PBKDF2", false, ["deriveKey"])
+  return subtle.deriveKey(
+    { name: "PBKDF2", salt: enc.encode(passphrase), iterations: 100_000, hash: "SHA-256" },
+    keyMaterial,
+    { name: "AES-GCM", length: 256 },
+    false,
+    ["encrypt", "decrypt"]
+  )
+}
+
+async function decrypt(key: CryptoKey, b64: string) {
+  const buf = Buffer.from(b64, "base64")
+  const iv = buf.subarray(0, 12)
+  const data = buf.subarray(12)
+  const plain = await subtle.decrypt({ name: "AES-GCM", iv }, key, data)
+  return new TextDecoder().decode(plain)
+}
+
+const key = await deriveKey("Wolverhampton")
+const rawDoc = { data: "<paste data field here>" }
+console.log(await decrypt(key, rawDoc.data))
+```
+
+Run: `npx tsx test-decrypt.ts`
+
+Expected: readable markdown content from your vault.
+
+If this fails, adjust the key derivation parameters based on Step 3 findings until decryption succeeds. The confirmed working parameters are what Task 3 implements.
+
+- [ ] **Step 5: Document confirmed format**
+
+Add a comment block at the top of `lib/services/vault-crypto.ts` (to be created in Task 3) documenting the confirmed format. No commit needed - this is carried into Task 3.
+
+---
+
+### Task 3: CouchDB Client
+
+**Files:**
+- Create: `lib/services/vault-couch.ts`
+
+- [ ] **Step 1: Write failing tests**
+
+Create `__tests__/services/vault-couch.test.ts`:
+
+```ts
+import { couchGet, couchPut, couchAllDocs, couchChanges, couchDbAccessible } from "@/lib/services/vault-couch"
+
+const fakeConfig = {
+  couchDbUrl: "http://localhost:5984",
+  couchDbDatabase: "obsidian",
+  couchDbUsername: "vaelerian",
+  couchDbPassword: "testpass",
+  e2ePassphrase: "testphrase",
+}
+
+const fetchMock = jest.fn()
+global.fetch = fetchMock
+
+beforeEach(() => jest.clearAllMocks())
+
+it("couchGet fetches with basic auth", async () => {
+  fetchMock.mockResolvedValue({ ok: true, json: async () => ({ _id: "doc1" }) })
+  const result = await couchGet(fakeConfig as any, "/obsidian/doc1")
+  expect(fetchMock).toHaveBeenCalledWith(
+    "http://localhost:5984/obsidian/doc1",
+    expect.objectContaining({ headers: expect.objectContaining({ Authorization: expect.stringContaining("Basic ") }) })
+  )
+  expect(result).toEqual({ _id: "doc1" })
+})
+
+it("couchGet throws on non-ok response", async () => {
+  fetchMock.mockResolvedValue({ ok: false, status: 404, json: async () => ({ error: "not_found" }) })
+  await expect(couchGet(fakeConfig as any, "/obsidian/missing")).rejects.toThrow()
+})
+
+it("couchDbAccessible returns true on 200", async () => {
+  fetchMock.mockResolvedValue({ ok: true, json: async () => ({}) })
+  expect(await couchDbAccessible(fakeConfig as any)).toBe(true)
+})
+
+it("couchDbAccessible returns false on error", async () => {
+  fetchMock.mockRejectedValue(new Error("ECONNREFUSED"))
+  expect(await couchDbAccessible(fakeConfig as any)).toBe(false)
+})
+
+it("couchAllDocs fetches _all_docs with include_docs", async () => {
+  fetchMock.mockResolvedValue({ ok: true, json: async () => ({ rows: [] }) })
+  await couchAllDocs(fakeConfig as any, { include_docs: true })
+  expect(fetchMock).toHaveBeenCalledWith(
+    expect.stringContaining("_all_docs"),
+    expect.any(Object)
+  )
+})
+
+it("couchChanges fetches _changes since lastSeq", async () => {
+  fetchMock.mockResolvedValue({ ok: true, json: async () => ({ results: [], last_seq: "5-abc" }) })
+  const result = await couchChanges(fakeConfig as any, "3-xyz")
+  expect(fetchMock).toHaveBeenCalledWith(
+    expect.stringContaining("since=3-xyz"),
+    expect.any(Object)
+  )
+  expect(result.last_seq).toBe("5-abc")
+})
+```
+
+- [ ] **Step 2: Run tests to confirm they fail**
+
+```bash
+npx jest __tests__/services/vault-couch.test.ts
+```
+
+Expected: FAIL (module not found).
+
+- [ ] **Step 3: Implement vault-couch.ts**
+
+Create `lib/services/vault-couch.ts`:
+
+```ts
+import type { VaultConfig } from "@/app/generated/prisma/client"
+
+function basicAuth(username: string, password: string) {
+  return "Basic " + Buffer.from(`${username}:${password}`).toString("base64")
+}
+
+function baseUrl(config: VaultConfig) {
+  return `${config.couchDbUrl}/${config.couchDbDatabase}`
+}
+
+async function couchFetch(config: VaultConfig, path: string, options: RequestInit = {}) {
+  const url = path.startsWith("http") ? path : `${config.couchDbUrl}${path}`
+  const res = await fetch(url, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: basicAuth(config.couchDbUsername, config.couchDbPassword),
+      ...(options.headers ?? {}),
+    },
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(`CouchDB ${res.status}: ${JSON.stringify(body)}`)
+  }
+  return res.json()
+}
+
+export async function couchGet(config: VaultConfig, path: string) {
+  return couchFetch(config, path)
+}
+
+export async function couchPut(config: VaultConfig, path: string, body: unknown) {
+  return couchFetch(config, path, { method: "PUT", body: JSON.stringify(body) })
+}
+
+export interface CouchAllDocsResult {
+  rows: Array<{ id: string; key: string; value: { rev: string }; doc?: unknown }>
+  total_rows: number
+  offset: number
+}
+
+export async function couchAllDocs(config: VaultConfig, options: { include_docs?: boolean } = {}): Promise<CouchAllDocsResult> {
+  const params = new URLSearchParams()
+  if (options.include_docs) params.set("include_docs", "true")
+  return couchFetch(config, `/${config.couchDbDatabase}/_all_docs?${params}`)
+}
+
+export interface CouchChangesResult {
+  results: Array<{ id: string; seq: string; deleted?: boolean; doc?: unknown }>
+  last_seq: string
+}
+
+export async function couchChanges(config: VaultConfig, since: string): Promise<CouchChangesResult> {
+  const params = new URLSearchParams({ since, include_docs: "true" })
+  return couchFetch(config, `/${config.couchDbDatabase}/_changes?${params}`)
+}
+
+export async function couchDbAccessible(config: VaultConfig): Promise<boolean> {
+  try {
+    await couchFetch(config, `/${config.couchDbDatabase}`)
+    return true
+  } catch {
+    return false
+  }
+}
+```
+
+- [ ] **Step 4: Run tests to confirm they pass**
+
+```bash
+npx jest __tests__/services/vault-couch.test.ts
+```
+
+Expected: All passing.
+
+- [ ] **Step 5: TypeScript compile check**
+
+```bash
+npx tsc --noEmit
+```
+
+Expected: No errors.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add lib/services/vault-couch.ts __tests__/services/vault-couch.test.ts
+git commit -m "feat: add CouchDB HTTP client for vault service"
+```
+
+---
+
+### Task 4: Crypto Layer
+
+**Files:**
+- Create: `lib/services/vault-crypto.ts`
+- Create: `__tests__/services/vault-crypto.test.ts`
+
+Use the confirmed encryption format from Task 2. The implementation below uses the expected format; update if Task 2 found differences.
+
+- [ ] **Step 1: Write failing tests**
+
+Create `__tests__/services/vault-crypto.test.ts`:
+
+```ts
+import { deriveKey, encryptString, decryptString } from "@/lib/services/vault-crypto"
+
+describe("vault-crypto", () => {
+  it("deriveKey returns a CryptoKey", async () => {
+    const key = await deriveKey("test-passphrase")
+    expect(key).toBeDefined()
+    expect(key.type).toBe("secret")
+  })
+
+  it("encrypt then decrypt round-trips correctly", async () => {
+    const key = await deriveKey("test-passphrase")
+    const plaintext = "# Hello\n\nThis is a test note."
+    const encrypted = await encryptString(key, plaintext)
+    expect(encrypted).not.toBe(plaintext)
+    const decrypted = await decryptString(key, encrypted)
+    expect(decrypted).toBe(plaintext)
+  })
+
+  it("encrypting the same string twice produces different ciphertexts (random IV)", async () => {
+    const key = await deriveKey("test-passphrase")
+    const a = await encryptString(key, "same content")
+    const b = await encryptString(key, "same content")
+    expect(a).not.toBe(b)
+  })
+
+  it("decrypting with wrong key throws", async () => {
+    const key1 = await deriveKey("passphrase-one")
+    const key2 = await deriveKey("passphrase-two")
+    const encrypted = await encryptString(key1, "secret")
+    await expect(decryptString(key2, encrypted)).rejects.toThrow()
+  })
+
+  it("decrypting invalid base64 throws", async () => {
+    const key = await deriveKey("test-passphrase")
+    await expect(decryptString(key, "not-valid-base64!!!")).rejects.toThrow()
+  })
+})
+```
+
+- [ ] **Step 2: Run tests to confirm they fail**
+
+```bash
+npx jest __tests__/services/vault-crypto.test.ts
+```
+
+Expected: FAIL (module not found).
+
+- [ ] **Step 3: Implement vault-crypto.ts**
+
+Create `lib/services/vault-crypto.ts`:
+
+```ts
+// LiveSync E2E encryption format (confirmed in Task 2 discovery):
+// Key derivation: PBKDF2-SHA256, 100,000 iterations, salt = UTF-8(passphrase)
+// Encryption: AES-GCM 256-bit, random 12-byte IV
+// Output format: base64(iv[12 bytes] + ciphertext + auth_tag[16 bytes])
+// Both document _id (file path) and data (content) use this format.
+
+import { webcrypto } from "node:crypto"
+const { subtle } = webcrypto as Crypto
+
+export async function deriveKey(passphrase: string): Promise<CryptoKey> {
+  const enc = new TextEncoder()
+  const keyMaterial = await subtle.importKey(
+    "raw",
+    enc.encode(passphrase),
+    "PBKDF2",
+    false,
+    ["deriveKey"]
+  )
+  return subtle.deriveKey(
+    {
+      name: "PBKDF2",
+      salt: enc.encode(passphrase),
+      iterations: 100_000,
+      hash: "SHA-256",
+    },
+    keyMaterial,
+    { name: "AES-GCM", length: 256 },
+    false,
+    ["encrypt", "decrypt"]
+  )
+}
+
+export async function encryptString(key: CryptoKey, plaintext: string): Promise<string> {
+  const enc = new TextEncoder()
+  const iv = webcrypto.getRandomValues(new Uint8Array(12))
+  const ciphertext = await subtle.encrypt({ name: "AES-GCM", iv }, key, enc.encode(plaintext))
+  const combined = new Uint8Array(iv.length + ciphertext.byteLength)
+  combined.set(iv, 0)
+  combined.set(new Uint8Array(ciphertext), iv.length)
+  return Buffer.from(combined).toString("base64")
+}
+
+export async function decryptString(key: CryptoKey, b64: string): Promise<string> {
+  const buf = Buffer.from(b64, "base64")
+  const iv = buf.subarray(0, 12)
+  const data = buf.subarray(12)
+  const plain = await subtle.decrypt({ name: "AES-GCM", iv }, key, data)
+  return new TextDecoder().decode(plain)
+}
+```
+
+- [ ] **Step 4: Run tests to confirm they pass**
+
+```bash
+npx jest __tests__/services/vault-crypto.test.ts
+```
+
+Expected: All passing.
+
+- [ ] **Step 5: TypeScript compile check**
+
+```bash
+npx tsc --noEmit
+```
+
+Expected: No errors.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add lib/services/vault-crypto.ts __tests__/services/vault-crypto.test.ts
+git commit -m "feat: add AES-GCM crypto layer matching LiveSync E2E format"
+```
+
+---
+
+### Task 5: Vault Reader
 
 **Files:**
 - Create: `lib/services/vault.ts`
 - Create: `__tests__/services/vault.test.ts`
 
-- [ ] **Step 1: Write failing tests for vault reader functions**
+- [ ] **Step 1: Write failing tests**
 
 Create `__tests__/services/vault.test.ts`:
 
 ```ts
 import { getVaultConfig, isVaultAccessible, searchVault, getNoteContent } from "@/lib/services/vault"
 import { prisma } from "@/lib/db"
-import * as fs from "node:fs/promises"
-
-jest.mock("node:fs/promises", () => ({
-  access: jest.fn(),
-  readFile: jest.fn(),
-  readdir: jest.fn(),
-  mkdir: jest.fn(),
-  writeFile: jest.fn(),
-}))
+import * as vaultCouch from "@/lib/services/vault-couch"
+import * as vaultCrypto from "@/lib/services/vault-crypto"
 
 jest.mock("@/lib/db", () => ({
-  prisma: {
-    vaultConfig: { findFirst: jest.fn() },
-    vaultNote: { upsert: jest.fn(), updateMany: jest.fn() },
-  },
+  prisma: { vaultConfig: { findFirst: jest.fn() } },
 }))
+jest.mock("@/lib/services/vault-couch")
+jest.mock("@/lib/services/vault-crypto")
 
-const mockFs = fs as jest.Mocked<typeof fs>
 const mockPrisma = prisma as jest.Mocked<typeof prisma>
-
-beforeEach(() => jest.clearAllMocks())
+const mockCouch = vaultCouch as jest.Mocked<typeof vaultCouch>
+const mockCrypto = vaultCrypto as jest.Mocked<typeof vaultCrypto>
 
 const fakeConfig = {
   id: "cfg1",
-  vaultPath: "/vault",
+  couchDbUrl: "http://localhost:5984",
+  couchDbDatabase: "obsidian",
+  couchDbUsername: "vaelerian",
+  couchDbPassword: "pass",
+  e2ePassphrase: "Wolverhampton",
   workdayCron: "0 * * * 1-5",
   weekendCron: "0 */4 * * 0,6",
   lastSyncAt: null,
+  lastSeq: "0",
   enabled: true,
   createdAt: new Date(),
   updatedAt: new Date(),
 }
 
+const fakeKey = {} as CryptoKey
+
+beforeEach(() => {
+  jest.clearAllMocks()
+  mockCrypto.deriveKey.mockResolvedValue(fakeKey)
+})
+
 describe("getVaultConfig", () => {
-  it("returns null when no config exists", async () => {
+  it("returns null when no config", async () => {
     mockPrisma.vaultConfig.findFirst.mockResolvedValue(null)
     expect(await getVaultConfig()).toBeNull()
   })
@@ -188,15 +614,15 @@ describe("isVaultAccessible", () => {
     expect(await isVaultAccessible()).toBe(false)
   })
 
-  it("returns true when vault path is accessible", async () => {
+  it("returns true when CouchDB is reachable", async () => {
     mockPrisma.vaultConfig.findFirst.mockResolvedValue(fakeConfig as any)
-    mockFs.access.mockResolvedValue(undefined)
+    mockCouch.couchDbAccessible.mockResolvedValue(true)
     expect(await isVaultAccessible()).toBe(true)
   })
 
-  it("returns false when vault path not accessible", async () => {
+  it("returns false when CouchDB unreachable", async () => {
     mockPrisma.vaultConfig.findFirst.mockResolvedValue(fakeConfig as any)
-    mockFs.access.mockRejectedValue(Object.assign(new Error("ENOENT"), { code: "ENOENT" }))
+    mockCouch.couchDbAccessible.mockResolvedValue(false)
     expect(await isVaultAccessible()).toBe(false)
   })
 })
@@ -209,73 +635,89 @@ describe("searchVault", () => {
 
   it("returns empty array when vault inaccessible", async () => {
     mockPrisma.vaultConfig.findFirst.mockResolvedValue(fakeConfig as any)
-    mockFs.access.mockRejectedValue(Object.assign(new Error("ENOENT"), { code: "ENOENT" }))
+    mockCouch.couchDbAccessible.mockResolvedValue(false)
     expect(await searchVault("query")).toEqual([])
   })
 
-  it("returns matching results with title, path, snippet", async () => {
+  it("returns matching notes after decryption", async () => {
     mockPrisma.vaultConfig.findFirst.mockResolvedValue(fakeConfig as any)
-    mockFs.access.mockResolvedValue(undefined)
-    mockFs.readdir.mockResolvedValue([
-      { name: "Note.md", isDirectory: () => false, isFile: () => true },
-    ] as any)
-    mockFs.readFile.mockResolvedValue("# Note Title\n\nHello query world" as any)
+    mockCouch.couchDbAccessible.mockResolvedValue(true)
+    mockCouch.couchAllDocs.mockResolvedValue({
+      rows: [{ id: "enc_id_1", key: "enc_id_1", value: { rev: "1-abc" }, doc: { _id: "enc_id_1", data: "enc_data_1", type: "newnote" } }],
+      total_rows: 1,
+      offset: 0,
+    })
+    // decrypt _id -> path, decrypt data -> content
+    mockCrypto.decryptString
+      .mockResolvedValueOnce("People/John Smith.md")
+      .mockResolvedValueOnce("# John Smith\n\nJohn discussed the query topic.")
     const results = await searchVault("query")
     expect(results).toHaveLength(1)
-    expect(results[0].title).toBe("Note Title")
-    expect(results[0].path).toBe("Note.md")
+    expect(results[0].path).toBe("People/John Smith.md")
+    expect(results[0].title).toBe("John Smith")
     expect(results[0].snippet).toContain("query")
   })
 
-  it("uses filename as title when no H1 present", async () => {
+  it("skips documents where ID decryption fails", async () => {
     mockPrisma.vaultConfig.findFirst.mockResolvedValue(fakeConfig as any)
-    mockFs.access.mockResolvedValue(undefined)
-    mockFs.readdir.mockResolvedValue([
-      { name: "My Note.md", isDirectory: () => false, isFile: () => true },
-    ] as any)
-    mockFs.readFile.mockResolvedValue("Some query content without heading" as any)
+    mockCouch.couchDbAccessible.mockResolvedValue(true)
+    mockCouch.couchAllDocs.mockResolvedValue({
+      rows: [{ id: "bad_id", key: "bad_id", value: { rev: "1-abc" }, doc: { _id: "bad_id", data: "x" } }],
+      total_rows: 1,
+      offset: 0,
+    })
+    mockCrypto.decryptString.mockRejectedValue(new Error("decryption failed"))
     const results = await searchVault("query")
-    expect(results[0].title).toBe("My Note")
+    expect(results).toEqual([])
   })
 
-  it("parses frontmatter fields", async () => {
+  it("skips non-.md paths", async () => {
     mockPrisma.vaultConfig.findFirst.mockResolvedValue(fakeConfig as any)
-    mockFs.access.mockResolvedValue(undefined)
-    mockFs.readdir.mockResolvedValue([
-      { name: "Note.md", isDirectory: () => false, isFile: () => true },
-    ] as any)
-    mockFs.readFile.mockResolvedValue(
-      "---\nprm_entity: contact\nprm_id: abc123\n---\n\n# Note\n\nquery here" as any
-    )
+    mockCouch.couchDbAccessible.mockResolvedValue(true)
+    mockCouch.couchAllDocs.mockResolvedValue({
+      rows: [{ id: "enc_id", key: "enc_id", value: { rev: "1-a" }, doc: { _id: "enc_id", data: "d" } }],
+      total_rows: 1,
+      offset: 0,
+    })
+    mockCrypto.decryptString.mockResolvedValueOnce(".obsidian/config")
     const results = await searchVault("query")
-    expect(results[0].frontmatter).toEqual(expect.objectContaining({
-      prm_entity: "contact",
-      prm_id: "abc123",
-    }))
+    expect(results).toEqual([])
+  })
+
+  it("uses filename as title when no H1", async () => {
+    mockPrisma.vaultConfig.findFirst.mockResolvedValue(fakeConfig as any)
+    mockCouch.couchDbAccessible.mockResolvedValue(true)
+    mockCouch.couchAllDocs.mockResolvedValue({
+      rows: [{ id: "enc", key: "enc", value: { rev: "1-a" }, doc: { _id: "enc", data: "d" } }],
+      total_rows: 1,
+      offset: 0,
+    })
+    mockCrypto.decryptString
+      .mockResolvedValueOnce("Notes/My Note.md")
+      .mockResolvedValueOnce("Some query content without heading")
+    const results = await searchVault("query")
+    expect(results[0].title).toBe("My Note")
   })
 })
 
 describe("getNoteContent", () => {
+  it("returns decrypted content", async () => {
+    mockPrisma.vaultConfig.findFirst.mockResolvedValue(fakeConfig as any)
+    mockCouch.couchGet.mockResolvedValue({ _id: "enc_id", data: "enc_data" })
+    mockCrypto.decryptString.mockResolvedValue("# Note content")
+    const result = await getNoteContent("enc_id")
+    expect(result).toBe("# Note content")
+  })
+
+  it("returns null when document not found", async () => {
+    mockPrisma.vaultConfig.findFirst.mockResolvedValue(fakeConfig as any)
+    mockCouch.couchGet.mockRejectedValue(Object.assign(new Error("not found"), { status: 404 }))
+    expect(await getNoteContent("missing")).toBeNull()
+  })
+
   it("returns null when no config", async () => {
     mockPrisma.vaultConfig.findFirst.mockResolvedValue(null)
-    expect(await getNoteContent("Note.md")).toBeNull()
-  })
-
-  it("returns null when path traversal detected", async () => {
-    mockPrisma.vaultConfig.findFirst.mockResolvedValue(fakeConfig as any)
-    expect(await getNoteContent("../../etc/passwd")).toBeNull()
-  })
-
-  it("returns content when file exists", async () => {
-    mockPrisma.vaultConfig.findFirst.mockResolvedValue(fakeConfig as any)
-    mockFs.readFile.mockResolvedValue("# Hello\n\ncontent here" as any)
-    expect(await getNoteContent("Note.md")).toBe("# Hello\n\ncontent here")
-  })
-
-  it("returns null when file not found", async () => {
-    mockPrisma.vaultConfig.findFirst.mockResolvedValue(fakeConfig as any)
-    mockFs.readFile.mockRejectedValue(Object.assign(new Error("ENOENT"), { code: "ENOENT" }))
-    expect(await getNoteContent("missing.md")).toBeNull()
+    expect(await getNoteContent("any")).toBeNull()
   })
 })
 ```
@@ -283,128 +725,125 @@ describe("getNoteContent", () => {
 - [ ] **Step 2: Run tests to confirm they fail**
 
 ```bash
-npx jest __tests__/services/vault.test.ts --no-coverage
+npx jest __tests__/services/vault.test.ts
 ```
 
-Expected: FAIL - "Cannot find module '@/lib/services/vault'"
+Expected: FAIL (module not found).
 
-- [ ] **Step 3: Implement vault reader functions in lib/services/vault.ts**
+- [ ] **Step 3: Implement vault.ts (reader portion)**
+
+Create `lib/services/vault.ts`:
 
 ```ts
 import { prisma } from "@/lib/db"
-import { access, readFile, readdir, mkdir, writeFile } from "node:fs/promises"
-import path from "node:path"
+import { couchAllDocs, couchDbAccessible, couchGet } from "@/lib/services/vault-couch"
+import { deriveKey, decryptString } from "@/lib/services/vault-crypto"
+import type { VaultConfig } from "@/app/generated/prisma/client"
 
-export interface VaultSearchResult {
-  path: string
-  title: string
-  snippet: string
-  frontmatter: Record<string, string>
-}
-
-export async function getVaultConfig() {
+export async function getVaultConfig(): Promise<VaultConfig | null> {
   return prisma.vaultConfig.findFirst()
 }
 
 export async function isVaultAccessible(): Promise<boolean> {
   const config = await getVaultConfig()
   if (!config) return false
-  try {
-    await access(config.vaultPath)
-    return true
-  } catch {
-    return false
-  }
+  return couchDbAccessible(config)
 }
 
-function parseFrontmatter(content: string): Record<string, string> {
-  const match = content.match(/^---\n([\s\S]*?)\n---/)
-  if (!match) return {}
-  const result: Record<string, string> = {}
+export interface VaultSearchResult {
+  couchDbId: string
+  path: string
+  title: string
+  snippet: string
+  frontmatter: Record<string, unknown>
+}
+
+function parseFrontmatter(content: string): { frontmatter: Record<string, unknown>; body: string } {
+  const match = content.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/)
+  if (!match) return { frontmatter: {}, body: content }
+  const frontmatter: Record<string, unknown> = {}
   for (const line of match[1].split("\n")) {
     const colonIdx = line.indexOf(":")
-    if (colonIdx !== -1) {
-      result[line.slice(0, colonIdx).trim()] = line.slice(colonIdx + 1).trim()
-    }
+    if (colonIdx === -1) continue
+    const key = line.slice(0, colonIdx).trim()
+    const value = line.slice(colonIdx + 1).trim()
+    frontmatter[key] = value
   }
-  return result
+  return { frontmatter, body: match[2] }
 }
 
-function extractTitle(content: string, filePath: string): string {
-  const match = content.match(/^#\s+(.+)$/m)
-  if (match) return match[1].trim()
-  return path.basename(filePath, ".md")
+function extractTitle(content: string, path: string): string {
+  const h1 = content.match(/^#\s+(.+)$/m)
+  if (h1) return h1[1].trim()
+  const filename = path.split("/").pop() ?? path
+  return filename.replace(/\.md$/, "")
 }
 
 function extractSnippet(content: string, query: string): string {
-  const lc = content.toLowerCase()
-  const idx = lc.indexOf(query.toLowerCase())
+  const lower = content.toLowerCase()
+  const idx = lower.indexOf(query.toLowerCase())
   if (idx === -1) return content.slice(0, 200)
-  const start = Math.max(0, idx - 50)
-  const end = Math.min(content.length, idx + 150)
-  const snippet = content.slice(start, end)
-  return (start > 0 ? "..." : "") + snippet + (end < content.length ? "..." : "")
-}
-
-async function walkDir(dir: string): Promise<string[]> {
-  const entries = await readdir(dir, { withFileTypes: true })
-  const files: string[] = []
-  for (const entry of entries) {
-    const full = path.join(dir, entry.name)
-    if (entry.isDirectory()) {
-      files.push(...(await walkDir(full)))
-    } else if (entry.isFile() && entry.name.endsWith(".md")) {
-      files.push(full)
-    }
-  }
-  return files
+  const start = Math.max(0, idx - 80)
+  const end = Math.min(content.length, idx + 120)
+  return (start > 0 ? "..." : "") + content.slice(start, end) + (end < content.length ? "..." : "")
 }
 
 export async function searchVault(query: string, limit = 10): Promise<VaultSearchResult[]> {
   const config = await getVaultConfig()
   if (!config) return []
-  try {
-    await access(config.vaultPath)
-  } catch {
-    return []
-  }
+  if (!(await couchDbAccessible(config))) return []
 
-  const files = await walkDir(config.vaultPath)
+  const key = await deriveKey(config.e2ePassphrase)
+  const allDocs = await couchAllDocs(config, { include_docs: true })
   const results: VaultSearchResult[] = []
 
-  for (const filePath of files) {
+  for (const row of allDocs.rows) {
     if (results.length >= limit) break
+    const doc = row.doc as Record<string, unknown> | undefined
+    if (!doc) continue
+
+    let path: string
     try {
-      const content = await readFile(filePath, "utf-8")
-      if (!content.toLowerCase().includes(query.toLowerCase())) continue
-      const relPath = path.relative(config.vaultPath, filePath).replace(/\\/g, "/")
-      results.push({
-        path: relPath,
-        title: extractTitle(content, filePath),
-        snippet: extractSnippet(content, query),
-        frontmatter: parseFrontmatter(content),
-      })
+      path = await decryptString(key, row.id)
     } catch {
-      // skip unreadable files
+      continue // not a LiveSync note document
     }
+
+    if (!path.endsWith(".md")) continue
+
+    const rawData = doc.data as string | undefined
+    if (!rawData) continue
+
+    let content: string
+    try {
+      content = await decryptString(key, rawData)
+    } catch {
+      continue
+    }
+
+    if (!content.toLowerCase().includes(query.toLowerCase())) continue
+
+    const { frontmatter, body } = parseFrontmatter(content)
+    results.push({
+      couchDbId: row.id,
+      path,
+      title: extractTitle(body, path),
+      snippet: extractSnippet(content, query),
+      frontmatter,
+    })
   }
 
   return results
 }
 
-function isPathSafe(vaultRoot: string, resolvedPath: string): boolean {
-  const rel = path.relative(vaultRoot, resolvedPath)
-  return !rel.startsWith("..") && !path.isAbsolute(rel)
-}
-
-export async function getNoteContent(relativePath: string): Promise<string | null> {
+export async function getNoteContent(couchDbId: string): Promise<string | null> {
   const config = await getVaultConfig()
   if (!config) return null
-  const vaultRoot = path.resolve(config.vaultPath)
-  const resolved = path.resolve(vaultRoot, relativePath)
-  if (!isPathSafe(vaultRoot, resolved)) return null
+
   try {
-    return await readFile(resolved, "utf-8")
+    const doc = await couchGet(config, `/${config.couchDbDatabase}/${encodeURIComponent(couchDbId)}`) as Record<string, unknown>
+    const key = await deriveKey(config.e2ePassphrase)
+    return decryptString(key, doc.data as string)
   } catch {
     return null
   }
@@ -414,242 +853,217 @@ export async function getNoteContent(relativePath: string): Promise<string | nul
 - [ ] **Step 4: Run tests to confirm they pass**
 
 ```bash
-npx jest __tests__/services/vault.test.ts --no-coverage
+npx jest __tests__/services/vault.test.ts
 ```
 
-Expected: PASS - all 11 tests pass.
+Expected: All passing.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: TypeScript compile check**
+
+```bash
+npx tsc --noEmit
+```
+
+Expected: No errors.
+
+- [ ] **Step 6: Commit**
 
 ```bash
 git add lib/services/vault.ts __tests__/services/vault.test.ts
-git commit -m "feat: add vault reader service (getVaultConfig, searchVault, getNoteContent)"
+git commit -m "feat: add vault reader service with CouchDB and E2E decryption"
 ```
 
 ---
 
-### Task 3: Note Writer
+### Task 6: Note Writer
 
 **Files:**
-- Modify: `lib/services/vault.ts` (append createNote and updateNote)
-- Modify: `__tests__/services/vault.test.ts` (append write tests)
+- Modify: `lib/services/vault.ts`
+- Modify: `__tests__/services/vault.test.ts`
 
-- [ ] **Step 1: Append write operation tests to __tests__/services/vault.test.ts**
+- [ ] **Step 1: Write failing tests for createNote and updateNote**
 
-Append to the end of `__tests__/services/vault.test.ts`:
+Add to `__tests__/services/vault.test.ts`:
 
 ```ts
 import { createNote, updateNote } from "@/lib/services/vault"
+// (add prisma.vaultNote mock)
+// In the existing jest.mock("@/lib/db") block, add:
+//   vaultNote: { upsert: jest.fn(), findFirst: jest.fn(), updateMany: jest.fn() }
 
 describe("createNote", () => {
-  it("throws on invalid filename (path separators)", async () => {
+  it("encrypts path and content, writes to CouchDB, upserts VaultNote", async () => {
     mockPrisma.vaultConfig.findFirst.mockResolvedValue(fakeConfig as any)
-    await expect(createNote("../bad/path", "contact", "id1", "content")).rejects.toThrow("Invalid filename")
-  })
-
-  it("throws on invalid filename (special chars)", async () => {
-    mockPrisma.vaultConfig.findFirst.mockResolvedValue(fakeConfig as any)
-    await expect(createNote("note<>.md", "contact", "id1", "content")).rejects.toThrow("Invalid filename")
-  })
-
-  it("throws when vault not configured", async () => {
-    mockPrisma.vaultConfig.findFirst.mockResolvedValue(null)
-    await expect(createNote("John Smith", "contact", "id1", "content")).rejects.toThrow("Vault not configured")
-  })
-
-  it("throws FILE_EXISTS when note already exists", async () => {
-    mockPrisma.vaultConfig.findFirst.mockResolvedValue(fakeConfig as any)
-    mockFs.mkdir.mockResolvedValue(undefined as any)
-    mockFs.access.mockResolvedValue(undefined) // file exists
-    await expect(createNote("John Smith", "contact", "id1", "content")).rejects.toThrow("FILE_EXISTS")
-  })
-
-  it("creates note with frontmatter and inserts VaultNote row", async () => {
-    mockPrisma.vaultConfig.findFirst.mockResolvedValue(fakeConfig as any)
-    mockFs.mkdir.mockResolvedValue(undefined as any)
-    mockFs.access.mockRejectedValue(Object.assign(new Error("ENOENT"), { code: "ENOENT" }))
-    mockFs.writeFile.mockResolvedValue(undefined)
+    mockCrypto.encryptString
+      .mockResolvedValueOnce("enc_path")   // encrypted notePath -> couchDbId
+      .mockResolvedValueOnce("enc_content") // encrypted content
+    mockCouch.couchPut.mockResolvedValue({ ok: true, id: "enc_path", rev: "1-abc" })
     mockPrisma.vaultNote.upsert.mockResolvedValue({} as any)
 
-    const result = await createNote("John Smith", "contact", "id1", "# John Smith\n\nContent")
-    expect(result).toBe("Holly/John Smith.md")
-    const written = (mockFs.writeFile as jest.Mock).mock.calls[0][1] as string
-    expect(written).toContain("prm_entity: contact")
-    expect(written).toContain("prm_id: id1")
-    expect(written).toContain("# John Smith")
-    expect(mockPrisma.vaultNote.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        create: expect.objectContaining({ entityType: "contact", entityId: "id1", vaultPath: "Holly/John Smith.md" }),
-      })
+    const result = await createNote("Holly/John.md", "contact", "uuid1", "# John\n\nContent")
+    expect(result).toBe("enc_path")
+    expect(mockCouch.couchPut).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.stringContaining("enc_path"),
+      expect.objectContaining({ data: "enc_content", encrypted: true })
     )
+    expect(mockPrisma.vaultNote.upsert).toHaveBeenCalled()
+  })
+
+  it("returns null when no config", async () => {
+    mockPrisma.vaultConfig.findFirst.mockResolvedValue(null)
+    expect(await createNote("Holly/Note.md", "contact", "id1", "content")).toBeNull()
+  })
+
+  it("returns null for invalid notePath (path traversal)", async () => {
+    mockPrisma.vaultConfig.findFirst.mockResolvedValue(fakeConfig as any)
+    expect(await createNote("../../etc/passwd", "contact", "id1", "x")).toBeNull()
   })
 })
 
 describe("updateNote", () => {
-  it("throws when vault not configured", async () => {
+  it("fetches, merges, encrypts, and puts updated content", async () => {
+    mockPrisma.vaultConfig.findFirst.mockResolvedValue(fakeConfig as any)
+    mockCouch.couchGet.mockResolvedValue({
+      _id: "enc_id",
+      _rev: "2-abc",
+      data: "enc_old",
+      type: "newnote",
+      mtime: 1000,
+    })
+    mockCrypto.decryptString.mockResolvedValue("---\nprm_entity: contact\nprm_id: u1\n---\n\nOld body")
+    mockCrypto.encryptString.mockResolvedValue("enc_new")
+    mockCouch.couchPut.mockResolvedValue({ ok: true })
+    mockPrisma.vaultNote.updateMany = jest.fn().mockResolvedValue({ count: 1 })
+
+    await updateNote("enc_id", "New body content")
+    expect(mockCouch.couchPut).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.stringContaining("enc_id"),
+      expect.objectContaining({ _rev: "2-abc", data: "enc_new" })
+    )
+  })
+
+  it("does nothing when no config", async () => {
     mockPrisma.vaultConfig.findFirst.mockResolvedValue(null)
-    await expect(updateNote("Holly/Note.md", "new content")).rejects.toThrow("Vault not configured")
-  })
-
-  it("throws NOTE_NOT_FOUND when file missing", async () => {
-    mockPrisma.vaultConfig.findFirst.mockResolvedValue(fakeConfig as any)
-    mockFs.readFile.mockRejectedValue(Object.assign(new Error("ENOENT"), { code: "ENOENT" }))
-    await expect(updateNote("Holly/Note.md", "new content")).rejects.toThrow("NOTE_NOT_FOUND")
-  })
-
-  it("throws on path traversal attempt", async () => {
-    mockPrisma.vaultConfig.findFirst.mockResolvedValue(fakeConfig as any)
-    await expect(updateNote("../../etc/passwd", "content")).rejects.toThrow("Path traversal")
-  })
-
-  it("preserves frontmatter and adds last_updated when frontmatter exists", async () => {
-    mockPrisma.vaultConfig.findFirst.mockResolvedValue(fakeConfig as any)
-    mockFs.readFile.mockResolvedValue(
-      "---\nprm_entity: contact\nprm_id: id1\n---\n\nOld content" as any
-    )
-    mockFs.writeFile.mockResolvedValue(undefined)
-    mockPrisma.vaultNote.updateMany.mockResolvedValue({ count: 1 } as any)
-
-    await updateNote("Holly/Note.md", "New content")
-
-    const written = (mockFs.writeFile as jest.Mock).mock.calls[0][1] as string
-    expect(written).toContain("prm_entity: contact")
-    expect(written).toContain("last_updated:")
-    expect(written).toContain("New content")
-    expect(mockPrisma.vaultNote.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { vaultPath: "Holly/Note.md" } })
-    )
-  })
-
-  it("updates existing last_updated when already in frontmatter", async () => {
-    mockPrisma.vaultConfig.findFirst.mockResolvedValue(fakeConfig as any)
-    mockFs.readFile.mockResolvedValue(
-      "---\nprm_entity: contact\nlast_updated: 2025-01-01\n---\n\nOld content" as any
-    )
-    mockFs.writeFile.mockResolvedValue(undefined)
-    mockPrisma.vaultNote.updateMany.mockResolvedValue({ count: 0 } as any)
-
-    await updateNote("Holly/Note.md", "New content")
-
-    const written = (mockFs.writeFile as jest.Mock).mock.calls[0][1] as string
-    expect(written).not.toContain("2025-01-01")
-    expect(written).toContain("last_updated: " + new Date().toISOString().slice(0, 10))
+    await updateNote("enc_id", "content")
+    expect(mockCouch.couchPut).not.toHaveBeenCalled()
   })
 })
 ```
 
-- [ ] **Step 2: Run tests to confirm new tests fail**
+- [ ] **Step 2: Run tests to confirm they fail**
 
 ```bash
-npx jest __tests__/services/vault.test.ts --no-coverage
+npx jest __tests__/services/vault.test.ts --testNamePattern="createNote|updateNote"
 ```
 
-Expected: existing tests PASS, new createNote/updateNote tests FAIL - "createNote is not a function"
+Expected: FAIL (functions not exported).
 
-- [ ] **Step 3: Implement createNote and updateNote - append to lib/services/vault.ts**
+- [ ] **Step 3: Implement createNote and updateNote in vault.ts**
+
+Add to `lib/services/vault.ts`:
 
 ```ts
-const VALID_FILENAME = /^[a-zA-Z0-9 _-]+$/
+import { couchGet, couchPut } from "@/lib/services/vault-couch"
+import { encryptString } from "@/lib/services/vault-crypto"
+
+const VALID_NOTE_PATH = /^[a-zA-Z0-9 \-_/]+\.md$/
 
 export async function createNote(
-  filename: string,
+  notePath: string,
   entityType: string,
   entityId: string,
   content: string
-): Promise<string> {
-  if (!VALID_FILENAME.test(filename)) {
-    throw new Error(`Invalid filename: ${filename}`)
-  }
+): Promise<string | null> {
+  if (!VALID_NOTE_PATH.test(notePath) || notePath.includes("..")) return null
+
   const config = await getVaultConfig()
-  if (!config) throw new Error("Vault not configured")
+  if (!config) return null
 
-  const hollyDir = path.join(config.vaultPath, "Holly")
-  await mkdir(hollyDir, { recursive: true })
+  const key = await deriveKey(config.e2ePassphrase)
+  const now = Date.now()
+  const frontmatter = `---\nprm_entity: ${entityType}\nprm_id: ${entityId}\ncreated: ${new Date().toISOString().slice(0, 10)}\n---\n\n`
+  const fullContent = frontmatter + content
 
-  const filePath = path.join(hollyDir, `${filename}.md`)
+  const couchDbId = await encryptString(key, notePath)
+  const encryptedContent = await encryptString(key, fullContent)
 
-  try {
-    await access(filePath)
-    throw new Error("FILE_EXISTS")
-  } catch (e) {
-    if ((e as NodeJS.ErrnoException).code !== "ENOENT") throw e
-  }
-
-  const today = new Date().toISOString().slice(0, 10)
-  const frontmatter = `---\nprm_entity: ${entityType}\nprm_id: ${entityId}\ncreated: ${today}\n---\n\n`
-
-  await writeFile(filePath, frontmatter + content, "utf-8")
-
-  const relativePath = `Holly/${filename}.md`
+  await couchPut(config, `/${config.couchDbDatabase}/${encodeURIComponent(couchDbId)}`, {
+    _id: couchDbId,
+    data: encryptedContent,
+    type: "newnote",
+    encrypted: true,
+    mtime: now,
+    ctime: now,
+    size: Buffer.byteLength(fullContent, "utf8"),
+    children: [],
+  })
 
   await prisma.vaultNote.upsert({
     where: { entityType_entityId: { entityType, entityId } },
-    create: { entityType, entityId, vaultPath: relativePath, lastSyncAt: new Date() },
-    update: { vaultPath: relativePath, lastSyncAt: new Date() },
+    create: { entityType, entityId, couchDbId, notePath, lastSyncAt: new Date() },
+    update: { couchDbId, notePath, lastSyncAt: new Date() },
   })
 
-  return relativePath
+  return couchDbId
 }
 
-export async function updateNote(relativePath: string, content: string): Promise<void> {
+export async function updateNote(couchDbId: string, newBody: string): Promise<void> {
   const config = await getVaultConfig()
-  if (!config) throw new Error("Vault not configured")
+  if (!config) return
 
-  const vaultRoot = path.resolve(config.vaultPath)
-  const resolved = path.resolve(vaultRoot, relativePath)
-  if (!isPathSafe(vaultRoot, resolved)) throw new Error("Path traversal detected")
+  const doc = await couchGet(config, `/${config.couchDbDatabase}/${encodeURIComponent(couchDbId)}`) as Record<string, unknown>
+  const key = await deriveKey(config.e2ePassphrase)
+  const existing = await decryptString(key, doc.data as string)
 
-  let existing: string
-  try {
-    existing = await readFile(resolved, "utf-8")
-  } catch {
-    throw new Error("NOTE_NOT_FOUND")
-  }
+  // Preserve frontmatter, replace body, update last_updated
+  const { frontmatter } = parseFrontmatter(existing)
+  frontmatter.last_updated = new Date().toISOString().slice(0, 10)
+  const fmLines = Object.entries(frontmatter).map(([k, v]) => `${k}: ${v}`).join("\n")
+  const updated = `---\n${fmLines}\n---\n\n${newBody}`
 
-  const today = new Date().toISOString().slice(0, 10)
-  const fmMatch = existing.match(/^(---\n[\s\S]*?\n---\n)/)
+  const encryptedContent = await encryptString(key, updated)
+  await couchPut(config, `/${config.couchDbDatabase}/${encodeURIComponent(couchDbId)}`, {
+    ...doc,
+    data: encryptedContent,
+    mtime: Date.now(),
+    size: Buffer.byteLength(updated, "utf8"),
+  })
 
-  let newContent: string
-  if (fmMatch) {
-    let fm = fmMatch[1]
-    if (/last_updated:/.test(fm)) {
-      fm = fm.replace(/last_updated: .+\n/, `last_updated: ${today}\n`)
-    } else {
-      fm = fm.replace(/---\n$/, `last_updated: ${today}\n---\n`)
-    }
-    newContent = fm + "\n" + content
-  } else {
-    newContent = content
-  }
-
-  await writeFile(resolved, newContent, "utf-8")
-
-  const normalizedPath = relativePath.replace(/\\/g, "/")
   await prisma.vaultNote.updateMany({
-    where: { vaultPath: normalizedPath },
+    where: { couchDbId },
     data: { lastSyncAt: new Date() },
   })
 }
 ```
 
-- [ ] **Step 4: Run tests to confirm all pass**
+- [ ] **Step 4: Run all vault tests**
 
 ```bash
-npx jest __tests__/services/vault.test.ts --no-coverage
+npx jest __tests__/services/vault.test.ts
 ```
 
-Expected: PASS - all 19 tests pass.
+Expected: All passing.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: TypeScript compile check**
+
+```bash
+npx tsc --noEmit
+```
+
+Expected: No errors.
+
+- [ ] **Step 6: Commit**
 
 ```bash
 git add lib/services/vault.ts __tests__/services/vault.test.ts
-git commit -m "feat: add note writer to vault service (createNote, updateNote)"
+git commit -m "feat: add vault note writer with E2E encryption"
 ```
 
 ---
 
-### Task 4: Vault Sync Service
+### Task 7: Sync Service
 
 **Files:**
 - Create: `lib/services/vault-sync.ts`
@@ -660,163 +1074,104 @@ git commit -m "feat: add note writer to vault service (createNote, updateNote)"
 Create `__tests__/services/vault-sync.test.ts`:
 
 ```ts
-import { shouldRunSync, runVaultSync } from "@/lib/services/vault-sync"
+import { runVaultSync, shouldRunSync } from "@/lib/services/vault-sync"
+import * as vault from "@/lib/services/vault"
+import * as vaultCouch from "@/lib/services/vault-couch"
+import * as vaultCrypto from "@/lib/services/vault-crypto"
 import { prisma } from "@/lib/db"
 
-jest.mock("@/lib/db", () => ({
-  prisma: {
-    vaultNote: { findMany: jest.fn() },
-    vaultConfig: { update: jest.fn() },
-  },
-}))
+jest.mock("@/lib/services/vault")
+jest.mock("@/lib/services/vault-couch")
+jest.mock("@/lib/services/vault-crypto")
+jest.mock("@/lib/db", () => ({ prisma: { vaultConfig: { update: jest.fn() }, vaultNote: { findMany: jest.fn() } } }))
 
-jest.mock("@/lib/services/vault", () => ({
-  getVaultConfig: jest.fn(),
-  getNoteContent: jest.fn(),
-}))
-
-import { getVaultConfig, getNoteContent } from "@/lib/services/vault"
-const mockGetVaultConfig = getVaultConfig as jest.MockedFunction<typeof getVaultConfig>
-const mockGetNoteContent = getNoteContent as jest.MockedFunction<typeof getNoteContent>
+const mockVault = vault as jest.Mocked<typeof vault>
+const mockCouch = vaultCouch as jest.Mocked<typeof vaultCouch>
+const mockCrypto = vaultCrypto as jest.Mocked<typeof vaultCrypto>
 const mockPrisma = prisma as jest.Mocked<typeof prisma>
+
+const fakeConfig = {
+  id: "cfg1",
+  enabled: true,
+  lastSyncAt: new Date("2026-01-01T00:00:00Z"),
+  lastSeq: "5-abc",
+  workdayCron: "0 * * * 1-5",
+  weekendCron: "0 */4 * * 0,6",
+  e2ePassphrase: "Wolverhampton",
+} as any
 
 beforeEach(() => jest.clearAllMocks())
 
-const baseConfig = {
-  id: "cfg1",
-  vaultPath: "/vault",
-  workdayCron: "0 * * * 1-5",
-  weekendCron: "0 * * * 0,6",
-  lastSyncAt: null as Date | null,
-  enabled: true,
-  createdAt: new Date(),
-  updatedAt: new Date(),
-}
-
 describe("shouldRunSync", () => {
   it("returns false when disabled", () => {
-    expect(shouldRunSync({ ...baseConfig, enabled: false })).toBe(false)
+    expect(shouldRunSync({ ...fakeConfig, enabled: false })).toBe(false)
   })
 
-  it("returns true when never synced", () => {
-    expect(shouldRunSync({ ...baseConfig, lastSyncAt: null })).toBe(true)
+  it("returns false when lastSyncAt is recent (within cron interval)", () => {
+    const recentSync = new Date(Date.now() - 30 * 60 * 1000) // 30 min ago
+    expect(shouldRunSync({ ...fakeConfig, lastSyncAt: recentSync })).toBe(false)
   })
 
-  it("returns true when hourly interval has elapsed (2 hours ago)", () => {
-    const config = {
-      ...baseConfig,
-      workdayCron: "0 * * * 1-5",
-      weekendCron: "0 * * * 0,6",
-      lastSyncAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
-    }
-    expect(shouldRunSync(config)).toBe(true)
+  it("returns true when lastSyncAt is old enough", () => {
+    const oldSync = new Date(Date.now() - 2 * 60 * 60 * 1000) // 2 hours ago
+    expect(shouldRunSync({ ...fakeConfig, lastSyncAt: oldSync })).toBe(true)
   })
 
-  it("returns false when hourly interval has not elapsed (30 min ago)", () => {
-    const config = {
-      ...baseConfig,
-      workdayCron: "0 * * * 1-5",
-      weekendCron: "0 * * * 0,6",
-      lastSyncAt: new Date(Date.now() - 30 * 60 * 1000),
-    }
-    expect(shouldRunSync(config)).toBe(false)
-  })
-
-  it("uses 4-hour interval for */4 cron", () => {
-    const config = {
-      ...baseConfig,
-      workdayCron: "0 */4 * * 1-5",
-      weekendCron: "0 */4 * * 0,6",
-      lastSyncAt: new Date(Date.now() - 3 * 60 * 60 * 1000),
-    }
-    expect(shouldRunSync(config)).toBe(false)
+  it("returns true when lastSyncAt is null", () => {
+    expect(shouldRunSync({ ...fakeConfig, lastSyncAt: null })).toBe(true)
   })
 })
 
 describe("runVaultSync", () => {
-  it("returns empty result when no config", async () => {
-    mockGetVaultConfig.mockResolvedValue(null)
+  it("returns early when no config", async () => {
+    mockVault.getVaultConfig.mockResolvedValue(null)
+    const result = await runVaultSync()
+    expect(result).toEqual({ updatedNotes: [], errors: [] })
+    expect(mockCouch.couchChanges).not.toHaveBeenCalled()
+  })
+
+  it("returns early when disabled", async () => {
+    mockVault.getVaultConfig.mockResolvedValue({ ...fakeConfig, enabled: false })
     const result = await runVaultSync()
     expect(result).toEqual({ updatedNotes: [], errors: [] })
   })
 
-  it("returns empty result when no vault notes", async () => {
-    mockGetVaultConfig.mockResolvedValue(baseConfig as any)
+  it("returns changed notes from _changes feed", async () => {
+    mockVault.getVaultConfig.mockResolvedValue(fakeConfig)
+    mockCouch.couchDbAccessible.mockResolvedValue(true)
+    mockCrypto.deriveKey.mockResolvedValue({} as CryptoKey)
+    mockCouch.couchChanges.mockResolvedValue({
+      results: [{ id: "enc_id", seq: "6-xyz", doc: { _id: "enc_id", data: "enc_data", type: "newnote" } }],
+      last_seq: "6-xyz",
+    })
+    mockCrypto.decryptString
+      .mockResolvedValueOnce("People/Jane.md")
+      .mockResolvedValueOnce("# Jane\n\nContent about Jane")
     mockPrisma.vaultNote.findMany.mockResolvedValue([])
-    mockPrisma.vaultConfig.update.mockResolvedValue({} as any)
-    const result = await runVaultSync()
-    expect(result.updatedNotes).toHaveLength(0)
-    expect(result.errors).toHaveLength(0)
-    expect(mockPrisma.vaultConfig.update).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: "cfg1" } })
-    )
-  })
-
-  it("adds note to updatedNotes when last_updated is after lastSyncAt", async () => {
-    mockGetVaultConfig.mockResolvedValue(baseConfig as any)
-    const pastSync = new Date(Date.now() - 2 * 60 * 60 * 1000)
-    mockPrisma.vaultNote.findMany.mockResolvedValue([
-      {
-        id: "n1",
-        entityType: "contact",
-        entityId: "c1",
-        vaultPath: "Holly/John.md",
-        lastSyncAt: pastSync,
-        createdAt: new Date(),
-      },
-    ] as any)
-    const today = new Date().toISOString().slice(0, 10)
-    mockGetNoteContent.mockResolvedValue(
-      `---\nprm_entity: contact\nprm_id: c1\nlast_updated: ${today}\n---\n\n# John\n\nContent`
-    )
-    mockPrisma.vaultConfig.update.mockResolvedValue({} as any)
+    mockPrisma.vaultConfig.update.mockResolvedValue(fakeConfig)
 
     const result = await runVaultSync()
     expect(result.updatedNotes).toHaveLength(1)
-    expect(result.updatedNotes[0].path).toBe("Holly/John.md")
-    expect(result.errors).toHaveLength(0)
+    expect(result.updatedNotes[0].path).toBe("People/Jane.md")
+    expect(mockPrisma.vaultConfig.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ lastSeq: "6-xyz" }) })
+    )
   })
 
-  it("does not add note to updatedNotes when last_updated is before lastSyncAt", async () => {
-    mockGetVaultConfig.mockResolvedValue(baseConfig as any)
-    const recentSync = new Date()
-    mockPrisma.vaultNote.findMany.mockResolvedValue([
-      {
-        id: "n1",
-        entityType: "contact",
-        entityId: "c1",
-        vaultPath: "Holly/John.md",
-        lastSyncAt: recentSync,
-        createdAt: new Date(),
-      },
-    ] as any)
-    mockGetNoteContent.mockResolvedValue(
-      "---\nprm_entity: contact\nprm_id: c1\nlast_updated: 2026-01-01\n---\n\n# John\n\nContent"
-    )
-    mockPrisma.vaultConfig.update.mockResolvedValue({} as any)
+  it("skips documents where decryption fails", async () => {
+    mockVault.getVaultConfig.mockResolvedValue(fakeConfig)
+    mockCouch.couchDbAccessible.mockResolvedValue(true)
+    mockCrypto.deriveKey.mockResolvedValue({} as CryptoKey)
+    mockCouch.couchChanges.mockResolvedValue({
+      results: [{ id: "bad_enc", seq: "6-x", doc: { _id: "bad_enc", data: "garbage" } }],
+      last_seq: "6-x",
+    })
+    mockCrypto.decryptString.mockRejectedValue(new Error("decryption failed"))
+    mockPrisma.vaultNote.findMany.mockResolvedValue([])
+    mockPrisma.vaultConfig.update.mockResolvedValue(fakeConfig)
 
     const result = await runVaultSync()
     expect(result.updatedNotes).toHaveLength(0)
-  })
-
-  it("adds error when note content not found", async () => {
-    mockGetVaultConfig.mockResolvedValue(baseConfig as any)
-    mockPrisma.vaultNote.findMany.mockResolvedValue([
-      {
-        id: "n1",
-        entityType: "contact",
-        entityId: "c1",
-        vaultPath: "Holly/Gone.md",
-        lastSyncAt: new Date(),
-        createdAt: new Date(),
-      },
-    ] as any)
-    mockGetNoteContent.mockResolvedValue(null)
-    mockPrisma.vaultConfig.update.mockResolvedValue({} as any)
-
-    const result = await runVaultSync()
-    expect(result.errors).toHaveLength(1)
-    expect(result.errors[0]).toContain("Holly/Gone.md")
   })
 })
 ```
@@ -824,267 +1179,438 @@ describe("runVaultSync", () => {
 - [ ] **Step 2: Run tests to confirm they fail**
 
 ```bash
-npx jest __tests__/services/vault-sync.test.ts --no-coverage
+npx jest __tests__/services/vault-sync.test.ts
 ```
 
-Expected: FAIL - "Cannot find module '@/lib/services/vault-sync'"
+Expected: FAIL.
 
-- [ ] **Step 3: Implement lib/services/vault-sync.ts**
+- [ ] **Step 3: Implement vault-sync.ts**
+
+Create `lib/services/vault-sync.ts`:
 
 ```ts
 import { prisma } from "@/lib/db"
-import { getVaultConfig, getNoteContent, VaultSearchResult } from "./vault"
+import { getVaultConfig, isVaultAccessible, VaultSearchResult, parseFrontmatter, extractTitle, extractSnippet } from "@/lib/services/vault"
+import { couchChanges, couchDbAccessible } from "@/lib/services/vault-couch"
+import { deriveKey, decryptString } from "@/lib/services/vault-crypto"
+import type { VaultConfig } from "@/app/generated/prisma/client"
 
 export interface VaultSyncResult {
   updatedNotes: VaultSearchResult[]
   errors: string[]
 }
 
-function cronToIntervalMs(cron: string): number {
-  const parts = cron.split(" ")
-  const hourField = parts[1] ?? "*"
-  if (hourField === "*") return 60 * 60 * 1000
-  const stepMatch = hourField.match(/^\*\/(\d+)$/)
-  if (stepMatch) return parseInt(stepMatch[1]) * 60 * 60 * 1000
-  if (hourField === "9,17") return 8 * 60 * 60 * 1000
-  return 24 * 60 * 60 * 1000
-}
-
-export function shouldRunSync(config: {
-  enabled: boolean
-  workdayCron: string
-  weekendCron: string
-  lastSyncAt: Date | null
-}): boolean {
+export function shouldRunSync(config: VaultConfig): boolean {
   if (!config.enabled) return false
   if (!config.lastSyncAt) return true
-  const now = new Date()
-  const dayOfWeek = now.getDay()
-  const isWorkday = dayOfWeek >= 1 && dayOfWeek <= 5
-  const cron = isWorkday ? config.workdayCron : config.weekendCron
-  const intervalMs = cronToIntervalMs(cron)
-  return now.getTime() - config.lastSyncAt.getTime() >= intervalMs
-}
-
-function parseFm(content: string): Record<string, string> {
-  const match = content.match(/^---\n([\s\S]*?)\n---/)
-  if (!match) return {}
-  const result: Record<string, string> = {}
-  for (const line of match[1].split("\n")) {
-    const colonIdx = line.indexOf(":")
-    if (colonIdx !== -1) {
-      result[line.slice(0, colonIdx).trim()] = line.slice(colonIdx + 1).trim()
-    }
+  // Parse cron interval: extract the hour step from the cron expression
+  // Supported patterns: "0 * * * *" (hourly), "0 */2 * * *" (every 2h), etc.
+  const isWeekend = [0, 6].includes(new Date().getDay())
+  const cron = isWeekend ? config.weekendCron : config.workdayCron
+  const hourField = cron.split(" ")[1]
+  let intervalHours = 1
+  if (hourField.startsWith("*/")) {
+    intervalHours = parseInt(hourField.slice(2), 10) || 1
+  } else if (hourField === "9,17") {
+    intervalHours = 8
+  } else if (hourField === "9") {
+    intervalHours = 24
   }
-  return result
+  const msSinceSync = Date.now() - config.lastSyncAt.getTime()
+  return msSinceSync >= intervalHours * 60 * 60 * 1000
 }
 
 export async function runVaultSync(): Promise<VaultSyncResult> {
   const config = await getVaultConfig()
-  if (!config) return { updatedNotes: [], errors: [] }
+  if (!config || !config.enabled) return { updatedNotes: [], errors: [] }
+  if (!(await couchDbAccessible(config))) return { updatedNotes: [], errors: [] }
 
-  const vaultNotes = await prisma.vaultNote.findMany()
+  const key = await deriveKey(config.e2ePassphrase)
+  const changes = await couchChanges(config, config.lastSeq)
   const updatedNotes: VaultSearchResult[] = []
   const errors: string[] = []
 
-  for (const note of vaultNotes) {
-    try {
-      const content = await getNoteContent(note.vaultPath)
-      if (!content) {
-        errors.push(`Note not found: ${note.vaultPath}`)
-        continue
-      }
+  for (const change of changes.results) {
+    if (change.deleted) continue
+    const doc = change.doc as Record<string, unknown> | undefined
+    if (!doc) continue
 
-      const lastUpdatedMatch = content.match(/last_updated:\s*(.+)/)
-      if (lastUpdatedMatch) {
-        const fileLastUpdated = new Date(lastUpdatedMatch[1].trim())
-        if (!isNaN(fileLastUpdated.getTime()) && fileLastUpdated > note.lastSyncAt) {
-          const titleMatch = content.match(/^#\s+(.+)$/m)
-          updatedNotes.push({
-            path: note.vaultPath,
-            title: titleMatch ? titleMatch[1].trim() : note.vaultPath,
-            snippet: content.slice(0, 200),
-            frontmatter: parseFm(content),
-          })
-        }
-      }
-    } catch (e) {
-      errors.push(`Error syncing ${note.vaultPath}: ${e instanceof Error ? e.message : String(e)}`)
+    let path: string
+    try {
+      path = await decryptString(key, change.id)
+    } catch {
+      continue
     }
+    if (!path.endsWith(".md")) continue
+
+    let content: string
+    try {
+      content = await decryptString(key, doc.data as string)
+    } catch (e) {
+      errors.push(`Failed to decrypt ${change.id}: ${e}`)
+      continue
+    }
+
+    const { frontmatter, body } = parseFrontmatter(content)
+    updatedNotes.push({
+      couchDbId: change.id,
+      path,
+      title: extractTitle(body, path),
+      snippet: content.slice(0, 200),
+      frontmatter,
+    })
   }
 
   await prisma.vaultConfig.update({
     where: { id: config.id },
-    data: { lastSyncAt: new Date() },
+    data: { lastSyncAt: new Date(), lastSeq: changes.last_seq },
   })
 
   return { updatedNotes, errors }
 }
 ```
 
-- [ ] **Step 4: Run tests to confirm all pass**
+Note: `parseFrontmatter`, `extractTitle`, and `extractSnippet` need to be exported from `vault.ts` for vault-sync to import them.
 
-```bash
-npx jest __tests__/services/vault-sync.test.ts --no-coverage
+- [ ] **Step 4: Export helpers from vault.ts**
+
+In `lib/services/vault.ts`, change the three helper functions from non-exported to exported:
+
+```ts
+export function parseFrontmatter(...)
+export function extractTitle(...)
+export function extractSnippet(...)
 ```
 
-Expected: PASS - all 9 tests pass.
-
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Run all sync tests**
 
 ```bash
-git add lib/services/vault-sync.ts __tests__/services/vault-sync.test.ts
-git commit -m "feat: add vault sync service (shouldRunSync, runVaultSync)"
+npx jest __tests__/services/vault-sync.test.ts
+```
+
+Expected: All passing.
+
+- [ ] **Step 6: TypeScript compile check**
+
+```bash
+npx tsc --noEmit
+```
+
+Expected: No errors.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add lib/services/vault-sync.ts __tests__/services/vault-sync.test.ts lib/services/vault.ts
+git commit -m "feat: add vault sync service using CouchDB _changes feed"
 ```
 
 ---
 
-### Task 5: Holly API Routes
+### Task 8: Cron and Briefing Integration
+
+**Files:**
+- Modify: `app/api/v1/cron/notify/route.ts`
+- Modify: `lib/services/briefing.ts`
+
+- [ ] **Step 1: Read current cron route**
+
+Read `app/api/v1/cron/notify/route.ts` to identify where to insert the vault sync step (after the Gmail poll step).
+
+- [ ] **Step 2: Add vault sync step to cron route**
+
+After the Gmail poll try/catch block, add:
+
+```ts
+// 4. Vault sync
+try {
+  const vaultConfig = await getVaultConfig()
+  if (vaultConfig && shouldRunSync(vaultConfig)) {
+    const result = await runVaultSync()
+    await redis.set("vault:sync:latest", JSON.stringify(result), "EX", 7200)
+  }
+} catch (e) {
+  console.error("[cron/notify] vault sync failed", e)
+}
+```
+
+Add imports at the top:
+```ts
+import { getVaultConfig } from "@/lib/services/vault"
+import { shouldRunSync, runVaultSync } from "@/lib/services/vault-sync"
+```
+
+- [ ] **Step 3: Read current briefing service**
+
+Read `lib/services/briefing.ts` to understand the current return shape.
+
+- [ ] **Step 4: Add vaultUpdates to getBriefing**
+
+In `lib/services/briefing.ts`, in the `getBriefing` function, add:
+
+```ts
+let vaultUpdates: VaultSearchResult[] = []
+try {
+  const cached = await redis.get("vault:sync:latest")
+  if (cached) {
+    const parsed = JSON.parse(cached)
+    vaultUpdates = parsed.updatedNotes ?? []
+  }
+} catch {
+  // Redis unavailable - proceed without vault updates
+}
+
+return {
+  // ... existing fields ...
+  vaultUpdates,
+}
+```
+
+Add import: `import type { VaultSearchResult } from "@/lib/services/vault"`
+
+- [ ] **Step 5: TypeScript compile check**
+
+```bash
+npx tsc --noEmit
+```
+
+Expected: No errors.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add app/api/v1/cron/notify/route.ts lib/services/briefing.ts
+git commit -m "feat: integrate vault sync into cron and briefing"
+```
+
+---
+
+### Task 9: Holly API Routes
 
 **Files:**
 - Create: `app/api/holly/v1/vault/search/route.ts`
 - Create: `app/api/holly/v1/vault/note/route.ts`
 - Create: `app/api/holly/v1/vault/sync/route.ts`
 
-- [ ] **Step 1: Create the vault search route**
+- [ ] **Step 1: Write failing tests**
+
+Create `__tests__/api/holly/vault.test.ts`:
+
+```ts
+import { GET as searchGet } from "@/app/api/holly/v1/vault/search/route"
+import { GET as noteGet, POST as notePost, PATCH as notePatch } from "@/app/api/holly/v1/vault/note/route"
+import { POST as syncPost } from "@/app/api/holly/v1/vault/sync/route"
+import { NextRequest } from "next/server"
+
+jest.mock("@/lib/services/vault", () => ({
+  isVaultAccessible: jest.fn(),
+  searchVault: jest.fn(),
+  getNoteContent: jest.fn(),
+  createNote: jest.fn(),
+  updateNote: jest.fn(),
+  getVaultConfig: jest.fn(),
+}))
+jest.mock("@/lib/services/vault-sync", () => ({ runVaultSync: jest.fn() }))
+
+import * as vault from "@/lib/services/vault"
+import { runVaultSync } from "@/lib/services/vault-sync"
+
+const mockVault = vault as jest.Mocked<typeof vault>
+const mockSync = runVaultSync as jest.Mock
+
+const API_KEY = "test-key"
+process.env.HOLLY_API_KEY = API_KEY
+
+function req(url: string, opts?: RequestInit) {
+  return new NextRequest(url, {
+    ...opts,
+    headers: { "X-Holly-API-Key": API_KEY, "Content-Type": "application/json", ...(opts?.headers ?? {}) },
+  })
+}
+
+beforeEach(() => jest.clearAllMocks())
+
+it("GET /vault/search returns 401 without API key", async () => {
+  const res = await searchGet(new NextRequest("http://localhost/api/holly/v1/vault/search?q=test"))
+  expect(res.status).toBe(401)
+})
+
+it("GET /vault/search returns 503 when vault not accessible", async () => {
+  mockVault.isVaultAccessible.mockResolvedValue(false)
+  const res = await searchGet(req("http://localhost/api/holly/v1/vault/search?q=test"))
+  expect(res.status).toBe(503)
+})
+
+it("GET /vault/search returns results", async () => {
+  mockVault.isVaultAccessible.mockResolvedValue(true)
+  mockVault.searchVault.mockResolvedValue([{ couchDbId: "enc", path: "Note.md", title: "Note", snippet: "test", frontmatter: {} }])
+  const res = await searchGet(req("http://localhost/api/holly/v1/vault/search?q=test"))
+  expect(res.status).toBe(200)
+  const data = await res.json()
+  expect(data.results).toHaveLength(1)
+})
+
+it("GET /vault/note returns 400 without id", async () => {
+  mockVault.isVaultAccessible.mockResolvedValue(true)
+  const res = await noteGet(req("http://localhost/api/holly/v1/vault/note"))
+  expect(res.status).toBe(400)
+})
+
+it("GET /vault/note returns 404 when not found", async () => {
+  mockVault.isVaultAccessible.mockResolvedValue(true)
+  mockVault.getNoteContent.mockResolvedValue(null)
+  const res = await noteGet(req("http://localhost/api/holly/v1/vault/note?id=enc_id"))
+  expect(res.status).toBe(404)
+})
+
+it("GET /vault/note returns content", async () => {
+  mockVault.isVaultAccessible.mockResolvedValue(true)
+  mockVault.getNoteContent.mockResolvedValue("# Note\n\nContent")
+  const res = await noteGet(req("http://localhost/api/holly/v1/vault/note?id=enc_id"))
+  expect(res.status).toBe(200)
+  const data = await res.json()
+  expect(data.content).toBe("# Note\n\nContent")
+})
+
+it("POST /vault/note creates note and returns 201", async () => {
+  mockVault.isVaultAccessible.mockResolvedValue(true)
+  mockVault.createNote.mockResolvedValue("new_enc_id")
+  const res = await notePost(req("http://localhost/api/holly/v1/vault/note", {
+    method: "POST",
+    body: JSON.stringify({ notePath: "Holly/Test.md", entityType: "contact", entityId: "uuid1", content: "# Test" }),
+  }))
+  expect(res.status).toBe(201)
+})
+
+it("POST /vault/note returns 422 for missing fields", async () => {
+  mockVault.isVaultAccessible.mockResolvedValue(true)
+  const res = await notePost(req("http://localhost/api/holly/v1/vault/note", {
+    method: "POST",
+    body: JSON.stringify({ notePath: "Holly/Test.md" }),
+  }))
+  expect(res.status).toBe(422)
+})
+
+it("PATCH /vault/note updates note and returns 200", async () => {
+  mockVault.isVaultAccessible.mockResolvedValue(true)
+  mockVault.updateNote.mockResolvedValue(undefined)
+  const res = await notePatch(req("http://localhost/api/holly/v1/vault/note", {
+    method: "PATCH",
+    body: JSON.stringify({ couchDbId: "enc_id", content: "Updated content" }),
+  }))
+  expect(res.status).toBe(200)
+})
+
+it("POST /vault/sync triggers sync and returns result", async () => {
+  mockVault.getVaultConfig.mockResolvedValue({ enabled: true } as any)
+  mockSync.mockResolvedValue({ updatedNotes: [], errors: [] })
+  const res = await syncPost(req("http://localhost/api/holly/v1/vault/sync", { method: "POST" }))
+  expect(res.status).toBe(200)
+})
+```
+
+- [ ] **Step 2: Run tests to confirm they fail**
+
+```bash
+npx jest __tests__/api/holly/vault.test.ts
+```
+
+Expected: FAIL.
+
+- [ ] **Step 3: Create search route**
 
 Create `app/api/holly/v1/vault/search/route.ts`:
 
 ```ts
 import { NextRequest, NextResponse } from "next/server"
-import { validateHollyRequest } from "@/lib/holly-auth"
-import { searchVault, isVaultAccessible } from "@/lib/services/vault"
+import { isVaultAccessible, searchVault } from "@/lib/services/vault"
+
+function authorized(req: NextRequest) {
+  return req.headers.get("X-Holly-API-Key") === process.env.HOLLY_API_KEY
+}
 
 export async function GET(req: NextRequest) {
-  const authResult = await validateHollyRequest(req)
-  if (!authResult.valid) {
-    if (authResult.rateLimited) return NextResponse.json({ error: "Rate limit exceeded", code: "RATE_LIMITED" }, { status: 429, headers: { "Retry-After": "60" } })
-    return NextResponse.json({ error: "Unauthorized", code: "UNAUTHORIZED" }, { status: 401 })
-  }
-
-  const accessible = await isVaultAccessible()
-  if (!accessible) {
-    return NextResponse.json({ error: "vault_not_configured" }, { status: 503 })
-  }
+  if (!authorized(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  if (!(await isVaultAccessible())) return NextResponse.json({ error: "vault_not_configured" }, { status: 503 })
 
   const q = req.nextUrl.searchParams.get("q") ?? ""
-  const limit = Math.min(50, Math.max(1, parseInt(req.nextUrl.searchParams.get("limit") ?? "10", 10) || 10))
-
-  if (!q.trim()) {
-    return NextResponse.json({ results: [], query: q, total: 0 })
-  }
-
+  const limit = parseInt(req.nextUrl.searchParams.get("limit") ?? "10", 10)
   const results = await searchVault(q, limit)
   return NextResponse.json({ results, query: q, total: results.length })
 }
 ```
 
-- [ ] **Step 2: Create the vault note route (GET / POST / PATCH)**
+- [ ] **Step 4: Create note route**
 
 Create `app/api/holly/v1/vault/note/route.ts`:
 
 ```ts
 import { NextRequest, NextResponse } from "next/server"
-import { validateHollyRequest } from "@/lib/holly-auth"
-import { getNoteContent, createNote, updateNote, isVaultAccessible } from "@/lib/services/vault"
+import { isVaultAccessible, getNoteContent, createNote, updateNote } from "@/lib/services/vault"
 
-async function checkAuth(req: NextRequest) {
-  const authResult = await validateHollyRequest(req)
-  if (!authResult.valid) {
-    const status = authResult.rateLimited ? 429 : 401
-    const error = authResult.rateLimited ? "Rate limit exceeded" : "Unauthorized"
-    const code = authResult.rateLimited ? "RATE_LIMITED" : "UNAUTHORIZED"
-    const headers = authResult.rateLimited ? { "Retry-After": "60" } : undefined
-    return { ok: false, response: NextResponse.json({ error, code }, { status, headers }) }
-  }
-  return { ok: true, response: null }
+function authorized(req: NextRequest) {
+  return req.headers.get("X-Holly-API-Key") === process.env.HOLLY_API_KEY
 }
 
 export async function GET(req: NextRequest) {
-  const auth = await checkAuth(req)
-  if (!auth.ok) return auth.response!
+  if (!authorized(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  if (!(await isVaultAccessible())) return NextResponse.json({ error: "vault_not_configured" }, { status: 503 })
 
-  const accessible = await isVaultAccessible()
-  if (!accessible) return NextResponse.json({ error: "vault_not_configured" }, { status: 503 })
+  const id = req.nextUrl.searchParams.get("id")
+  if (!id) return NextResponse.json({ error: "Missing id parameter" }, { status: 400 })
 
-  const notePath = req.nextUrl.searchParams.get("path")
-  if (!notePath) return NextResponse.json({ error: "path parameter required" }, { status: 400 })
+  const content = await getNoteContent(id)
+  if (content === null) return NextResponse.json({ error: "Note not found" }, { status: 404 })
 
-  const content = await getNoteContent(decodeURIComponent(notePath))
-  if (content === null) return NextResponse.json({ error: "not_found" }, { status: 404 })
-
-  return NextResponse.json({ path: notePath, content })
+  return NextResponse.json({ couchDbId: id, content })
 }
 
 export async function POST(req: NextRequest) {
-  const auth = await checkAuth(req)
-  if (!auth.ok) return auth.response!
+  if (!authorized(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  if (!(await isVaultAccessible())) return NextResponse.json({ error: "vault_not_configured" }, { status: 503 })
 
-  const accessible = await isVaultAccessible()
-  if (!accessible) return NextResponse.json({ error: "vault_not_configured" }, { status: 503 })
-
-  let body: unknown
-  try { body = await req.json() } catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }) }
-
-  const { filename, entityType, entityId, content } = body as Record<string, string>
-  if (!filename || !entityType || !entityId || content === undefined) {
-    return NextResponse.json({ error: "filename, entityType, entityId, content are required" }, { status: 400 })
+  const body = await req.json()
+  const { notePath, entityType, entityId, content } = body
+  if (!notePath || !entityType || !entityId || !content) {
+    return NextResponse.json({ error: "Missing required fields: notePath, entityType, entityId, content" }, { status: 422 })
   }
 
-  try {
-    const notePath = await createNote(filename, entityType, entityId, content)
-    return NextResponse.json({ path: notePath }, { status: 201 })
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e)
-    if (msg === "FILE_EXISTS") return NextResponse.json({ error: "file_exists" }, { status: 409 })
-    if (msg.startsWith("Invalid filename")) return NextResponse.json({ error: msg }, { status: 422 })
-    throw e
-  }
+  const couchDbId = await createNote(notePath, entityType, entityId, content)
+  if (couchDbId === null) return NextResponse.json({ error: "Invalid notePath" }, { status: 422 })
+
+  return NextResponse.json({ couchDbId }, { status: 201 })
 }
 
 export async function PATCH(req: NextRequest) {
-  const auth = await checkAuth(req)
-  if (!auth.ok) return auth.response!
+  if (!authorized(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  if (!(await isVaultAccessible())) return NextResponse.json({ error: "vault_not_configured" }, { status: 503 })
 
-  const accessible = await isVaultAccessible()
-  if (!accessible) return NextResponse.json({ error: "vault_not_configured" }, { status: 503 })
-
-  let body: unknown
-  try { body = await req.json() } catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }) }
-
-  const { path: notePath, content } = body as Record<string, string>
-  if (!notePath || content === undefined) {
-    return NextResponse.json({ error: "path and content are required" }, { status: 400 })
+  const body = await req.json()
+  const { couchDbId, content } = body
+  if (!couchDbId || !content) {
+    return NextResponse.json({ error: "Missing required fields: couchDbId, content" }, { status: 422 })
   }
 
-  try {
-    await updateNote(notePath, content)
-    return NextResponse.json({ path: notePath })
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e)
-    if (msg === "NOTE_NOT_FOUND") return NextResponse.json({ error: "not_found" }, { status: 404 })
-    if (msg.startsWith("Path traversal")) return NextResponse.json({ error: "invalid_path" }, { status: 400 })
-    throw e
-  }
+  await updateNote(couchDbId, content)
+  return NextResponse.json({ ok: true })
 }
 ```
 
-- [ ] **Step 3: Create the vault sync route (Holly)**
+- [ ] **Step 5: Create sync route**
 
 Create `app/api/holly/v1/vault/sync/route.ts`:
 
 ```ts
 import { NextRequest, NextResponse } from "next/server"
-import { validateHollyRequest } from "@/lib/holly-auth"
-import { runVaultSync } from "@/lib/services/vault-sync"
 import { getVaultConfig } from "@/lib/services/vault"
+import { runVaultSync } from "@/lib/services/vault-sync"
+
+function authorized(req: NextRequest) {
+  return req.headers.get("X-Holly-API-Key") === process.env.HOLLY_API_KEY
+}
 
 export async function POST(req: NextRequest) {
-  const authResult = await validateHollyRequest(req)
-  if (!authResult.valid) {
-    if (authResult.rateLimited) return NextResponse.json({ error: "Rate limit exceeded", code: "RATE_LIMITED" }, { status: 429, headers: { "Retry-After": "60" } })
-    return NextResponse.json({ error: "Unauthorized", code: "UNAUTHORIZED" }, { status: 401 })
-  }
+  if (!authorized(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const config = await getVaultConfig()
   if (!config) return NextResponse.json({ error: "vault_not_configured" }, { status: 503 })
@@ -1094,7 +1620,15 @@ export async function POST(req: NextRequest) {
 }
 ```
 
-- [ ] **Step 4: TypeScript compile check**
+- [ ] **Step 6: Run all Holly vault tests**
+
+```bash
+npx jest __tests__/api/holly/vault.test.ts
+```
+
+Expected: All passing.
+
+- [ ] **Step 7: TypeScript compile check**
 
 ```bash
 npx tsc --noEmit
@@ -1102,56 +1636,153 @@ npx tsc --noEmit
 
 Expected: No errors.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
 git add app/api/holly/v1/vault/
-git commit -m "feat: add Holly API vault routes (search, note CRUD, sync)"
+git commit -m "feat: add Holly vault API routes (search, note CRUD, sync)"
 ```
 
 ---
 
-### Task 6: Web API Routes
+### Task 10: Web Session API Routes
 
 **Files:**
 - Create: `app/api/v1/vault/status/route.ts`
 - Create: `app/api/v1/vault/config/route.ts`
 - Create: `app/api/v1/vault/sync/route.ts`
 
-- [ ] **Step 1: Create the vault status route**
+- [ ] **Step 1: Write failing tests**
+
+Create `__tests__/api/v1/vault-routes.test.ts`:
+
+```ts
+import { GET as statusGet } from "@/app/api/v1/vault/status/route"
+import { POST as configPost } from "@/app/api/v1/vault/config/route"
+import { POST as syncPost } from "@/app/api/v1/vault/sync/route"
+import { NextRequest } from "next/server"
+
+jest.mock("@/lib/auth", () => ({ auth: jest.fn() }))
+jest.mock("@/lib/services/vault", () => ({
+  getVaultConfig: jest.fn(),
+  isVaultAccessible: jest.fn(),
+}))
+jest.mock("@/lib/services/vault-sync", () => ({ runVaultSync: jest.fn() }))
+jest.mock("@/lib/db", () => ({ prisma: { vaultConfig: { upsert: jest.fn(), findFirst: jest.fn() } } }))
+
+import { auth } from "@/lib/auth"
+import * as vault from "@/lib/services/vault"
+import { runVaultSync } from "@/lib/services/vault-sync"
+import { prisma } from "@/lib/db"
+
+const mockAuth = auth as jest.Mock
+const mockVault = vault as jest.Mocked<typeof vault>
+const mockSync = runVaultSync as jest.Mock
+const mockPrisma = prisma as jest.Mocked<typeof prisma>
+
+beforeEach(() => jest.clearAllMocks())
+
+it("GET /vault/status returns 401 when unauthenticated", async () => {
+  mockAuth.mockResolvedValue(null)
+  const res = await statusGet()
+  expect(res.status).toBe(401)
+})
+
+it("GET /vault/status returns config without secrets", async () => {
+  mockAuth.mockResolvedValue({ userId: "u1" })
+  mockVault.getVaultConfig.mockResolvedValue({
+    couchDbUrl: "http://localhost:5984",
+    couchDbDatabase: "obsidian",
+    couchDbUsername: "vaelerian",
+    couchDbPassword: "secret",
+    e2ePassphrase: "Wolverhampton",
+    lastSyncAt: null,
+    lastSeq: "0",
+    enabled: true,
+    workdayCron: "0 * * * 1-5",
+    weekendCron: "0 */4 * * 0,6",
+  } as any)
+  mockVault.isVaultAccessible.mockResolvedValue(true)
+  const res = await statusGet()
+  expect(res.status).toBe(200)
+  const data = await res.json()
+  expect(data.passwordSet).toBe(true)
+  expect(data.couchDbPassword).toBeUndefined()
+  expect(data.e2ePassphrase).toBeUndefined()
+})
+
+it("POST /vault/config saves config and returns 200", async () => {
+  mockAuth.mockResolvedValue({ userId: "u1" })
+  mockVault.getVaultConfig.mockResolvedValue(null)
+  mockPrisma.vaultConfig.upsert.mockResolvedValue({} as any)
+  const req = new NextRequest("http://localhost/", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      couchDbUrl: "http://localhost:5984",
+      couchDbDatabase: "obsidian",
+      couchDbUsername: "vaelerian",
+      couchDbPassword: "pass",
+      e2ePassphrase: "phrase",
+    }),
+  })
+  const res = await configPost(req)
+  expect(res.status).toBe(200)
+})
+
+it("POST /vault/sync triggers sync", async () => {
+  mockAuth.mockResolvedValue({ userId: "u1" })
+  mockVault.getVaultConfig.mockResolvedValue({ enabled: true } as any)
+  mockSync.mockResolvedValue({ updatedNotes: [], errors: [] })
+  const req = new NextRequest("http://localhost/", { method: "POST" })
+  const res = await syncPost(req)
+  expect(res.status).toBe(200)
+})
+```
+
+- [ ] **Step 2: Run tests to confirm they fail**
+
+```bash
+npx jest __tests__/api/v1/vault-routes.test.ts
+```
+
+Expected: FAIL.
+
+- [ ] **Step 3: Create status route**
 
 Create `app/api/v1/vault/status/route.ts`:
 
 ```ts
-import { NextRequest, NextResponse } from "next/server"
+import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { getVaultConfig, isVaultAccessible } from "@/lib/services/vault"
 
-export async function GET(req: NextRequest) {
+export async function GET() {
   const session = await auth()
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  if (!session?.userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const config = await getVaultConfig()
-  if (!config) {
-    return NextResponse.json({ configured: false, accessible: false, config: null })
-  }
+  if (!config) return NextResponse.json({ configured: false, accessible: false })
 
   const accessible = await isVaultAccessible()
   return NextResponse.json({
     configured: true,
     accessible,
-    config: {
-      vaultPath: config.vaultPath,
-      workdayCron: config.workdayCron,
-      weekendCron: config.weekendCron,
-      enabled: config.enabled,
-      lastSyncAt: config.lastSyncAt,
-    },
+    couchDbUrl: config.couchDbUrl,
+    couchDbDatabase: config.couchDbDatabase,
+    couchDbUsername: config.couchDbUsername,
+    passwordSet: config.couchDbPassword.length > 0,
+    e2ePassphraseSet: config.e2ePassphrase.length > 0,
+    lastSyncAt: config.lastSyncAt,
+    lastSeq: config.lastSeq,
+    enabled: config.enabled,
+    workdayCron: config.workdayCron,
+    weekendCron: config.weekendCron,
   })
 }
 ```
 
-- [ ] **Step 2: Create the vault config save route**
+- [ ] **Step 4: Create config route**
 
 Create `app/api/v1/vault/config/route.ts`:
 
@@ -1159,60 +1790,45 @@ Create `app/api/v1/vault/config/route.ts`:
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/db"
-import { z } from "zod"
-
-const VALID_WORKDAY_CRONS = [
-  "0 * * * 1-5",
-  "0 */2 * * 1-5",
-  "0 */4 * * 1-5",
-  "0 9,17 * * 1-5",
-  "0 9 * * 1-5",
-]
-
-const VALID_WEEKEND_CRONS = [
-  "0 * * * 0,6",
-  "0 */2 * * 0,6",
-  "0 */4 * * 0,6",
-  "0 9,17 * * 0,6",
-  "0 9 * * 0,6",
-]
-
-const ConfigSchema = z.object({
-  vaultPath: z.string().min(1),
-  workdayCron: z.string().refine(v => VALID_WORKDAY_CRONS.includes(v), {
-    message: "Invalid workday cron expression",
-  }),
-  weekendCron: z.string().refine(v => VALID_WEEKEND_CRONS.includes(v), {
-    message: "Invalid weekend cron expression",
-  }),
-  enabled: z.boolean(),
-})
+import { getVaultConfig } from "@/lib/services/vault"
 
 export async function POST(req: NextRequest) {
   const session = await auth()
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  if (!session?.userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  let body: unknown
-  try { body = await req.json() } catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }) }
+  const body = await req.json()
+  const { couchDbUrl, couchDbDatabase, couchDbUsername, couchDbPassword, e2ePassphrase, workdayCron, weekendCron, enabled } = body
 
-  const parsed = ConfigSchema.safeParse(body)
-  if (!parsed.success) {
-    return NextResponse.json({ error: "Validation failed", details: parsed.error.flatten() }, { status: 422 })
+  if (!couchDbUrl || !couchDbDatabase || !couchDbUsername) {
+    return NextResponse.json({ error: "Missing required fields: couchDbUrl, couchDbDatabase, couchDbUsername" }, { status: 422 })
   }
 
-  const existing = await prisma.vaultConfig.findFirst()
-  const config = existing
-    ? await prisma.vaultConfig.update({
-        where: { id: existing.id },
-        data: parsed.data,
-      })
-    : await prisma.vaultConfig.create({ data: parsed.data })
+  const existing = await getVaultConfig()
+  const id = existing?.id ?? crypto.randomUUID()
 
-  return NextResponse.json(config)
+  const data: Record<string, unknown> = {
+    couchDbUrl,
+    couchDbDatabase,
+    couchDbUsername,
+    ...(workdayCron && { workdayCron }),
+    ...(weekendCron && { weekendCron }),
+    ...(enabled !== undefined && { enabled }),
+  }
+  // Only update secrets if provided (non-empty string)
+  if (couchDbPassword) data.couchDbPassword = couchDbPassword
+  if (e2ePassphrase) data.e2ePassphrase = e2ePassphrase
+
+  await prisma.vaultConfig.upsert({
+    where: { id },
+    create: { id, couchDbUrl, couchDbDatabase, couchDbUsername, couchDbPassword: couchDbPassword ?? "", e2ePassphrase: e2ePassphrase ?? "" },
+    update: data,
+  })
+
+  return NextResponse.json({ ok: true })
 }
 ```
 
-- [ ] **Step 3: Create the web vault sync route**
+- [ ] **Step 5: Create web sync route**
 
 Create `app/api/v1/vault/sync/route.ts`:
 
@@ -1224,7 +1840,7 @@ import { runVaultSync } from "@/lib/services/vault-sync"
 
 export async function POST(req: NextRequest) {
   const session = await auth()
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  if (!session?.userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const config = await getVaultConfig()
   if (!config) return NextResponse.json({ error: "vault_not_configured" }, { status: 503 })
@@ -1233,6 +1849,247 @@ export async function POST(req: NextRequest) {
   return NextResponse.json(result)
 }
 ```
+
+- [ ] **Step 6: Run all web vault route tests**
+
+```bash
+npx jest __tests__/api/v1/vault-routes.test.ts
+```
+
+Expected: All passing.
+
+- [ ] **Step 7: TypeScript compile check**
+
+```bash
+npx tsc --noEmit
+```
+
+Expected: No errors.
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add app/api/v1/vault/
+git commit -m "feat: add web session vault API routes (status, config, sync)"
+```
+
+---
+
+### Task 11: Settings UI
+
+**Files:**
+- Modify: `app/(dashboard)/settings/page.tsx`
+
+- [ ] **Step 1: Read current settings page**
+
+Read `app/(dashboard)/settings/page.tsx` to understand the current structure.
+
+- [ ] **Step 2: Add Obsidian Vault section**
+
+Add the Obsidian Vault section as a new `<section>` at the bottom of the settings page. The section is a client component because it has form state.
+
+Create `components/settings/vault-settings.tsx`:
+
+```tsx
+"use client"
+import { useState } from "react"
+
+interface VaultStatus {
+  configured: boolean
+  accessible: boolean
+  couchDbUrl?: string
+  couchDbDatabase?: string
+  couchDbUsername?: string
+  passwordSet?: boolean
+  e2ePassphraseSet?: boolean
+  lastSyncAt?: string | null
+  lastSeq?: string
+  enabled?: boolean
+  workdayCron?: string
+  weekendCron?: string
+}
+
+const CRON_OPTIONS = [
+  { label: "Every hour", value: "0 * * * *" },
+  { label: "Every 2 hours", value: "0 */2 * * *" },
+  { label: "Every 4 hours", value: "0 */4 * * *" },
+  { label: "Twice daily (9am and 5pm)", value: "0 9,17 * * *" },
+  { label: "Once daily (9am)", value: "0 9 * * *" },
+]
+
+export function VaultSettings({ initial }: { initial: VaultStatus }) {
+  const [status, setStatus] = useState(initial)
+  const [couchDbUrl, setCouchDbUrl] = useState(initial.couchDbUrl ?? "http://localhost:5984")
+  const [couchDbDatabase, setCouchDbDatabase] = useState(initial.couchDbDatabase ?? "obsidian")
+  const [couchDbUsername, setCouchDbUsername] = useState(initial.couchDbUsername ?? "")
+  const [couchDbPassword, setCouchDbPassword] = useState("")
+  const [e2ePassphrase, setE2ePassphrase] = useState("")
+  const [workdayCron, setWorkdayCron] = useState(initial.workdayCron ?? "0 * * * *")
+  const [weekendCron, setWeekendCron] = useState(initial.weekendCron ?? "0 */4 * * *")
+  const [enabled, setEnabled] = useState(initial.enabled ?? true)
+  const [saving, setSaving] = useState(false)
+  const [syncing, setSyncing] = useState(false)
+  const [testing, setTesting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [message, setMessage] = useState<string | null>(null)
+
+  async function testConnection() {
+    setTesting(true)
+    setError(null)
+    try {
+      const res = await fetch("/api/v1/vault/status")
+      const data = await res.json()
+      setStatus(data)
+      setMessage(data.accessible ? "Connected successfully" : "CouchDB unreachable - check URL and credentials")
+    } catch {
+      setError("Request failed")
+    } finally {
+      setTesting(false)
+    }
+  }
+
+  async function saveConfig() {
+    setSaving(true)
+    setError(null)
+    setMessage(null)
+    try {
+      const res = await fetch("/api/v1/vault/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ couchDbUrl, couchDbDatabase, couchDbUsername, couchDbPassword, e2ePassphrase, workdayCron, weekendCron, enabled }),
+      })
+      if (!res.ok) throw new Error("Save failed")
+      setMessage("Settings saved")
+    } catch {
+      setError("Failed to save settings")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function syncNow() {
+    setSyncing(true)
+    setError(null)
+    try {
+      const res = await fetch("/api/v1/vault/sync", { method: "POST" })
+      const data = await res.json()
+      setMessage(`Sync complete - ${data.updatedNotes?.length ?? 0} updated notes`)
+      const statusRes = await fetch("/api/v1/vault/status")
+      setStatus(await statusRes.json())
+    } catch {
+      setError("Sync failed")
+    } finally {
+      setSyncing(false)
+    }
+  }
+
+  return (
+    <section className="border border-[rgba(0,255,136,0.15)] rounded-xl p-5 space-y-4">
+      <h2 className="text-sm font-semibold text-[#c0c0d0]">Obsidian Vault</h2>
+
+      {error && <p className="text-xs text-red-400">{error}</p>}
+      {message && <p className="text-xs text-[#00ff88]">{message}</p>}
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-[#666688]">CouchDB URL</span>
+          <input value={couchDbUrl} onChange={e => setCouchDbUrl(e.target.value)}
+            className="border border-[rgba(0,255,136,0.2)] rounded-lg px-3 py-2 text-sm bg-[#0a0a1a] text-[#c0c0d0] focus:outline-none focus:ring-2 focus:ring-[#00ff88]" />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-[#666688]">Database name</span>
+          <input value={couchDbDatabase} onChange={e => setCouchDbDatabase(e.target.value)}
+            className="border border-[rgba(0,255,136,0.2)] rounded-lg px-3 py-2 text-sm bg-[#0a0a1a] text-[#c0c0d0] focus:outline-none focus:ring-2 focus:ring-[#00ff88]" />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-[#666688]">Username</span>
+          <input value={couchDbUsername} onChange={e => setCouchDbUsername(e.target.value)}
+            className="border border-[rgba(0,255,136,0.2)] rounded-lg px-3 py-2 text-sm bg-[#0a0a1a] text-[#c0c0d0] focus:outline-none focus:ring-2 focus:ring-[#00ff88]" />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-[#666688]">Password {status.passwordSet && <span className="text-[#00ff88]">(set)</span>}</span>
+          <input type="password" value={couchDbPassword} onChange={e => setCouchDbPassword(e.target.value)}
+            placeholder={status.passwordSet ? "Leave blank to keep existing" : "Enter password"}
+            className="border border-[rgba(0,255,136,0.2)] rounded-lg px-3 py-2 text-sm bg-[#0a0a1a] text-[#c0c0d0] focus:outline-none focus:ring-2 focus:ring-[#00ff88]" />
+        </label>
+        <label className="flex flex-col gap-1 sm:col-span-2">
+          <span className="text-xs text-[#666688]">E2E passphrase {status.e2ePassphraseSet && <span className="text-[#00ff88]">(set)</span>}</span>
+          <input type="password" value={e2ePassphrase} onChange={e => setE2ePassphrase(e.target.value)}
+            placeholder={status.e2ePassphraseSet ? "Leave blank to keep existing" : "Enter LiveSync passphrase"}
+            className="border border-[rgba(0,255,136,0.2)] rounded-lg px-3 py-2 text-sm bg-[#0a0a1a] text-[#c0c0d0] focus:outline-none focus:ring-2 focus:ring-[#00ff88]" />
+        </label>
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-[#666688]">Work days sync</span>
+          <select value={workdayCron} onChange={e => setWorkdayCron(e.target.value)}
+            className="border border-[rgba(0,255,136,0.2)] rounded-lg px-3 py-2 text-sm bg-[#0a0a1a] text-[#c0c0d0] focus:outline-none focus:ring-2 focus:ring-[#00ff88]">
+            {CRON_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-[#666688]">Weekends sync</span>
+          <select value={weekendCron} onChange={e => setWeekendCron(e.target.value)}
+            className="border border-[rgba(0,255,136,0.2)] rounded-lg px-3 py-2 text-sm bg-[#0a0a1a] text-[#c0c0d0] focus:outline-none focus:ring-2 focus:ring-[#00ff88]">
+            {CRON_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </label>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <button onClick={() => setEnabled(e => !e)}
+          className={`w-10 h-5 rounded-full transition-colors ${enabled ? "bg-[#00ff88]" : "bg-[#333355]"}`}>
+          <span className={`block w-4 h-4 rounded-full bg-white mx-0.5 transition-transform ${enabled ? "translate-x-5" : ""}`} />
+        </button>
+        <span className="text-xs text-[#666688]">{enabled ? "Sync enabled" : "Sync paused"}</span>
+      </div>
+
+      <div className="flex flex-wrap gap-2 items-center">
+        <button onClick={testConnection} disabled={testing}
+          className="bg-[rgba(0,255,136,0.05)] border border-[rgba(0,255,136,0.2)] text-[#c0c0d0] text-xs px-3 py-1.5 rounded-lg hover:bg-[rgba(0,255,136,0.08)] disabled:opacity-50">
+          {testing ? "Testing..." : "Test connection"}
+        </button>
+        <button onClick={saveConfig} disabled={saving}
+          className="bg-[#00ff88] text-[#0a0a1a] text-xs font-medium px-3 py-1.5 rounded-lg hover:bg-[#00cc6f] disabled:opacity-50">
+          {saving ? "Saving..." : "Save"}
+        </button>
+        <button onClick={syncNow} disabled={syncing}
+          className="bg-[rgba(0,255,136,0.05)] border border-[rgba(0,255,136,0.2)] text-[#c0c0d0] text-xs px-3 py-1.5 rounded-lg hover:bg-[rgba(0,255,136,0.08)] disabled:opacity-50">
+          {syncing ? "Syncing..." : "Sync now"}
+        </button>
+        {status.lastSyncAt && (
+          <span className="text-xs text-[#666688]">
+            Last synced: {new Date(status.lastSyncAt).toLocaleString("en-GB")}
+          </span>
+        )}
+        {!status.lastSyncAt && status.configured && (
+          <span className="text-xs text-[#666688]">Never synced</span>
+        )}
+      </div>
+    </section>
+  )
+}
+```
+
+- [ ] **Step 3: Import VaultSettings in settings page**
+
+In `app/(dashboard)/settings/page.tsx`:
+1. Add `import { VaultSettings } from "@/components/settings/vault-settings"`
+2. Fetch vault status server-side:
+   ```ts
+   const vaultStatus = await fetch(`${process.env.NEXTAUTH_URL}/api/v1/vault/status`, {
+     headers: { Cookie: ... } // pass session cookie
+   }).then(r => r.json()).catch(() => ({ configured: false, accessible: false }))
+   ```
+   Or call the service layer directly (preferred for server components):
+   ```ts
+   import { getVaultConfig, isVaultAccessible } from "@/lib/services/vault"
+   const vaultConfig = await getVaultConfig()
+   const vaultAccessible = vaultConfig ? await isVaultAccessible() : false
+   const vaultStatus = { configured: !!vaultConfig, accessible: vaultAccessible, ...vaultConfig, passwordSet: !!vaultConfig?.couchDbPassword, e2ePassphraseSet: !!vaultConfig?.e2ePassphrase }
+   ```
+3. Add `<VaultSettings initial={vaultStatus} />` at the bottom of the settings content.
 
 - [ ] **Step 4: TypeScript compile check**
 
@@ -1245,464 +2102,27 @@ Expected: No errors.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add app/api/v1/vault/
-git commit -m "feat: add web vault API routes (status, config, sync)"
+git add components/settings/vault-settings.tsx app/(dashboard)/settings/page.tsx
+git commit -m "feat: add Obsidian Vault settings UI section"
 ```
 
 ---
 
-### Task 7: Cron Integration and Briefing Extension
+### Task 12: Full Test Run
 
-**Files:**
-- Modify: `app/api/v1/cron/notify/route.ts`
-- Modify: `lib/services/briefing.ts`
-- Modify: `__tests__/services/briefing.test.ts`
-
-- [ ] **Step 1: Write failing test for briefing vaultUpdates field**
-
-Open `__tests__/services/briefing.test.ts`. It currently mocks `@/lib/redis` but check if it does. If not, the test calls the real redis. Append this test to the file:
-
-First, check if `@/lib/redis` is mocked in the existing briefing test. If not, add the mock. Then append:
-
-```ts
-// If not already at top of file, add:
-jest.mock("@/lib/redis", () => ({
-  redis: { get: jest.fn() },
-}))
-import { redis } from "@/lib/redis"
-const mockRedis = redis as jest.Mocked<typeof redis>
-
-// Add to describe block or at module level:
-it("getBriefing includes vaultUpdates from redis cache", async () => {
-  // Set up all existing prisma mocks (same values as existing test)
-  mockPrisma.contact.findMany
-    .mockResolvedValueOnce([])
-    .mockResolvedValueOnce([])
-  mockPrisma.interaction.findMany
-    .mockResolvedValueOnce([])
-    .mockResolvedValueOnce([])
-  mockPrisma.actionItem.findMany
-    .mockResolvedValueOnce([])
-    .mockResolvedValueOnce([])
-  mockPrisma.project.count.mockResolvedValue(0)
-  mockPrisma.project.findMany.mockResolvedValue([])
-  mockPrisma.task.count.mockResolvedValue(0)
-  mockPrisma.task.findMany.mockResolvedValue([])
-
-  const fakeUpdates = [{ path: "Holly/John.md", title: "John", snippet: "...", frontmatter: {} }]
-  mockRedis.get
-    .mockResolvedValueOnce(null) // gmail:recent
-    .mockResolvedValueOnce(JSON.stringify({ updatedNotes: fakeUpdates, errors: [] })) // vault:sync:latest
-
-  const result = await getBriefing()
-  expect(result.vaultUpdates).toEqual(fakeUpdates)
-})
-
-it("getBriefing returns empty vaultUpdates when redis key absent", async () => {
-  mockPrisma.contact.findMany
-    .mockResolvedValueOnce([])
-    .mockResolvedValueOnce([])
-  mockPrisma.interaction.findMany
-    .mockResolvedValueOnce([])
-    .mockResolvedValueOnce([])
-  mockPrisma.actionItem.findMany
-    .mockResolvedValueOnce([])
-    .mockResolvedValueOnce([])
-  mockPrisma.project.count.mockResolvedValue(0)
-  mockPrisma.project.findMany.mockResolvedValue([])
-  mockPrisma.task.count.mockResolvedValue(0)
-  mockPrisma.task.findMany.mockResolvedValue([])
-
-  mockRedis.get
-    .mockResolvedValueOnce(null) // gmail:recent
-    .mockResolvedValueOnce(null) // vault:sync:latest absent
-
-  const result = await getBriefing()
-  expect(result.vaultUpdates).toEqual([])
-})
-```
-
-**Important:** Read the existing briefing test first to check current mock setup, then integrate carefully so existing tests keep passing.
-
-- [ ] **Step 2: Run briefing tests to see new tests fail**
+- [ ] **Step 1: Run all tests**
 
 ```bash
-npx jest __tests__/services/briefing.test.ts --no-coverage
+npx jest
 ```
 
-Expected: existing test passes, new tests FAIL - "result.vaultUpdates is undefined"
+Expected: All passing.
 
-- [ ] **Step 3: Add vault sync step to app/api/v1/cron/notify/route.ts**
+- [ ] **Step 2: If any tests fail, fix them before proceeding**
 
-Add these imports at the top of the file (after existing imports):
-
-```ts
-import { getVaultConfig } from "@/lib/services/vault"
-import { shouldRunSync, runVaultSync } from "@/lib/services/vault-sync"
-```
-
-Add vault sync step after the Gmail poll block (after the `redis.set("gmail:recent", ...)` try/catch block):
-
-```ts
-  // 4. Vault sync
-  try {
-    const vaultConfig = await getVaultConfig()
-    if (vaultConfig && shouldRunSync(vaultConfig)) {
-      const result = await runVaultSync()
-      await redis.set("vault:sync:latest", JSON.stringify(result), "EX", 7200)
-    }
-  } catch (e) {
-    console.error("[cron/notify] vault sync failed", e)
-  }
-```
-
-- [ ] **Step 4: Add vaultUpdates to lib/services/briefing.ts**
-
-Add redis read block after the `recentEmails` block (around line 98-103). After the closing brace of the recentEmails try/catch, add:
-
-```ts
-  let vaultUpdates: unknown[] = []
-  try {
-    const vaultCached = await redis.get("vault:sync:latest")
-    if (vaultCached) {
-      const parsed = JSON.parse(vaultCached)
-      vaultUpdates = parsed.updatedNotes ?? []
-    }
-  } catch {
-    // Redis unavailable or invalid JSON - proceed with empty array
-  }
-```
-
-Then add `vaultUpdates` to the return object (after `recentEmails`):
-
-```ts
-  return {
-    overdueContacts,
-    pendingFollowUps,
-    openActionItems,
-    openProjectsCount,
-    tasksDueTodayCount,
-    upcomingMilestones,
-    myActionItems,
-    followUpCandidates,
-    recentInteractions,
-    projectHealth,
-    recentEmails,
-    vaultUpdates,
-    generatedAt: new Date(),
-  }
-```
-
-- [ ] **Step 5: Run briefing tests to confirm all pass**
+- [ ] **Step 3: Commit any fixes**
 
 ```bash
-npx jest __tests__/services/briefing.test.ts --no-coverage
+git add -p
+git commit -m "fix: resolve Phase 5 test failures"
 ```
-
-Expected: PASS - all tests pass including new vaultUpdates tests.
-
-- [ ] **Step 6: Run full test suite**
-
-```bash
-npx jest --no-coverage
-```
-
-Expected: All tests pass.
-
-- [ ] **Step 7: Commit**
-
-```bash
-git add app/api/v1/cron/notify/route.ts lib/services/briefing.ts __tests__/services/briefing.test.ts
-git commit -m "feat: wire vault sync into cron and add vaultUpdates to briefing"
-```
-
----
-
-### Task 8: Settings UI
-
-**Files:**
-- Modify: `app/(dashboard)/settings/page.tsx`
-
-- [ ] **Step 1: Add vault config state and fetch to settings/page.tsx**
-
-Read the current file, then add after the `googleStatus` state declaration (around line 25):
-
-```ts
-  const WORKDAY_OPTIONS = [
-    { label: "Every hour", value: "0 * * * 1-5" },
-    { label: "Every 2 hours", value: "0 */2 * * 1-5" },
-    { label: "Every 4 hours", value: "0 */4 * * 1-5" },
-    { label: "Twice daily (9am and 5pm)", value: "0 9,17 * * 1-5" },
-    { label: "Once daily (9am)", value: "0 9 * * 1-5" },
-  ]
-
-  const WEEKEND_OPTIONS = [
-    { label: "Every hour", value: "0 * * * 0,6" },
-    { label: "Every 2 hours", value: "0 */2 * * 0,6" },
-    { label: "Every 4 hours", value: "0 */4 * * 0,6" },
-    { label: "Twice daily (9am and 5pm)", value: "0 9,17 * * 0,6" },
-    { label: "Once daily (9am)", value: "0 9 * * 0,6" },
-  ]
-
-  const [vaultStatus, setVaultStatus] = useState<{
-    configured: boolean
-    accessible: boolean
-    config: {
-      vaultPath: string
-      workdayCron: string
-      weekendCron: string
-      enabled: boolean
-      lastSyncAt: string | null
-    } | null
-  }>({ configured: false, accessible: false, config: null })
-
-  const [vaultPath, setVaultPath] = useState("")
-  const [vaultWorkdayCron, setVaultWorkdayCron] = useState("0 * * * 1-5")
-  const [vaultWeekendCron, setVaultWeekendCron] = useState("0 */4 * * 0,6")
-  const [vaultEnabled, setVaultEnabled] = useState(true)
-  const [vaultSaving, setVaultSaving] = useState(false)
-  const [vaultSyncing, setVaultSyncing] = useState(false)
-  const [vaultTestResult, setVaultTestResult] = useState<"idle" | "ok" | "fail">("idle")
-```
-
-Add vault status fetch in `useEffect` after the Google status fetch:
-
-```ts
-    fetch("/api/v1/vault/status").then(r => r.json()).then((data) => {
-      setVaultStatus(data)
-      if (data.config) {
-        setVaultPath(data.config.vaultPath)
-        setVaultWorkdayCron(data.config.workdayCron)
-        setVaultWeekendCron(data.config.weekendCron)
-        setVaultEnabled(data.config.enabled)
-      }
-    }).catch(() => {})
-```
-
-- [ ] **Step 2: Add vault helper functions before the return statement**
-
-Add after the `disableNotifications` function:
-
-```ts
-  async function testVaultConnection() {
-    setVaultTestResult("idle")
-    const res = await fetch("/api/v1/vault/status")
-    const data = await res.json()
-    setVaultTestResult(data.accessible ? "ok" : "fail")
-  }
-
-  async function saveVaultConfig() {
-    setVaultSaving(true)
-    const res = await fetch("/api/v1/vault/config", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        vaultPath,
-        workdayCron: vaultWorkdayCron,
-        weekendCron: vaultWeekendCron,
-        enabled: vaultEnabled,
-      }),
-    })
-    if (res.ok) {
-      const saved = await res.json()
-      setVaultStatus(prev => ({
-        ...prev,
-        configured: true,
-        config: {
-          vaultPath: saved.vaultPath,
-          workdayCron: saved.workdayCron,
-          weekendCron: saved.weekendCron,
-          enabled: saved.enabled,
-          lastSyncAt: saved.lastSyncAt,
-        },
-      }))
-    }
-    setVaultSaving(false)
-  }
-
-  async function triggerVaultSync() {
-    setVaultSyncing(true)
-    const res = await fetch("/api/v1/vault/sync", { method: "POST" })
-    if (res.ok) {
-      const result = await res.json()
-      setVaultStatus(prev => ({
-        ...prev,
-        config: prev.config ? { ...prev.config, lastSyncAt: new Date().toISOString() } : null,
-      }))
-      console.info("[vault sync] result:", result)
-    }
-    setVaultSyncing(false)
-  }
-```
-
-- [ ] **Step 3: Add Obsidian Vault section to the return JSX**
-
-Add after the closing `</section>` of the Google Integration section (before the final `</div>`):
-
-```tsx
-      <section>
-        <h2 className="text-base font-semibold text-[#c0c0d0] mb-1">Obsidian Vault</h2>
-        <p className="text-sm text-[#666688] mb-4">Connect an Obsidian vault on the same server for bidirectional note sync.</p>
-
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm text-[#c0c0d0] mb-1">Vault path</label>
-            <div className="flex gap-2">
-              <Input
-                placeholder="/home/user/vault"
-                value={vaultPath}
-                onChange={e => setVaultPath(e.target.value)}
-              />
-              <Button variant="secondary" onClick={testVaultConnection}>
-                Test
-              </Button>
-            </div>
-            {vaultTestResult === "ok" && (
-              <p className="text-xs text-[#00ff88] mt-1">Vault accessible</p>
-            )}
-            {vaultTestResult === "fail" && (
-              <p className="text-xs text-red-400 mt-1">Vault not found or not readable</p>
-            )}
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm text-[#c0c0d0] mb-1">Work days (Mon-Fri)</label>
-              <select
-                value={vaultWorkdayCron}
-                onChange={e => setVaultWorkdayCron(e.target.value)}
-                className="w-full bg-[#111125] border border-[rgba(0,255,136,0.15)] rounded-lg px-3 py-2 text-sm text-[#c0c0d0] focus:outline-none focus:border-[rgba(0,255,136,0.4)]"
-              >
-                {WORKDAY_OPTIONS.map(o => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm text-[#c0c0d0] mb-1">Weekends</label>
-              <select
-                value={vaultWeekendCron}
-                onChange={e => setVaultWeekendCron(e.target.value)}
-                className="w-full bg-[#111125] border border-[rgba(0,255,136,0.15)] rounded-lg px-3 py-2 text-sm text-[#c0c0d0] focus:outline-none focus:border-[rgba(0,255,136,0.4)]"
-              >
-                {WEEKEND_OPTIONS.map(o => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <input
-              type="checkbox"
-              id="vault-enabled"
-              checked={vaultEnabled}
-              onChange={e => setVaultEnabled(e.target.checked)}
-              className="accent-[#00ff88]"
-            />
-            <label htmlFor="vault-enabled" className="text-sm text-[#c0c0d0]">Enable sync</label>
-          </div>
-
-          {vaultStatus.config?.lastSyncAt && (
-            <p className="text-xs text-[#666688]">
-              Last synced: {new Date(vaultStatus.config.lastSyncAt).toLocaleString("en-GB")}
-            </p>
-          )}
-          {vaultStatus.configured && !vaultStatus.config?.lastSyncAt && (
-            <p className="text-xs text-[#666688]">Last synced: Never</p>
-          )}
-
-          <div className="flex gap-2">
-            <Button onClick={saveVaultConfig} disabled={vaultSaving || !vaultPath.trim()}>
-              {vaultSaving ? "Saving..." : "Save"}
-            </Button>
-            {vaultStatus.configured && (
-              <Button variant="secondary" onClick={triggerVaultSync} disabled={vaultSyncing}>
-                {vaultSyncing ? "Syncing..." : "Sync now"}
-              </Button>
-            )}
-          </div>
-        </div>
-      </section>
-```
-
-- [ ] **Step 4: TypeScript compile check**
-
-```bash
-npx tsc --noEmit
-```
-
-Expected: No errors.
-
-- [ ] **Step 5: Run full test suite**
-
-```bash
-npx jest --no-coverage
-```
-
-Expected: All tests pass.
-
-- [ ] **Step 6: Commit**
-
-```bash
-git add app/(dashboard)/settings/page.tsx
-git commit -m "feat: add Obsidian Vault section to Settings page"
-```
-
----
-
-### Task 9: Push to Remote
-
-- [ ] **Step 1: Verify clean state**
-
-```bash
-git status
-git log --oneline -8
-```
-
-Expected: Working tree clean. Last 8 commits show the Phase 5 work.
-
-- [ ] **Step 2: Push branch**
-
-```bash
-git push origin main
-```
-
-Expected: Branch pushed successfully.
-
----
-
-## Self-Review Notes
-
-**Spec coverage check:**
-- VaultConfig + VaultNote schema: Task 1
-- searchVault, getNoteContent: Task 2
-- createNote, updateNote: Task 3
-- shouldRunSync, runVaultSync: Task 4
-- GET /api/holly/v1/vault/search: Task 5
-- GET /api/holly/v1/vault/note: Task 5
-- POST /api/holly/v1/vault/note: Task 5
-- PATCH /api/holly/v1/vault/note: Task 5
-- POST /api/holly/v1/vault/sync: Task 5
-- GET /api/v1/vault/status: Task 6
-- POST /api/v1/vault/config: Task 6
-- POST /api/v1/vault/sync: Task 6
-- Cron integration (step 4): Task 7
-- Briefing vaultUpdates field: Task 7
-- Settings Obsidian Vault section: Task 8
-
-**Security coverage:**
-- Path traversal prevention via `path.relative` + `startsWith("..")` check: vault.ts `isPathSafe()`
-- Filename allowlist `/^[a-zA-Z0-9 _-]+$/` on createNote
-- Vault root set by authenticated user only, never from request input
-- Holly API routes: validateHollyRequest middleware
-- Web routes: auth() session check
-
-**Error handling coverage:**
-- vault_not_configured -> 503 on all Holly vault routes
-- Not found -> 404 on read/update
-- Path traversal -> 400
-- Invalid filename -> 422
-- File already exists -> 409
-- Sync failure logged, lastSyncAt not updated
-- Redis unavailable -> empty vaultUpdates in briefing
