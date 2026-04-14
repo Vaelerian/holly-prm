@@ -15,14 +15,18 @@ const links = [
   { href: "/settings", label: "Settings" },
 ]
 
-export function Sidebar() {
+const adminLinks = [
+  { href: "/admin", label: "Admin" },
+]
+
+export function Sidebar({ isAdmin }: { isAdmin?: boolean } = {}) {
   const pathname = usePathname()
 
   return (
     <nav className="hidden md:flex flex-col w-44 min-h-screen bg-[#111125] border-r border-[rgba(0,255,136,0.15)] flex-shrink-0">
       <div className="px-4 py-5 font-bold text-lg border-b border-[rgba(0,255,136,0.15)] text-[#00ff88] tracking-wide">Holly</div>
       <div className="flex-1 py-2">
-        {links.map(({ href, label }) => (
+        {[...links, ...(isAdmin ? adminLinks : [])].map(({ href, label }) => (
           <Link
             key={href}
             href={href}

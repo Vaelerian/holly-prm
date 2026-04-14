@@ -5,12 +5,12 @@ import { Sidebar } from "./sidebar"
 import { BottomNav } from "./bottom-nav"
 import { LogInteractionModal } from "@/components/interactions/log-interaction-modal"
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+export function AppShell({ children, isAdmin }: { children: React.ReactNode; isAdmin?: boolean }) {
   const [logOpen, setLogOpen] = useState(false)
 
   return (
     <div className="flex min-h-screen bg-[#0a0a1a]">
-      <Sidebar />
+      <Sidebar isAdmin={isAdmin} />
       <main className="flex-1 pb-20 md:pb-0 overflow-y-auto">
         {children}
       </main>
