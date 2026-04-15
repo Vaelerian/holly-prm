@@ -1,10 +1,13 @@
 import { prisma } from "@/lib/db"
 import { Actor } from "@/app/generated/prisma/client"
 import { upsertCalendarEvent, deleteCalendarEvent } from "@/lib/services/calendar-sync"
+import { getOrCreateDefaultGoal } from "@/lib/services/goals"
 import type { CreateTaskInput, UpdateTaskInput } from "@/lib/validations/task"
 
 interface ListTasksOptions {
   projectId?: string
+  roleId?: string
+  goalId?: string
   status?: string
   assignedTo?: string
   milestoneOnly?: boolean
@@ -12,22 +15,39 @@ interface ListTasksOptions {
 }
 
 export async function listTasks(opts: ListTasksOptions) {
-  const where: Record<string, unknown> = {
-    project: {
+  const where: Record<string, unknown> = {}
+
+  if (opts.projectId) {
+    // When filtering by project, use project-based access control
+    where.projectId = opts.projectId
+    where.project = {
       OR: [
         { userId: opts.userId },
         { members: { some: { userId: opts.userId } } },
       ],
-    },
+    }
+  } else {
+    // Tasks can belong to a project OR be directly under a goal
+    where.OR = [
+      { project: { OR: [{ userId: opts.userId }, { members: { some: { userId: opts.userId } } }] } },
+      { projectId: null, goal: { userId: opts.userId } },
+    ]
   }
-  if (opts.projectId) where.projectId = opts.projectId
+
+  if (opts.roleId) where.roleId = opts.roleId
+  if (opts.goalId) where.goalId = opts.goalId
   if (opts.status) where.status = opts.status
   if (opts.assignedTo) where.assignedTo = opts.assignedTo
   if (opts.milestoneOnly) where.isMilestone = true
+
   return prisma.task.findMany({
     where,
     orderBy: { createdAt: "asc" },
-    include: { project: { select: { id: true, title: true } } },
+    include: {
+      project: { select: { id: true, title: true } },
+      goal: { select: { id: true, name: true } },
+      role: { select: { id: true, name: true } },
+    },
   })
 }
 
@@ -35,22 +55,34 @@ export async function getTask(id: string, userId: string) {
   return prisma.task.findFirst({
     where: {
       id,
-      project: {
-        OR: [
-          { userId },
-          { members: { some: { userId } } },
-        ],
-      },
+      OR: [
+        { project: { OR: [{ userId }, { members: { some: { userId } } }] } },
+        { projectId: null, goal: { userId } },
+      ],
     },
     include: {
       project: { select: { id: true, title: true } },
+      goal: { select: { id: true, name: true } },
+      role: { select: { id: true, name: true } },
       actionItems: { orderBy: { createdAt: "asc" } },
     },
   })
 }
 
 export async function createTask(data: CreateTaskInput, actor: Actor, userId: string) {
-  // Verify project access when projectId is provided (owner or member can add tasks)
+  // Determine goalId - use provided or fall back to default
+  let goalId = data.goalId
+  if (!goalId) {
+    const defaultGoal = await getOrCreateDefaultGoal(userId)
+    goalId = defaultGoal.id
+  }
+
+  // Look up the goal to derive roleId
+  const goal = await prisma.goal.findFirst({ where: { id: goalId, userId } })
+  if (!goal) return null
+  const roleId = goal.roleId
+
+  // Verify project access when projectId is provided
   if (data.projectId) {
     const project = await prisma.project.findFirst({
       where: {
@@ -59,10 +91,22 @@ export async function createTask(data: CreateTaskInput, actor: Actor, userId: st
       },
     })
     if (!project) return null
+
+    // Validate that the project's goal matches the task's goal
+    if (project.goalId && project.goalId !== goalId) {
+      return null
+    }
   }
 
+  const { goalId: _goalId, ...rest } = data
   const task = await prisma.task.create({
-    data: { ...data, dueDate: data.dueDate ? new Date(data.dueDate) : null },
+    data: {
+      ...rest,
+      projectId: data.projectId || null,
+      goalId,
+      roleId,
+      dueDate: data.dueDate ? new Date(data.dueDate) : null,
+    },
   })
   await prisma.auditLog.create({
     data: { entity: "Task", entityId: task.id, action: "create", actor, userId },
@@ -77,17 +121,37 @@ export async function updateTask(id: string, data: UpdateTaskInput, actor: Actor
   const existing = await prisma.task.findFirst({
     where: {
       id,
-      project: { OR: [{ userId }, { members: { some: { userId } } }] },
+      OR: [
+        { project: { OR: [{ userId }, { members: { some: { userId } } }] } },
+        { projectId: null, goal: { userId } },
+      ],
     },
   })
   if (!existing) return null
 
+  // If goalId is changing, derive new roleId
+  const updateData: Record<string, unknown> = {
+    ...data,
+    dueDate: data.dueDate !== undefined ? (data.dueDate ? new Date(data.dueDate) : null) : undefined,
+  }
+
+  if (data.goalId && data.goalId !== existing.goalId) {
+    const goal = await prisma.goal.findFirst({ where: { id: data.goalId, userId } })
+    if (!goal) return null
+    updateData.roleId = goal.roleId
+
+    // If task has a project, validate the goal matches
+    if (existing.projectId) {
+      const project = await prisma.project.findFirst({ where: { id: existing.projectId } })
+      if (project && project.goalId && project.goalId !== data.goalId) {
+        return null
+      }
+    }
+  }
+
   const task = await prisma.task.update({
     where: { id },
-    data: {
-      ...data,
-      dueDate: data.dueDate !== undefined ? (data.dueDate ? new Date(data.dueDate) : null) : undefined,
-    },
+    data: updateData,
   })
   await prisma.auditLog.create({
     data: { entity: "Task", entityId: id, action: "update", actor, userId, diff: { before: existing, after: task } },
@@ -101,9 +165,15 @@ export async function updateTask(id: string, data: UpdateTaskInput, actor: Actor
 }
 
 export async function deleteTask(id: string, actor: Actor, userId: string) {
-  // Only the project owner can delete tasks
+  // Owner can delete: project owner or goal owner when no project
   const existing = await prisma.task.findFirst({
-    where: { id, project: { userId } },
+    where: {
+      id,
+      OR: [
+        { project: { userId } },
+        { projectId: null, goal: { userId } },
+      ],
+    },
   })
   if (!existing) return null
 

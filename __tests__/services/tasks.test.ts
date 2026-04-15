@@ -13,8 +13,15 @@ jest.mock("@/lib/db", () => ({
     project: {
       findFirst: jest.fn(),
     },
+    goal: {
+      findFirst: jest.fn(),
+    },
     auditLog: { create: jest.fn() },
   },
+}))
+
+jest.mock("@/lib/services/goals", () => ({
+  getOrCreateDefaultGoal: jest.fn().mockResolvedValue({ id: "default-goal-id", roleId: "default-role-id" }),
 }))
 
 const mockPrisma = prisma as jest.Mocked<typeof prisma>
@@ -31,18 +38,16 @@ describe("listTasks", () => {
     )
   })
 
-  it("scopes tasks to projects owned or shared with the user", async () => {
+  it("scopes tasks to projects owned/shared or goals owned by the user", async () => {
     mockPrisma.task.findMany.mockResolvedValue([])
     await listTasks({ userId: "user-1" })
     expect(mockPrisma.task.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
-          project: {
-            OR: [
-              { userId: "user-1" },
-              { members: { some: { userId: "user-1" } } },
-            ],
-          },
+          OR: [
+            { project: { OR: [{ userId: "user-1" }, { members: { some: { userId: "user-1" } } }] } },
+            { projectId: null, goal: { userId: "user-1" } },
+          ],
         }),
       })
     )
@@ -63,25 +68,35 @@ describe("listTasks", () => {
       expect.objectContaining({ where: expect.objectContaining({ status: "todo" }) })
     )
   })
+
+  it("filters by roleId and goalId when provided", async () => {
+    mockPrisma.task.findMany.mockResolvedValue([])
+    await listTasks({ roleId: "role-1", goalId: "goal-1", userId: "user-1" })
+    expect(mockPrisma.task.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ roleId: "role-1", goalId: "goal-1" }),
+      })
+    )
+  })
 })
 
 describe("getTask", () => {
-  it("returns task with project and actionItems when user has access", async () => {
+  it("returns task with project, goal, role, and actionItems when user has access", async () => {
     const task = { id: "task-1", title: "T1", project: { id: "proj-1", title: "P1" }, actionItems: [] }
     mockPrisma.task.findFirst.mockResolvedValue(task as any)
     const result = await getTask("task-1", "user-1")
     expect(mockPrisma.task.findFirst).toHaveBeenCalledWith({
       where: {
         id: "task-1",
-        project: {
-          OR: [
-            { userId: "user-1" },
-            { members: { some: { userId: "user-1" } } },
-          ],
-        },
+        OR: [
+          { project: { OR: [{ userId: "user-1" }, { members: { some: { userId: "user-1" } } }] } },
+          { projectId: null, goal: { userId: "user-1" } },
+        ],
       },
       include: expect.objectContaining({
         project: expect.anything(),
+        goal: expect.anything(),
+        role: expect.anything(),
         actionItems: expect.anything(),
       }),
     })
@@ -97,9 +112,10 @@ describe("getTask", () => {
 
 describe("createTask", () => {
   it("creates task and writes audit log when user has project access", async () => {
-    const input = { projectId: "proj-1", title: "T1", description: "", status: "todo" as const, priority: "medium" as const, assignedTo: "ian" as const, dueDate: null, isMilestone: false }
+    const input = { projectId: "proj-1", goalId: "goal-1", title: "T1", description: "", status: "todo" as const, priority: "medium" as const, assignedTo: "ian" as const, dueDate: null, isMilestone: false }
     const created = { id: "task-1", ...input }
-    mockPrisma.project.findFirst.mockResolvedValue({ id: "proj-1" } as any)
+    mockPrisma.goal.findFirst.mockResolvedValue({ id: "goal-1", roleId: "role-1", userId: "user-1" } as any)
+    mockPrisma.project.findFirst.mockResolvedValue({ id: "proj-1", goalId: "goal-1" } as any)
     mockPrisma.task.create.mockResolvedValue(created as any)
     mockPrisma.auditLog.create.mockResolvedValue({} as any)
     const result = await createTask(input, "ian", "user-1")
@@ -111,11 +127,63 @@ describe("createTask", () => {
   })
 
   it("returns null when user does not have access to the project", async () => {
-    const input = { projectId: "proj-1", title: "T1", description: "", status: "todo" as const, priority: "medium" as const, assignedTo: "ian" as const, dueDate: null, isMilestone: false }
+    const input = { projectId: "proj-1", goalId: "goal-1", title: "T1", description: "", status: "todo" as const, priority: "medium" as const, assignedTo: "ian" as const, dueDate: null, isMilestone: false }
+    mockPrisma.goal.findFirst.mockResolvedValue({ id: "goal-1", roleId: "role-1", userId: "user-1" } as any)
     mockPrisma.project.findFirst.mockResolvedValue(null)
     const result = await createTask(input, "ian", "other-user")
     expect(result).toBeNull()
     expect(mockPrisma.task.create).not.toHaveBeenCalled()
+  })
+
+  it("creates task with goalId and derives roleId", async () => {
+    const input = { projectId: null, goalId: "goal-1", title: "T1", description: "", status: "todo" as const, priority: "medium" as const, assignedTo: "ian" as const, dueDate: null, isMilestone: false }
+    const created = { id: "task-1", ...input, roleId: "role-1" }
+    mockPrisma.goal.findFirst.mockResolvedValue({ id: "goal-1", roleId: "role-1", userId: "user-1" } as any)
+    mockPrisma.task.create.mockResolvedValue(created as any)
+    mockPrisma.auditLog.create.mockResolvedValue({} as any)
+    const result = await createTask(input, "ian", "user-1")
+    expect(mockPrisma.task.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ goalId: "goal-1", roleId: "role-1" }),
+    })
+    expect(result).toEqual(created)
+  })
+
+  it("creates task without projectId (directly under goal)", async () => {
+    const input = { title: "T1", description: "", status: "todo" as const, priority: "medium" as const, assignedTo: "ian" as const, dueDate: null, isMilestone: false, goalId: "goal-1" }
+    const created = { id: "task-1", ...input, projectId: null, roleId: "role-1" }
+    mockPrisma.goal.findFirst.mockResolvedValue({ id: "goal-1", roleId: "role-1", userId: "user-1" } as any)
+    mockPrisma.task.create.mockResolvedValue(created as any)
+    mockPrisma.auditLog.create.mockResolvedValue({} as any)
+    const result = await createTask(input, "ian", "user-1")
+    expect(mockPrisma.task.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ projectId: null, goalId: "goal-1", roleId: "role-1" }),
+    })
+    expect(mockPrisma.project.findFirst).not.toHaveBeenCalled()
+    expect(result).toEqual(created)
+  })
+
+  it("rejects when projectId goal does not match", async () => {
+    const input = { projectId: "proj-1", goalId: "goal-1", title: "T1", description: "", status: "todo" as const, priority: "medium" as const, assignedTo: "ian" as const, dueDate: null, isMilestone: false }
+    mockPrisma.goal.findFirst.mockResolvedValue({ id: "goal-1", roleId: "role-1", userId: "user-1" } as any)
+    mockPrisma.project.findFirst.mockResolvedValue({ id: "proj-1", goalId: "goal-2" } as any)
+    const result = await createTask(input, "ian", "user-1")
+    expect(result).toBeNull()
+    expect(mockPrisma.task.create).not.toHaveBeenCalled()
+  })
+
+  it("falls back to default goal when goalId not provided", async () => {
+    const { getOrCreateDefaultGoal } = require("@/lib/services/goals")
+    const input = { title: "T1", description: "", status: "todo" as const, priority: "medium" as const, assignedTo: "ian" as const, dueDate: null, isMilestone: false }
+    const created = { id: "task-1", ...input, goalId: "default-goal-id", roleId: "default-role-id", projectId: null }
+    mockPrisma.goal.findFirst.mockResolvedValue({ id: "default-goal-id", roleId: "default-role-id", userId: "user-1" } as any)
+    mockPrisma.task.create.mockResolvedValue(created as any)
+    mockPrisma.auditLog.create.mockResolvedValue({} as any)
+    const result = await createTask(input, "ian", "user-1")
+    expect(getOrCreateDefaultGoal).toHaveBeenCalledWith("user-1")
+    expect(mockPrisma.task.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ goalId: "default-goal-id", roleId: "default-role-id" }),
+    })
+    expect(result).toEqual(created)
   })
 })
 
@@ -169,11 +237,17 @@ describe("deleteTask", () => {
     expect(mockPrisma.task.delete).not.toHaveBeenCalled()
   })
 
-  it("uses owner-only check (does not allow members to delete)", async () => {
+  it("uses owner-only check including goal ownership for tasks without projects", async () => {
     mockPrisma.task.findFirst.mockResolvedValue(null)
     await deleteTask("task-1", "ian", "member-user")
     expect(mockPrisma.task.findFirst).toHaveBeenCalledWith({
-      where: { id: "task-1", project: { userId: "member-user" } },
+      where: {
+        id: "task-1",
+        OR: [
+          { project: { userId: "member-user" } },
+          { projectId: null, goal: { userId: "member-user" } },
+        ],
+      },
     })
   })
 })
