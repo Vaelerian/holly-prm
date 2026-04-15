@@ -361,7 +361,7 @@ function generateYearlyByDate(pattern: RepeatPatternData, rangeStart: Date, rang
   }
 
   while (true) {
-    const candidate = new Date(Date.UTC(year, dp.month, dp.day))
+    const candidate: Date = new Date(Date.UTC(year, dp.month, dp.day))
     // Check the date didn't overflow (e.g. Feb 29 in non-leap year)
     if (candidate.getUTCMonth() === dp.month && candidate >= start && inRange(candidate, rangeStart, rangeEnd)) {
       dates.push(candidate)

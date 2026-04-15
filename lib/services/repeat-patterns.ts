@@ -25,7 +25,7 @@ export async function createRepeatPattern(data: CreateRepeatPatternInput, userId
       intervalValue: data.intervalValue ?? 1,
       startDate: new Date(`${data.startDate}T00:00:00Z`),
       endDate: data.endDate ? new Date(`${data.endDate}T00:00:00Z`) : null,
-      dayPattern: data.dayPattern ?? {},
+      dayPattern: data.dayPattern as any ?? {},
       startMinutes: data.startMinutes,
       endMinutes: data.endMinutes,
       title: data.title ?? "",
