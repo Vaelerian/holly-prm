@@ -270,10 +270,10 @@ model Project {
   updatedAt   DateTime        @updatedAt
   userId      String?
   user        User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
-  roleId              String?
-  role                Role?          @relation("ProjectRole", fields: [roleId], references: [id], onDelete: SetNull)
-  goalId              String?
-  goal                Goal?          @relation("ProjectGoal", fields: [goalId], references: [id], onDelete: SetNull)
+  roleId              String
+  role                Role           @relation("ProjectRole", fields: [roleId], references: [id], onDelete: SetNull)
+  goalId              String
+  goal                Goal           @relation("ProjectGoal", fields: [goalId], references: [id], onDelete: SetNull)
   members             ProjectMember[]
   linkedContacts      Contact[]      @relation("ContactProject")
   linkedInteractions  Interaction[]  @relation("InteractionProject")
@@ -290,10 +290,10 @@ model Task {
   assignedTo  Actor
   dueDate     DateTime?
   isMilestone Boolean      @default(false)
-  roleId      String?
-  role        Role?        @relation("TaskRole", fields: [roleId], references: [id], onDelete: SetNull)
-  goalId      String?
-  goal        Goal?        @relation("TaskGoal", fields: [goalId], references: [id], onDelete: SetNull)
+  roleId      String
+  role        Role         @relation("TaskRole", fields: [roleId], references: [id], onDelete: SetNull)
+  goalId      String
+  goal        Goal         @relation("TaskGoal", fields: [goalId], references: [id], onDelete: SetNull)
   actionItems ActionItem[]
   createdAt   DateTime     @default(now())
 }
