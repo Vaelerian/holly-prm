@@ -76,10 +76,10 @@ export default async function DashboardPage() {
               <h2 className="text-xs font-semibold text-[#666688] uppercase tracking-wide mb-3">Upcoming milestones</h2>
               <div className="space-y-2">
                 {data.upcomingMilestones.map(m => (
-                  <Link key={m.id} href={`/projects/${m.project.id}`} className="flex items-center justify-between bg-[#111125] border border-[rgba(160,0,255,0.2)] rounded-lg px-4 py-2.5 hover:border-purple-400 transition-colors">
+                  <Link key={m.id} href={m.project ? `/projects/${m.project.id}` : "#"} className="flex items-center justify-between bg-[#111125] border border-[rgba(160,0,255,0.2)] rounded-lg px-4 py-2.5 hover:border-purple-400 transition-colors">
                     <div>
                       <p className="text-sm font-semibold text-[#c0c0d0]">★ {m.title}</p>
-                      <p className="text-xs text-[#666688]">{m.project.title}</p>
+                      <p className="text-xs text-[#666688]">{m.project?.title ?? "No project"}</p>
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
                       <Badge variant={m.status === "in_progress" ? "info" : "default"}>{m.status.replace("_", " ")}</Badge>
@@ -107,7 +107,7 @@ export default async function DashboardPage() {
                     interactionId={item.interactionId}
                     taskId={item.taskId}
                     contactId={item.interaction?.contact?.id}
-                    taskProjectId={item.task?.projectId}
+                    taskProjectId={item.task?.projectId ?? undefined}
                   />
                 ))}
               </div>
