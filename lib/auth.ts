@@ -33,6 +33,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             create: { email: adminEmail, name: "Admin", status: "approved" },
             update: {},
           })
+          void import("@/lib/services/roles").then(m => m.getOrCreateDefaultRole(adminUser.id)).catch(() => {})
           return { id: adminUser.id, email: adminEmail, name: "Admin", role: "admin" } as any
         }
 
@@ -61,6 +62,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           return "/login?error=pending"
         }
         if (dbUser.status !== "approved") return "/login?error=pending"
+        void import("@/lib/services/roles").then(m => m.getOrCreateDefaultRole(dbUser.id)).catch(() => {})
       }
       return true
     },
