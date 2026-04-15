@@ -1,4 +1,5 @@
 import { listProjects } from "@/lib/services/projects"
+import { listRoles } from "@/lib/services/roles"
 import { ProjectCard } from "@/components/projects/project-card"
 import { auth } from "@/lib/auth"
 import Link from "next/link"
@@ -10,12 +11,22 @@ export default async function ProjectsPage({ searchParams }: PageProps) {
   const session = await auth()
   const userId = session?.userId ?? ""
   let projects: Awaited<ReturnType<typeof listProjects>> = []
+  let roles: Awaited<ReturnType<typeof listRoles>> = []
   let dbError = false
   try {
-    projects = await listProjects({ status, roleId, goalId, userId })
+    ;[projects, roles] = await Promise.all([
+      listProjects({ status, roleId, goalId, userId }),
+      listRoles(userId),
+    ])
   } catch (e) {
     console.error("[projects page]", e)
     dbError = true
+  }
+
+  // Build role colour map
+  const roleColourMap: Record<string, string> = {}
+  for (const role of roles) {
+    roleColourMap[role.name] = role.colour
   }
 
   return (
@@ -32,7 +43,7 @@ export default async function ProjectsPage({ searchParams }: PageProps) {
         </Link>
       </div>
 
-      <form className="flex gap-2">
+      <form className="flex gap-2 flex-wrap">
         <select name="status" defaultValue={status ?? ""} className="border border-[rgba(0,255,136,0.2)] rounded-lg px-3 py-2 text-sm bg-[#0a0a1a] text-[#c0c0d0] focus:outline-none focus:ring-2 focus:ring-[#00ff88]">
           <option value="">All statuses</option>
           <option value="planning">Planning</option>
@@ -40,6 +51,12 @@ export default async function ProjectsPage({ searchParams }: PageProps) {
           <option value="on_hold">On hold</option>
           <option value="done">Done</option>
           <option value="cancelled">Cancelled</option>
+        </select>
+        <select name="roleId" defaultValue={roleId ?? ""} className="border border-[rgba(0,255,136,0.2)] rounded-lg px-3 py-2 text-sm bg-[#0a0a1a] text-[#c0c0d0] focus:outline-none focus:ring-2 focus:ring-[#00ff88]">
+          <option value="">All roles</option>
+          {roles.map(r => (
+            <option key={r.id} value={r.id}>{r.name}</option>
+          ))}
         </select>
         <button type="submit" className="bg-[rgba(0,255,136,0.05)] border border-[rgba(0,255,136,0.2)] text-[#c0c0d0] text-sm px-3 py-2 rounded-lg hover:bg-[rgba(0,255,136,0.08)]">Filter</button>
       </form>
@@ -52,6 +69,9 @@ export default async function ProjectsPage({ searchParams }: PageProps) {
             const regularTasks = p.tasks.filter(t => !t.isMilestone)
             const taskDoneCount = regularTasks.filter(t => t.status === "done").length
             const isShared = p.userId !== userId
+            const roleName = p.role?.name
+            const goalName = p.goal?.name
+            const roleColour = roleName ? roleColourMap[roleName] ?? "#666688" : "#666688"
             return (
               <div key={p.id} className="relative">
                 {isShared && (
@@ -59,16 +79,26 @@ export default async function ProjectsPage({ searchParams }: PageProps) {
                     Shared
                   </span>
                 )}
-                <ProjectCard
-                  id={p.id}
-                  title={p.title}
-                  category={p.category}
-                  status={p.status}
-                  priority={p.priority}
-                  targetDate={p.targetDate}
-                  taskDoneCount={taskDoneCount}
-                  taskTotalCount={regularTasks.length}
-                />
+                <div className="block bg-[#111125] border border-[rgba(0,255,136,0.15)] rounded-lg hover:border-[#00ff88] transition-colors">
+                  {(roleName || goalName) && (
+                    <div className="flex items-center gap-2 px-4 pt-2 pb-0">
+                      <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: roleColour }} />
+                      <span className="text-xs text-[#666688]">
+                        {roleName}{goalName ? ` / ${goalName}` : ""}
+                      </span>
+                    </div>
+                  )}
+                  <ProjectCard
+                    id={p.id}
+                    title={p.title}
+                    category={p.category}
+                    status={p.status}
+                    priority={p.priority}
+                    targetDate={p.targetDate}
+                    taskDoneCount={taskDoneCount}
+                    taskTotalCount={regularTasks.length}
+                  />
+                </div>
               </div>
             )
           })}
