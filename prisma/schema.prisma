@@ -95,6 +95,20 @@ enum GoalStatus {
   archived
 }
 
+enum RepeatType {
+  daily
+  weekly
+  monthly_by_date
+  monthly_by_day
+  yearly_by_date
+  yearly_by_day
+}
+
+enum ExceptionType {
+  modified
+  skipped
+}
+
 model User {
   id           String     @id @default(uuid())
   email        String     @unique
@@ -125,6 +139,9 @@ model User {
   contactShares       ContactShare[]
   roles               Role[]
   goals               Goal[]
+  timeSlots           TimeSlot[]
+  repeatPatterns      RepeatPattern[]
+  repeatExceptions    RepeatException[]
 }
 
 model Role {
@@ -140,9 +157,11 @@ model Role {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  goals    Goal[]
-  projects Project[] @relation("ProjectRole")
-  tasks    Task[]    @relation("TaskRole")
+  goals          Goal[]
+  projects       Project[] @relation("ProjectRole")
+  tasks          Task[]    @relation("TaskRole")
+  timeSlots      TimeSlot[]
+  repeatPatterns RepeatPattern[]
 
   @@unique([userId, name])
 }
@@ -459,4 +478,62 @@ model ContactShare {
 
   @@unique([contactId, userId])
   @@index([userId])
+}
+
+model TimeSlot {
+  id              String         @id @default(uuid())
+  roleId          String
+  role            Role           @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  date            DateTime
+  startMinutes    Int
+  endMinutes      Int
+  capacityMinutes Int
+  usedMinutes     Int            @default(0)
+  taskCount       Int            @default(0)
+  title           String         @default("")
+  repeatPatternId String?
+  repeatPattern   RepeatPattern? @relation(fields: [repeatPatternId], references: [id], onDelete: SetNull)
+  userId          String?
+  user            User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@index([userId, date])
+}
+
+model RepeatPattern {
+  id            String     @id @default(uuid())
+  roleId        String
+  role          Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  repeatType    RepeatType
+  intervalValue Int        @default(1)
+  startDate     DateTime
+  endDate       DateTime?
+  dayPattern    Json       @default("{}")
+  startMinutes  Int
+  endMinutes    Int
+  title         String     @default("")
+  userId        String?
+  user          User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  exceptions RepeatException[]
+  slots      TimeSlot[]
+}
+
+model RepeatException {
+  id                   String        @id @default(uuid())
+  repeatPatternId      String
+  repeatPattern        RepeatPattern @relation(fields: [repeatPatternId], references: [id], onDelete: Cascade)
+  exceptionDate        DateTime
+  exceptionType        ExceptionType
+  modifiedStartMinutes Int?
+  modifiedEndMinutes   Int?
+  modifiedTitle        String?
+  userId               String?
+  user                 User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt            DateTime      @default(now())
+
+  @@unique([repeatPatternId, exceptionDate])
 }
