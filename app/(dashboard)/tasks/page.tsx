@@ -3,17 +3,17 @@ import { TaskRow } from "@/components/tasks/task-row"
 import { auth } from "@/lib/auth"
 import { redirect } from "next/navigation"
 
-interface PageProps { searchParams: Promise<{ status?: string; assignedTo?: string; milestoneOnly?: string }> }
+interface PageProps { searchParams: Promise<{ status?: string; assignedTo?: string; milestoneOnly?: string; roleId?: string; goalId?: string }> }
 
 export default async function TasksPage({ searchParams }: PageProps) {
   const session = await auth()
   if (!session?.userId) redirect("/login")
-  const { status, assignedTo, milestoneOnly } = await searchParams
+  const { status, assignedTo, milestoneOnly, roleId, goalId } = await searchParams
   let tasks: Awaited<ReturnType<typeof listTasks>> = []
   let dbError = false
 
   try {
-    tasks = await listTasks({ status, assignedTo, milestoneOnly: milestoneOnly === "true", userId: session.userId })
+    tasks = await listTasks({ status, assignedTo, milestoneOnly: milestoneOnly === "true", roleId, goalId, userId: session.userId })
   } catch (e) {
     console.error("[tasks page]", e)
     dbError = true

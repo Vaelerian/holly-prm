@@ -8,7 +8,12 @@ export async function GET(req: NextRequest) {
   const userId = session?.userId
   if (!userId) return NextResponse.json({ error: "Unauthorized", code: "UNAUTHORIZED" }, { status: 401 })
   const { searchParams } = req.nextUrl
-  const projects = await listProjects({ status: searchParams.get("status") ?? undefined, userId })
+  const projects = await listProjects({
+    status: searchParams.get("status") ?? undefined,
+    roleId: searchParams.get("roleId") ?? undefined,
+    goalId: searchParams.get("goalId") ?? undefined,
+    userId,
+  })
   return NextResponse.json(projects)
 }
 

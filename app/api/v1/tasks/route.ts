@@ -10,6 +10,8 @@ export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl
   const tasks = await listTasks({
     projectId: searchParams.get("projectId") ?? undefined,
+    roleId: searchParams.get("roleId") ?? undefined,
+    goalId: searchParams.get("goalId") ?? undefined,
     status: searchParams.get("status") ?? undefined,
     assignedTo: searchParams.get("assignedTo") ?? undefined,
     milestoneOnly: searchParams.get("milestoneOnly") === "true",

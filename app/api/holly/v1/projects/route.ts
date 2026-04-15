@@ -12,6 +12,8 @@ export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl
   const projects = await listProjects({
     status: searchParams.get("status") ?? undefined,
+    roleId: searchParams.get("roleId") ?? undefined,
+    goalId: searchParams.get("goalId") ?? undefined,
     userId: authResult.userId,
   })
   return NextResponse.json(projects)

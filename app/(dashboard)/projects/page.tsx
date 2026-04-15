@@ -3,16 +3,16 @@ import { ProjectCard } from "@/components/projects/project-card"
 import { auth } from "@/lib/auth"
 import Link from "next/link"
 
-interface PageProps { searchParams: Promise<{ status?: string }> }
+interface PageProps { searchParams: Promise<{ status?: string; roleId?: string; goalId?: string }> }
 
 export default async function ProjectsPage({ searchParams }: PageProps) {
-  const { status } = await searchParams
+  const { status, roleId, goalId } = await searchParams
   const session = await auth()
   const userId = session?.userId ?? ""
   let projects: Awaited<ReturnType<typeof listProjects>> = []
   let dbError = false
   try {
-    projects = await listProjects({ status, userId })
+    projects = await listProjects({ status, roleId, goalId, userId })
   } catch (e) {
     console.error("[projects page]", e)
     dbError = true
