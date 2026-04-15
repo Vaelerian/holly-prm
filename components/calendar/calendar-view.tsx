@@ -72,7 +72,6 @@ function minutesToTime(m: number): string {
   return `${Math.floor(m / 60).toString().padStart(2, "0")}:${(m % 60).toString().padStart(2, "0")}`
 }
 
-/** Deterministic role colour from fallback palette */
 const ROLE_FALLBACK_COLORS = [
   "#6366F1", "#EC4899", "#F59E0B", "#10B981", "#3B82F6",
   "#8B5CF6", "#EF4444", "#14B8A6", "#F97316", "#06B6D4",
@@ -102,7 +101,19 @@ function CapacityBar({ usedMinutes, capacityMinutes, colour }: { usedMinutes: nu
 
 // ─── Month View ───
 
-function MonthView({ items, currentDate, setCurrentDate }: { items: CalendarItem[]; currentDate: Date; setCurrentDate: (d: Date) => void; timeSlots?: ResolvedTimeSlot[]; roles?: RoleOption[] }) {
+function MonthView({
+  items,
+  currentDate,
+  setCurrentDate,
+  timeSlots = [],
+  roles = [],
+}: {
+  items: CalendarItem[]
+  currentDate: Date
+  setCurrentDate: (d: Date) => void
+  timeSlots?: ResolvedTimeSlot[]
+  roles?: RoleOption[]
+}) {
   const year = currentDate.getFullYear()
   const month = currentDate.getMonth()
   const firstDay = new Date(year, month, 1)
@@ -117,6 +128,17 @@ function MonthView({ items, currentDate, setCurrentDate }: { items: CalendarItem
     const list = itemsByDate.get(item.date) ?? []
     list.push(item)
     itemsByDate.set(item.date, list)
+  }
+
+  // Group time slots by date then roleId with total minutes
+  const slotsByDate = new Map<string, Map<string, number>>()
+  for (const slot of timeSlots) {
+    let dateMap = slotsByDate.get(slot.date)
+    if (!dateMap) {
+      dateMap = new Map()
+      slotsByDate.set(slot.date, dateMap)
+    }
+    dateMap.set(slot.roleId, (dateMap.get(slot.roleId) ?? 0) + slot.capacityMinutes)
   }
 
   const monthLabel = currentDate.toLocaleDateString("en-GB", { month: "long", year: "numeric" })
@@ -135,6 +157,7 @@ function MonthView({ items, currentDate, setCurrentDate }: { items: CalendarItem
         {cells.map((day, i) => {
           const key = day ? toDateStr(day) : `empty-${i}`
           const dayItems = day ? (itemsByDate.get(toDateStr(day)) ?? []) : []
+          const daySlotRoles = day ? slotsByDate.get(toDateStr(day)) : undefined
           const isToday = day ? toDateStr(day) === toDateStr(new Date()) : false
           return (
             <div key={key} className={`bg-[#111125] min-h-[80px] px-1 py-1 ${day ? "" : "opacity-30"}`}>
@@ -157,6 +180,18 @@ function MonthView({ items, currentDate, setCurrentDate }: { items: CalendarItem
                     ))}
                     {dayItems.length > 3 && <div className="text-xs text-[#444466]">+{dayItems.length - 3} more</div>}
                   </div>
+                  {/* Role capacity indicators */}
+                  {daySlotRoles && daySlotRoles.size > 0 && (
+                    <div className="mt-1 space-y-0.5">
+                      {Array.from(daySlotRoles.entries()).map(([roleId]) => (
+                        <div
+                          key={roleId}
+                          className="h-1 rounded-full"
+                          style={{ backgroundColor: getRoleColor(roleId, roles), opacity: 0.6 }}
+                        />
+                      ))}
+                    </div>
+                  )}
                 </>
               )}
             </div>
@@ -204,9 +239,9 @@ function WeekView({
     slotsByDate.set(slot.date, list)
   }
 
-  const GRID_START = 360 // 06:00 in minutes
-  const GRID_END = 1320  // 22:00 in minutes
-  const GRID_HEIGHT = (GRID_END - GRID_START) // 960px
+  const GRID_START = 360
+  const GRID_END = 1320
+  const GRID_HEIGHT = (GRID_END - GRID_START)
   const hours = Array.from({ length: 17 }, (_, i) => i + 6)
 
   return (
@@ -253,7 +288,6 @@ function WeekView({
       {/* Time grid */}
       <div className="overflow-y-auto max-h-[600px] border border-[rgba(0,255,136,0.08)] rounded-b-lg">
         <div className="grid grid-cols-[48px_repeat(7,1fr)]" style={{ height: `${GRID_HEIGHT}px` }}>
-          {/* Hour labels column */}
           <div className="relative bg-[#0a0a1a]">
             {hours.map(h => (
               <div
@@ -266,7 +300,6 @@ function WeekView({
             ))}
           </div>
 
-          {/* Day columns */}
           {days.map(day => {
             const dateStr = toDateStr(day)
             const isToday = dateStr === todayStr
@@ -334,45 +367,91 @@ function WeekView({
 
 // ─── Agenda View ───
 
-function AgendaView({ items }: { items: CalendarItem[]; timeSlots?: ResolvedTimeSlot[] }) {
+function AgendaView({
+  items,
+  timeSlots = [],
+  roles = [],
+}: {
+  items: CalendarItem[]
+  timeSlots?: ResolvedTimeSlot[]
+  roles?: RoleOption[]
+}) {
   const today = toDateStr(new Date())
   const upcoming = items
     .filter(i => i.date >= today)
     .sort((a, b) => a.date.localeCompare(b.date))
 
-  const byDate = new Map<string, CalendarItem[]>()
+  const upcomingSlots = timeSlots
+    .filter(s => s.date >= today)
+    .sort((a, b) => a.date.localeCompare(b.date) || a.startMinutes - b.startMinutes)
+
+  // Collect all dates
+  const allDates = new Set<string>()
+  for (const item of upcoming) allDates.add(item.date)
+  for (const slot of upcomingSlots) allDates.add(slot.date)
+
+  const byDate = new Map<string, { slots: ResolvedTimeSlot[]; items: CalendarItem[] }>()
+  for (const date of allDates) {
+    byDate.set(date, { slots: [], items: [] })
+  }
   for (const item of upcoming) {
-    const list = byDate.get(item.date) ?? []
-    list.push(item)
-    byDate.set(item.date, list)
+    byDate.get(item.date)!.items.push(item)
+  }
+  for (const slot of upcomingSlots) {
+    byDate.get(slot.date)!.slots.push(slot)
   }
 
-  if (byDate.size === 0) {
+  const sortedDates = Array.from(byDate.keys()).sort()
+
+  if (sortedDates.length === 0) {
     return <p className="text-sm text-[#666688]">No upcoming items in the next 30 days.</p>
   }
 
   return (
     <div className="space-y-4">
-      {Array.from(byDate.entries()).map(([date, dateItems]) => (
-        <div key={date}>
-          <div className="text-xs font-semibold text-[#666688] uppercase tracking-wide mb-2">
-            {new Date(date + "T12:00:00").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}
+      {sortedDates.map(date => {
+        const { slots, items: dateItems } = byDate.get(date)!
+        return (
+          <div key={date}>
+            <div className="text-xs font-semibold text-[#666688] uppercase tracking-wide mb-2">
+              {new Date(date + "T12:00:00").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}
+            </div>
+            <div className="space-y-1">
+              {/* Time slots first */}
+              {slots.map(slot => {
+                const colour = getRoleColor(slot.roleId, roles)
+                return (
+                  <div key={slot.id} className="bg-[#111125] border border-[rgba(0,255,136,0.1)] rounded-lg px-3 py-2 flex items-center gap-2">
+                    <span
+                      className="flex-shrink-0 w-2 h-2 rounded-full"
+                      style={{ backgroundColor: colour }}
+                    />
+                    <span className="text-xs text-[#666688] flex-shrink-0 w-24">
+                      {minutesToTime(slot.startMinutes)} - {minutesToTime(slot.endMinutes)}
+                    </span>
+                    <span className="text-sm text-[#c0c0d0] truncate">{slot.title || "Time slot"}</span>
+                    <div className="ml-auto flex-shrink-0 w-16">
+                      <CapacityBar usedMinutes={slot.usedMinutes} capacityMinutes={slot.capacityMinutes} colour={colour} />
+                    </div>
+                  </div>
+                )
+              })}
+              {/* Regular items */}
+              {dateItems.map(item => (
+                <div key={item.id} className="bg-[#111125] border border-[rgba(0,255,136,0.1)] rounded-lg px-3 py-2 flex items-center gap-2">
+                  <span className={`flex-shrink-0 w-2 h-2 rounded-full ${TYPE_COLORS[item.type]}`} />
+                  {item.href ? (
+                    <Link href={item.href} className="text-sm text-[#c0c0d0] hover:text-[#00ff88] truncate">{item.title}</Link>
+                  ) : (
+                    <span className="text-sm text-[#c0c0d0] truncate">{item.title}</span>
+                  )}
+                  {item.type === "google_event" && <span className="ml-auto flex-shrink-0 text-xs text-[#444466] bg-[#0a0a1a] px-1.5 py-0.5 rounded">G</span>}
+                </div>
+              ))}
+            </div>
           </div>
-          <div className="space-y-1">
-            {dateItems.map(item => (
-              <div key={item.id} className="bg-[#111125] border border-[rgba(0,255,136,0.1)] rounded-lg px-3 py-2 flex items-center gap-2">
-                <span className={`flex-shrink-0 w-2 h-2 rounded-full ${TYPE_COLORS[item.type]}`} />
-                {item.href ? (
-                  <Link href={item.href} className="text-sm text-[#c0c0d0] hover:text-[#00ff88] truncate">{item.title}</Link>
-                ) : (
-                  <span className="text-sm text-[#c0c0d0] truncate">{item.title}</span>
-                )}
-                {item.type === "google_event" && <span className="ml-auto flex-shrink-0 text-xs text-[#444466] bg-[#0a0a1a] px-1.5 py-0.5 rounded">G</span>}
-              </div>
-            ))}
-          </div>
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 }
@@ -382,11 +461,22 @@ function AgendaView({ items }: { items: CalendarItem[]; timeSlots?: ResolvedTime
 export function CalendarView({ items, filters, timeSlots = [] }: CalendarViewProps) {
   const [view, setView] = useState<View>("month")
   const [currentDate, setCurrentDate] = useState(new Date())
+  const [roles, setRoles] = useState<RoleOption[]>([])
+  const [rolesLoaded, setRolesLoaded] = useState(false)
 
   useEffect(() => {
     const saved = sessionStorage.getItem("calendarView") as View | null
     if (saved) setView(saved)
   }, [])
+
+  // Eagerly fetch roles once for colour mapping
+  useEffect(() => {
+    if (rolesLoaded || timeSlots.length === 0) return
+    fetch("/api/v1/roles")
+      .then(res => res.ok ? res.json() : [])
+      .then(data => { setRoles(data); setRolesLoaded(true) })
+      .catch(() => {})
+  }, [rolesLoaded, timeSlots.length])
 
   function switchView(v: View) {
     setView(v)
@@ -408,9 +498,31 @@ export function CalendarView({ items, filters, timeSlots = [] }: CalendarViewPro
           </button>
         ))}
       </div>
-      {view === "month" && <MonthView items={filtered} currentDate={currentDate} setCurrentDate={setCurrentDate} timeSlots={timeSlots} />}
-      {view === "week" && <WeekView items={filtered} currentDate={currentDate} setCurrentDate={setCurrentDate} timeSlots={timeSlots} />}
-      {view === "agenda" && <AgendaView items={filtered} timeSlots={timeSlots} />}
+      {view === "month" && (
+        <MonthView
+          items={filtered}
+          currentDate={currentDate}
+          setCurrentDate={setCurrentDate}
+          timeSlots={timeSlots}
+          roles={roles}
+        />
+      )}
+      {view === "week" && (
+        <WeekView
+          items={filtered}
+          currentDate={currentDate}
+          setCurrentDate={setCurrentDate}
+          timeSlots={timeSlots}
+          roles={roles}
+        />
+      )}
+      {view === "agenda" && (
+        <AgendaView
+          items={filtered}
+          timeSlots={timeSlots}
+          roles={roles}
+        />
+      )}
     </div>
   )
 }
