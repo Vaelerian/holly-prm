@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
+import { useRouter } from "next/navigation"
 import Link from "next/link"
 import type { ResolvedTimeSlot } from "@/lib/services/repeat-expand"
 
@@ -72,6 +73,13 @@ function minutesToTime(m: number): string {
   return `${Math.floor(m / 60).toString().padStart(2, "0")}:${(m % 60).toString().padStart(2, "0")}`
 }
 
+function timeToMinutes(t: string): number {
+  const [h, m] = t.split(":").map(Number)
+  return h * 60 + m
+}
+
+/** Build a map of roleId -> colour from time slots (slots carry roleId but not colour).
+ *  We'll fetch roles separately for the form, but for display we use a fallback palette. */
 const ROLE_FALLBACK_COLORS = [
   "#6366F1", "#EC4899", "#F59E0B", "#10B981", "#3B82F6",
   "#8B5CF6", "#EF4444", "#14B8A6", "#F97316", "#06B6D4",
@@ -80,12 +88,15 @@ const ROLE_FALLBACK_COLORS = [
 function getRoleColor(roleId: string, roles: RoleOption[]): string {
   const role = roles.find(r => r.id === roleId)
   if (role) return role.colour
+  // Deterministic fallback based on roleId hash
   let hash = 0
   for (let i = 0; i < roleId.length; i++) {
     hash = ((hash << 5) - hash + roleId.charCodeAt(i)) | 0
   }
   return ROLE_FALLBACK_COLORS[Math.abs(hash) % ROLE_FALLBACK_COLORS.length]
 }
+
+// ─── Capacity bar component ───
 
 function CapacityBar({ usedMinutes, capacityMinutes, colour }: { usedMinutes: number; capacityMinutes: number; colour: string }) {
   const pct = capacityMinutes > 0 ? Math.min(100, Math.round((usedMinutes / capacityMinutes) * 100)) : 0
@@ -95,6 +106,512 @@ function CapacityBar({ usedMinutes, capacityMinutes, colour }: { usedMinutes: nu
         className="h-full rounded-full"
         style={{ width: `${pct}%`, backgroundColor: colour }}
       />
+    </div>
+  )
+}
+
+// ─── Slot form (create / edit) ───
+
+interface SlotFormProps {
+  roles: RoleOption[]
+  initial?: {
+    roleId?: string
+    date?: string
+    startMinutes?: number
+    endMinutes?: number
+    title?: string
+    isRepeating?: boolean
+    repeatType?: string
+    intervalValue?: number
+    dayPattern?: Record<string, unknown>
+    endDate?: string | null
+  }
+  onSubmit: (data: Record<string, unknown>) => Promise<void>
+  onCancel: () => void
+  submitLabel?: string
+}
+
+function SlotForm({ roles, initial, onSubmit, onCancel, submitLabel = "Save" }: SlotFormProps) {
+  const [roleId, setRoleId] = useState(initial?.roleId ?? (roles[0]?.id ?? ""))
+  const [date, setDate] = useState(initial?.date ?? toDateStr(new Date()))
+  const [startTime, setStartTime] = useState(minutesToTime(initial?.startMinutes ?? 540))
+  const [endTime, setEndTime] = useState(minutesToTime(initial?.endMinutes ?? 600))
+  const [title, setTitle] = useState(initial?.title ?? "")
+  const [isRepeating, setIsRepeating] = useState(initial?.isRepeating ?? false)
+  const [repeatType, setRepeatType] = useState(initial?.repeatType ?? "weekly")
+  const [intervalValue, setIntervalValue] = useState(initial?.intervalValue ?? 1)
+  const [weekDays, setWeekDays] = useState<number[]>(
+    (initial?.dayPattern as { days?: number[] })?.days ?? []
+  )
+  const [endDate, setEndDate] = useState(initial?.endDate ?? "")
+  const [forever, setForever] = useState(!initial?.endDate)
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState("")
+
+  function toggleWeekDay(d: number) {
+    setWeekDays(prev => prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d].sort())
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setError("")
+    setSubmitting(true)
+    try {
+      const startMinutes = timeToMinutes(startTime)
+      const endMinutes = timeToMinutes(endTime)
+      if (endMinutes <= startMinutes) {
+        setError("End time must be after start time")
+        setSubmitting(false)
+        return
+      }
+      if (isRepeating) {
+        const dayPattern: Record<string, unknown> = {}
+        if (repeatType === "weekly") {
+          dayPattern.days = weekDays.length > 0 ? weekDays : [1]
+        } else if (repeatType === "monthly_by_date") {
+          dayPattern.dates = [new Date(date + "T12:00:00").getDate()]
+        } else if (repeatType === "yearly_by_date") {
+          const d = new Date(date + "T12:00:00")
+          dayPattern.month = d.getMonth()
+          dayPattern.day = d.getDate()
+        }
+        await onSubmit({
+          roleId,
+          repeatType,
+          intervalValue,
+          startDate: date,
+          endDate: forever ? null : (endDate || null),
+          dayPattern,
+          startMinutes,
+          endMinutes,
+          title,
+        })
+      } else {
+        await onSubmit({ roleId, date, startMinutes, endMinutes, title })
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save")
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-3">
+      {/* Role */}
+      <div>
+        <label className="block text-xs text-[#666688] mb-1">Role</label>
+        <select
+          value={roleId}
+          onChange={e => setRoleId(e.target.value)}
+          className="w-full bg-[#0a0a1a] border border-[rgba(0,255,136,0.15)] rounded px-2 py-1.5 text-sm text-[#c0c0d0]"
+        >
+          {roles.map(r => (
+            <option key={r.id} value={r.id}>{r.name}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* Date */}
+      <div>
+        <label className="block text-xs text-[#666688] mb-1">Date</label>
+        <input
+          type="date"
+          value={date}
+          onChange={e => setDate(e.target.value)}
+          className="w-full bg-[#0a0a1a] border border-[rgba(0,255,136,0.15)] rounded px-2 py-1.5 text-sm text-[#c0c0d0]"
+        />
+      </div>
+
+      {/* Time row */}
+      <div className="flex gap-2">
+        <div className="flex-1">
+          <label className="block text-xs text-[#666688] mb-1">Start</label>
+          <input
+            type="time"
+            value={startTime}
+            onChange={e => setStartTime(e.target.value)}
+            className="w-full bg-[#0a0a1a] border border-[rgba(0,255,136,0.15)] rounded px-2 py-1.5 text-sm text-[#c0c0d0]"
+          />
+        </div>
+        <div className="flex-1">
+          <label className="block text-xs text-[#666688] mb-1">End</label>
+          <input
+            type="time"
+            value={endTime}
+            onChange={e => setEndTime(e.target.value)}
+            className="w-full bg-[#0a0a1a] border border-[rgba(0,255,136,0.15)] rounded px-2 py-1.5 text-sm text-[#c0c0d0]"
+          />
+        </div>
+      </div>
+
+      {/* Title */}
+      <div>
+        <label className="block text-xs text-[#666688] mb-1">Title (optional)</label>
+        <input
+          type="text"
+          value={title}
+          onChange={e => setTitle(e.target.value)}
+          placeholder="Time slot"
+          className="w-full bg-[#0a0a1a] border border-[rgba(0,255,136,0.15)] rounded px-2 py-1.5 text-sm text-[#c0c0d0] placeholder:text-[#444466]"
+        />
+      </div>
+
+      {/* Repeating */}
+      <div>
+        <label className="flex items-center gap-2 text-sm text-[#c0c0d0] cursor-pointer">
+          <input
+            type="checkbox"
+            checked={isRepeating}
+            onChange={e => setIsRepeating(e.target.checked)}
+            className="accent-[#00ff88]"
+          />
+          Repeating
+        </label>
+      </div>
+
+      {isRepeating && (
+        <div className="space-y-3 pl-4 border-l-2 border-[rgba(0,255,136,0.15)]">
+          <div>
+            <label className="block text-xs text-[#666688] mb-1">Repeat type</label>
+            <select
+              value={repeatType}
+              onChange={e => setRepeatType(e.target.value)}
+              className="w-full bg-[#0a0a1a] border border-[rgba(0,255,136,0.15)] rounded px-2 py-1.5 text-sm text-[#c0c0d0]"
+            >
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly</option>
+              <option value="monthly_by_date">Monthly (by date)</option>
+              <option value="yearly_by_date">Yearly (by date)</option>
+            </select>
+          </div>
+
+          {repeatType === "weekly" && (
+            <div>
+              <label className="block text-xs text-[#666688] mb-1">Days</label>
+              <div className="flex gap-1 flex-wrap">
+                {DAY_LABELS.map((label, i) => (
+                  <button
+                    key={label}
+                    type="button"
+                    onClick={() => toggleWeekDay(i + 1)}
+                    className={`px-2 py-1 text-xs rounded ${
+                      weekDays.includes(i + 1)
+                        ? "bg-[rgba(0,255,136,0.2)] text-[#00ff88] border border-[rgba(0,255,136,0.3)]"
+                        : "text-[#666688] border border-[rgba(0,255,136,0.1)]"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div>
+            <label className="block text-xs text-[#666688] mb-1">
+              Every N {repeatType === "daily" ? "days" : repeatType === "weekly" ? "weeks" : repeatType === "monthly_by_date" ? "months" : "years"}
+            </label>
+            <input
+              type="number"
+              min={1}
+              value={intervalValue}
+              onChange={e => setIntervalValue(Number(e.target.value) || 1)}
+              className="w-20 bg-[#0a0a1a] border border-[rgba(0,255,136,0.15)] rounded px-2 py-1.5 text-sm text-[#c0c0d0]"
+            />
+          </div>
+
+          <div>
+            <label className="flex items-center gap-2 text-sm text-[#c0c0d0] cursor-pointer mb-1">
+              <input
+                type="checkbox"
+                checked={forever}
+                onChange={e => setForever(e.target.checked)}
+                className="accent-[#00ff88]"
+              />
+              Forever
+            </label>
+            {!forever && (
+              <input
+                type="date"
+                value={endDate}
+                onChange={e => setEndDate(e.target.value)}
+                className="w-full bg-[#0a0a1a] border border-[rgba(0,255,136,0.15)] rounded px-2 py-1.5 text-sm text-[#c0c0d0]"
+              />
+            )}
+          </div>
+        </div>
+      )}
+
+      {error && <p className="text-xs text-red-400">{error}</p>}
+
+      <div className="flex gap-2">
+        <button
+          type="submit"
+          disabled={submitting}
+          className="px-3 py-1.5 text-sm rounded-lg bg-[rgba(0,255,136,0.15)] text-[#00ff88] border border-[rgba(0,255,136,0.3)] hover:bg-[rgba(0,255,136,0.25)] disabled:opacity-50"
+        >
+          {submitting ? "Saving..." : submitLabel}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="px-3 py-1.5 text-sm rounded-lg text-[#666688] hover:text-[#c0c0d0]"
+        >
+          Cancel
+        </button>
+      </div>
+    </form>
+  )
+}
+
+// ─── Virtual slot action panel ───
+
+interface VirtualSlotActionsProps {
+  slot: ResolvedTimeSlot
+  roles: RoleOption[]
+  onClose: () => void
+  onRefresh: () => void
+}
+
+function VirtualSlotActions({ slot, roles, onClose, onRefresh }: VirtualSlotActionsProps) {
+  const [action, setAction] = useState<"choose" | "edit_one" | "edit_pattern" | null>("choose")
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState("")
+
+  const patternId = slot.repeatPatternId!
+
+  async function handleSkip() {
+    setSubmitting(true)
+    setError("")
+    try {
+      const res = await fetch(`/api/v1/repeat-patterns/${patternId}/instances/${slot.date}/skip`, { method: "POST" })
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || "Failed to skip")
+      }
+      onRefresh()
+      onClose()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to skip")
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function handleDeletePattern() {
+    if (!confirm("Delete the entire repeat pattern? All future instances will be removed.")) return
+    setSubmitting(true)
+    setError("")
+    try {
+      const res = await fetch(`/api/v1/repeat-patterns/${patternId}?scope=all`, { method: "DELETE" })
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || "Failed to delete")
+      }
+      onRefresh()
+      onClose()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete")
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function handleEditOne(data: Record<string, unknown>) {
+    const res = await fetch(`/api/v1/repeat-patterns/${patternId}/instances/${slot.date}/modify`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        startMinutes: data.startMinutes,
+        endMinutes: data.endMinutes,
+        title: data.title,
+      }),
+    })
+    if (!res.ok) {
+      const d = await res.json()
+      throw new Error(d.error || "Failed to modify instance")
+    }
+    onRefresh()
+    onClose()
+  }
+
+  async function handleEditPattern(data: Record<string, unknown>) {
+    const res = await fetch(`/api/v1/repeat-patterns/${patternId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    })
+    if (!res.ok) {
+      const d = await res.json()
+      throw new Error(d.error || "Failed to update pattern")
+    }
+    onRefresh()
+    onClose()
+  }
+
+  if (action === "edit_one") {
+    return (
+      <div>
+        <h4 className="text-sm font-semibold text-[#c0c0d0] mb-2">Edit this occurrence</h4>
+        <SlotForm
+          roles={roles}
+          initial={{
+            roleId: slot.roleId,
+            date: slot.date,
+            startMinutes: slot.startMinutes,
+            endMinutes: slot.endMinutes,
+            title: slot.title,
+          }}
+          onSubmit={handleEditOne}
+          onCancel={() => setAction("choose")}
+          submitLabel="Save occurrence"
+        />
+      </div>
+    )
+  }
+
+  if (action === "edit_pattern") {
+    return (
+      <div>
+        <h4 className="text-sm font-semibold text-[#c0c0d0] mb-2">Edit entire pattern</h4>
+        <SlotForm
+          roles={roles}
+          initial={{
+            roleId: slot.roleId,
+            date: slot.date,
+            startMinutes: slot.startMinutes,
+            endMinutes: slot.endMinutes,
+            title: slot.title,
+            isRepeating: true,
+          }}
+          onSubmit={handleEditPattern}
+          onCancel={() => setAction("choose")}
+          submitLabel="Update pattern"
+        />
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-2">
+      <h4 className="text-sm font-semibold text-[#c0c0d0] mb-1">
+        Repeating slot: {slot.title || "Time slot"}
+      </h4>
+      <p className="text-xs text-[#666688]">
+        {minutesToTime(slot.startMinutes)} - {minutesToTime(slot.endMinutes)} on {slot.date}
+      </p>
+      {error && <p className="text-xs text-red-400">{error}</p>}
+      <div className="space-y-1">
+        <button
+          onClick={() => setAction("edit_one")}
+          className="block w-full text-left px-3 py-1.5 text-sm text-[#c0c0d0] hover:text-[#00ff88] hover:bg-[rgba(0,255,136,0.05)] rounded"
+        >
+          Edit this occurrence
+        </button>
+        <button
+          onClick={handleSkip}
+          disabled={submitting}
+          className="block w-full text-left px-3 py-1.5 text-sm text-[#c0c0d0] hover:text-[#00ff88] hover:bg-[rgba(0,255,136,0.05)] rounded disabled:opacity-50"
+        >
+          Skip this occurrence
+        </button>
+        <button
+          onClick={() => setAction("edit_pattern")}
+          className="block w-full text-left px-3 py-1.5 text-sm text-[#c0c0d0] hover:text-[#00ff88] hover:bg-[rgba(0,255,136,0.05)] rounded"
+        >
+          Edit entire pattern
+        </button>
+        <button
+          onClick={handleDeletePattern}
+          disabled={submitting}
+          className="block w-full text-left px-3 py-1.5 text-sm text-red-400 hover:text-red-300 hover:bg-[rgba(255,60,60,0.05)] rounded disabled:opacity-50"
+        >
+          Delete entire pattern
+        </button>
+      </div>
+      <button onClick={onClose} className="text-xs text-[#666688] hover:text-[#c0c0d0]">Close</button>
+    </div>
+  )
+}
+
+// ─── Concrete slot edit panel ───
+
+interface ConcreteSlotEditProps {
+  slot: ResolvedTimeSlot
+  roles: RoleOption[]
+  onClose: () => void
+  onRefresh: () => void
+}
+
+function ConcreteSlotEdit({ slot, roles, onClose, onRefresh }: ConcreteSlotEditProps) {
+  const [deleting, setDeleting] = useState(false)
+  const [error, setError] = useState("")
+
+  async function handleSave(data: Record<string, unknown>) {
+    const res = await fetch(`/api/v1/time-slots/${slot.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        roleId: data.roleId,
+        startMinutes: data.startMinutes,
+        endMinutes: data.endMinutes,
+        title: data.title,
+      }),
+    })
+    if (!res.ok) {
+      const d = await res.json()
+      throw new Error(d.error || "Failed to update")
+    }
+    onRefresh()
+    onClose()
+  }
+
+  async function handleDelete() {
+    if (!confirm("Delete this time slot?")) return
+    setDeleting(true)
+    setError("")
+    try {
+      const res = await fetch(`/api/v1/time-slots/${slot.id}`, { method: "DELETE" })
+      if (!res.ok) {
+        const d = await res.json()
+        throw new Error(d.error || "Failed to delete")
+      }
+      onRefresh()
+      onClose()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete")
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  return (
+    <div>
+      <h4 className="text-sm font-semibold text-[#c0c0d0] mb-2">Edit time slot</h4>
+      {error && <p className="text-xs text-red-400 mb-2">{error}</p>}
+      <SlotForm
+        roles={roles}
+        initial={{
+          roleId: slot.roleId,
+          date: slot.date,
+          startMinutes: slot.startMinutes,
+          endMinutes: slot.endMinutes,
+          title: slot.title,
+        }}
+        onSubmit={handleSave}
+        onCancel={onClose}
+        submitLabel="Save"
+      />
+      <button
+        onClick={handleDelete}
+        disabled={deleting}
+        className="mt-2 px-3 py-1.5 text-sm text-red-400 hover:text-red-300 rounded disabled:opacity-50"
+      >
+        {deleting ? "Deleting..." : "Delete slot"}
+      </button>
     </div>
   )
 }
@@ -117,7 +634,7 @@ function MonthView({
   const year = currentDate.getFullYear()
   const month = currentDate.getMonth()
   const firstDay = new Date(year, month, 1)
-  const startOffset = firstDay.getDay()
+  const startOffset = firstDay.getDay() // 0=Sun
   const daysInMonth = new Date(year, month + 1, 0).getDate()
   const cells: Array<Date | null> = [...Array(startOffset).fill(null)]
   for (let d = 1; d <= daysInMonth; d++) cells.push(new Date(year, month, d))
@@ -130,7 +647,7 @@ function MonthView({
     itemsByDate.set(item.date, list)
   }
 
-  // Group time slots by date then roleId with total minutes
+  // Group time slots by date, then by roleId with total minutes
   const slotsByDate = new Map<string, Map<string, number>>()
   for (const slot of timeSlots) {
     let dateMap = slotsByDate.get(slot.date)
@@ -180,7 +697,7 @@ function MonthView({
                     ))}
                     {dayItems.length > 3 && <div className="text-xs text-[#444466]">+{dayItems.length - 3} more</div>}
                   </div>
-                  {/* Role capacity indicators */}
+                  {/* Capacity indicators */}
                   {daySlotRoles && daySlotRoles.size > 0 && (
                     <div className="mt-1 space-y-0.5">
                       {Array.from(daySlotRoles.entries()).map(([roleId]) => (
@@ -219,6 +736,7 @@ function WeekView({
   roles?: RoleOption[]
   onSlotClick?: (slot: ResolvedTimeSlot) => void
 }) {
+  // Start of week = Sunday
   const weekStart = new Date(currentDate)
   weekStart.setDate(currentDate.getDate() - currentDate.getDay())
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
@@ -239,10 +757,11 @@ function WeekView({
     slotsByDate.set(slot.date, list)
   }
 
-  const GRID_START = 360
-  const GRID_END = 1320
-  const GRID_HEIGHT = (GRID_END - GRID_START)
-  const hours = Array.from({ length: 17 }, (_, i) => i + 6)
+  // Time grid: 06:00 to 22:00 = 16 hours, 60px per hour = 960px
+  const GRID_START = 360 // 06:00 in minutes
+  const GRID_END = 1320  // 22:00 in minutes
+  const GRID_HEIGHT = (GRID_END - GRID_START) // 960px
+  const hours = Array.from({ length: 17 }, (_, i) => i + 6) // 06 to 22
 
   return (
     <div>
@@ -288,6 +807,7 @@ function WeekView({
       {/* Time grid */}
       <div className="overflow-y-auto max-h-[600px] border border-[rgba(0,255,136,0.08)] rounded-b-lg">
         <div className="grid grid-cols-[48px_repeat(7,1fr)]" style={{ height: `${GRID_HEIGHT}px` }}>
+          {/* Hour labels column */}
           <div className="relative bg-[#0a0a1a]">
             {hours.map(h => (
               <div
@@ -300,6 +820,7 @@ function WeekView({
             ))}
           </div>
 
+          {/* Day columns */}
           {days.map(day => {
             const dateStr = toDateStr(day)
             const isToday = dateStr === todayStr
@@ -310,6 +831,7 @@ function WeekView({
                 key={dateStr}
                 className={`relative border-l border-[rgba(0,255,136,0.06)] ${isToday ? "bg-[rgba(0,255,136,0.02)]" : "bg-[#111125]"}`}
               >
+                {/* Hour lines */}
                 {hours.map(h => (
                   <div
                     key={h}
@@ -318,6 +840,7 @@ function WeekView({
                   />
                 ))}
 
+                {/* Time slot blocks */}
                 {daySlots.map(slot => {
                   const top = Math.max(0, (slot.startMinutes - GRID_START))
                   const bottom = Math.min(GRID_HEIGHT, (slot.endMinutes - GRID_START))
@@ -385,7 +908,7 @@ function AgendaView({
     .filter(s => s.date >= today)
     .sort((a, b) => a.date.localeCompare(b.date) || a.startMinutes - b.startMinutes)
 
-  // Collect all dates
+  // Collect all dates that have either items or slots
   const allDates = new Set<string>()
   for (const item of upcoming) allDates.add(item.date)
   for (const slot of upcomingSlots) allDates.add(slot.date)
@@ -459,8 +982,11 @@ function AgendaView({
 // ─── Main CalendarView ───
 
 export function CalendarView({ items, filters, timeSlots = [] }: CalendarViewProps) {
+  const router = useRouter()
   const [view, setView] = useState<View>("month")
   const [currentDate, setCurrentDate] = useState(new Date())
+  const [showSlotForm, setShowSlotForm] = useState(false)
+  const [selectedSlot, setSelectedSlot] = useState<ResolvedTimeSlot | null>(null)
   const [roles, setRoles] = useState<RoleOption[]>([])
   const [rolesLoaded, setRolesLoaded] = useState(false)
 
@@ -469,25 +995,62 @@ export function CalendarView({ items, filters, timeSlots = [] }: CalendarViewPro
     if (saved) setView(saved)
   }, [])
 
-  // Eagerly fetch roles once for colour mapping
-  useEffect(() => {
-    if (rolesLoaded || timeSlots.length === 0) return
-    fetch("/api/v1/roles")
-      .then(res => res.ok ? res.json() : [])
-      .then(data => { setRoles(data); setRolesLoaded(true) })
-      .catch(() => {})
-  }, [rolesLoaded, timeSlots.length])
+  const fetchRoles = useCallback(async () => {
+    if (rolesLoaded) return
+    try {
+      const res = await fetch("/api/v1/roles")
+      if (res.ok) {
+        const data = await res.json()
+        setRoles(data)
+        setRolesLoaded(true)
+      }
+    } catch {
+      // Roles will use fallback colours
+    }
+  }, [rolesLoaded])
 
   function switchView(v: View) {
     setView(v)
     sessionStorage.setItem("calendarView", v)
   }
 
+  function handleRefresh() {
+    router.refresh()
+  }
+
+  async function openSlotForm() {
+    await fetchRoles()
+    setShowSlotForm(true)
+    setSelectedSlot(null)
+  }
+
+  async function handleSlotClick(slot: ResolvedTimeSlot) {
+    await fetchRoles()
+    setSelectedSlot(slot)
+    setShowSlotForm(false)
+  }
+
+  async function handleCreateSubmit(data: Record<string, unknown>) {
+    const isRepeating = "repeatType" in data
+    const url = isRepeating ? "/api/v1/repeat-patterns" : "/api/v1/time-slots"
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    })
+    if (!res.ok) {
+      const d = await res.json()
+      throw new Error(d.error || "Failed to create")
+    }
+    setShowSlotForm(false)
+    handleRefresh()
+  }
+
   const filtered = filterItems(items, filters)
 
   return (
     <div>
-      <div className="flex gap-1 mb-6">
+      <div className="flex items-center gap-1 mb-6 flex-wrap">
         {(["month", "week", "agenda"] as View[]).map(v => (
           <button
             key={v}
@@ -497,7 +1060,48 @@ export function CalendarView({ items, filters, timeSlots = [] }: CalendarViewPro
             {v}
           </button>
         ))}
+        <button
+          onClick={openSlotForm}
+          className="ml-auto px-3 py-1.5 text-sm rounded-lg bg-[rgba(0,255,136,0.1)] text-[#00ff88] border border-[rgba(0,255,136,0.2)] hover:bg-[rgba(0,255,136,0.2)] transition-colors"
+        >
+          + Add Time Slot
+        </button>
       </div>
+
+      {/* Slot creation form */}
+      {showSlotForm && (
+        <div className="mb-6 bg-[#111125] border border-[rgba(0,255,136,0.15)] rounded-lg p-4">
+          <h3 className="text-sm font-semibold text-[#c0c0d0] mb-3">New time slot</h3>
+          <SlotForm
+            roles={roles}
+            onSubmit={handleCreateSubmit}
+            onCancel={() => setShowSlotForm(false)}
+            submitLabel="Create"
+          />
+        </div>
+      )}
+
+      {/* Slot edit/action panel */}
+      {selectedSlot && (
+        <div className="mb-6 bg-[#111125] border border-[rgba(0,255,136,0.15)] rounded-lg p-4">
+          {selectedSlot.isVirtual ? (
+            <VirtualSlotActions
+              slot={selectedSlot}
+              roles={roles}
+              onClose={() => setSelectedSlot(null)}
+              onRefresh={handleRefresh}
+            />
+          ) : (
+            <ConcreteSlotEdit
+              slot={selectedSlot}
+              roles={roles}
+              onClose={() => setSelectedSlot(null)}
+              onRefresh={handleRefresh}
+            />
+          )}
+        </div>
+      )}
+
       {view === "month" && (
         <MonthView
           items={filtered}
@@ -514,6 +1118,7 @@ export function CalendarView({ items, filters, timeSlots = [] }: CalendarViewPro
           setCurrentDate={setCurrentDate}
           timeSlots={timeSlots}
           roles={roles}
+          onSlotClick={handleSlotClick}
         />
       )}
       {view === "agenda" && (
