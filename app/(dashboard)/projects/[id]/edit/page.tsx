@@ -25,6 +25,8 @@ export default async function EditProjectPage({ params }: PageProps) {
           priority: project.priority,
           targetDate: project.targetDate ? project.targetDate.toISOString().slice(0, 10) : null,
           notes: project.notes,
+          goalId: project.goalId,
+          roleId: project.roleId,
         }}
       />
     </div>
