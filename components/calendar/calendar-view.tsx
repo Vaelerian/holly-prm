@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
+import type { ResolvedTimeSlot } from "@/lib/services/repeat-expand"
 
 export type CalendarItemType = "task" | "project" | "follow_up" | "milestone" | "action_item" | "google_event"
 
@@ -25,6 +26,7 @@ interface CalendarFilters {
 interface CalendarViewProps {
   items: CalendarItem[]
   filters: CalendarFilters
+  timeSlots?: ResolvedTimeSlot[]
 }
 
 type View = "month" | "week" | "agenda"
@@ -60,7 +62,7 @@ function toDateStr(date: Date): string {
   return date.toLocaleDateString("en-CA")
 }
 
-function MonthView({ items, currentDate, setCurrentDate }: { items: CalendarItem[]; currentDate: Date; setCurrentDate: (d: Date) => void }) {
+function MonthView({ items, currentDate, setCurrentDate }: { items: CalendarItem[]; currentDate: Date; setCurrentDate: (d: Date) => void; timeSlots?: ResolvedTimeSlot[] }) {
   const year = currentDate.getFullYear()
   const month = currentDate.getMonth()
   const firstDay = new Date(year, month, 1)
@@ -125,7 +127,7 @@ function MonthView({ items, currentDate, setCurrentDate }: { items: CalendarItem
   )
 }
 
-function WeekView({ items, currentDate, setCurrentDate }: { items: CalendarItem[]; currentDate: Date; setCurrentDate: (d: Date) => void }) {
+function WeekView({ items, currentDate, setCurrentDate }: { items: CalendarItem[]; currentDate: Date; setCurrentDate: (d: Date) => void; timeSlots?: ResolvedTimeSlot[] }) {
   // Start of week = Sunday
   const weekStart = new Date(currentDate)
   weekStart.setDate(currentDate.getDate() - currentDate.getDay())
@@ -179,7 +181,7 @@ function WeekView({ items, currentDate, setCurrentDate }: { items: CalendarItem[
   )
 }
 
-function AgendaView({ items }: { items: CalendarItem[] }) {
+function AgendaView({ items }: { items: CalendarItem[]; timeSlots?: ResolvedTimeSlot[] }) {
   const today = toDateStr(new Date())
   const upcoming = items
     .filter(i => i.date >= today)
@@ -222,7 +224,7 @@ function AgendaView({ items }: { items: CalendarItem[] }) {
   )
 }
 
-export function CalendarView({ items, filters }: CalendarViewProps) {
+export function CalendarView({ items, filters, timeSlots = [] }: CalendarViewProps) {
   const [view, setView] = useState<View>("month")
   const [currentDate, setCurrentDate] = useState(new Date())
 
@@ -251,9 +253,9 @@ export function CalendarView({ items, filters }: CalendarViewProps) {
           </button>
         ))}
       </div>
-      {view === "month" && <MonthView items={filtered} currentDate={currentDate} setCurrentDate={setCurrentDate} />}
-      {view === "week" && <WeekView items={filtered} currentDate={currentDate} setCurrentDate={setCurrentDate} />}
-      {view === "agenda" && <AgendaView items={filtered} />}
+      {view === "month" && <MonthView items={filtered} currentDate={currentDate} setCurrentDate={setCurrentDate} timeSlots={timeSlots} />}
+      {view === "week" && <WeekView items={filtered} currentDate={currentDate} setCurrentDate={setCurrentDate} timeSlots={timeSlots} />}
+      {view === "agenda" && <AgendaView items={filtered} timeSlots={timeSlots} />}
     </div>
   )
 }
