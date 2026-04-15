@@ -1,10 +1,32 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 
 interface ApiKey { id: string; name: string; lastUsed: string | null; createdAt: string }
+
+interface RoleData {
+  id: string
+  name: string
+  description: string
+  colour: string
+  icon: string
+  isDefault: boolean
+  _count: { goals: number }
+}
+
+interface GoalData {
+  id: string
+  roleId: string
+  name: string
+  description: string
+  goalType: "ongoing" | "completable"
+  status: string
+  targetDate: string | null
+  isDefault: boolean
+  _count: { projects: number; tasks: number }
+}
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4)
@@ -38,6 +60,179 @@ export default function SettingsPage() {
   const [vaultSyncing, setVaultSyncing] = useState(false)
   const [vaultSyncResult, setVaultSyncResult] = useState<{ updatedNotes: unknown[]; errors: string[] } | null>(null)
 
+  // --- Roles and Goals state ---
+  const [rolesExpanded, setRolesExpanded] = useState(true)
+  const [roles, setRoles] = useState<RoleData[]>([])
+  const [roleGoals, setRoleGoals] = useState<Record<string, GoalData[]>>({})
+  const [expandedRoles, setExpandedRoles] = useState<Set<string>>(new Set())
+
+  // Add role inline form
+  const [addingRole, setAddingRole] = useState(false)
+  const [newRoleName, setNewRoleName] = useState("")
+  const [newRoleColour, setNewRoleColour] = useState("#6366F1")
+  const [savingRole, setSavingRole] = useState(false)
+
+  // Edit role inline
+  const [editingRoleId, setEditingRoleId] = useState<string | null>(null)
+  const [editRoleName, setEditRoleName] = useState("")
+  const [editRoleColour, setEditRoleColour] = useState("")
+
+  // Delete role
+  const [deletingRoleId, setDeletingRoleId] = useState<string | null>(null)
+  const [remapRoleId, setRemapRoleId] = useState("")
+
+  // Add goal inline form
+  const [addingGoalForRole, setAddingGoalForRole] = useState<string | null>(null)
+  const [newGoalName, setNewGoalName] = useState("")
+  const [newGoalType, setNewGoalType] = useState<"ongoing" | "completable">("ongoing")
+  const [savingGoal, setSavingGoal] = useState(false)
+
+  // Edit goal inline
+  const [editingGoalId, setEditingGoalId] = useState<string | null>(null)
+  const [editGoalName, setEditGoalName] = useState("")
+  const [editGoalType, setEditGoalType] = useState<"ongoing" | "completable">("ongoing")
+  const [editGoalTargetDate, setEditGoalTargetDate] = useState("")
+
+  // Delete goal
+  const [deletingGoalId, setDeletingGoalId] = useState<string | null>(null)
+  const [remapGoalId, setRemapGoalId] = useState("")
+
+  const loadRoles = useCallback(async () => {
+    const res = await fetch("/api/v1/roles")
+    if (res.ok) {
+      const data: RoleData[] = await res.json()
+      setRoles(data)
+    }
+  }, [])
+
+  async function loadGoalsForRole(roleId: string) {
+    const res = await fetch(`/api/v1/goals?roleId=${roleId}`)
+    if (res.ok) {
+      const data: GoalData[] = await res.json()
+      setRoleGoals(prev => ({ ...prev, [roleId]: data }))
+    }
+  }
+
+  function toggleRoleExpanded(roleId: string) {
+    setExpandedRoles(prev => {
+      const next = new Set(prev)
+      if (next.has(roleId)) {
+        next.delete(roleId)
+      } else {
+        next.add(roleId)
+        if (!roleGoals[roleId]) loadGoalsForRole(roleId)
+      }
+      return next
+    })
+  }
+
+  async function handleAddRole() {
+    if (!newRoleName.trim()) return
+    setSavingRole(true)
+    try {
+      const res = await fetch("/api/v1/roles", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newRoleName.trim(), colour: newRoleColour }),
+      })
+      if (res.ok) {
+        setNewRoleName("")
+        setNewRoleColour("#6366F1")
+        setAddingRole(false)
+        await loadRoles()
+      }
+    } finally {
+      setSavingRole(false)
+    }
+  }
+
+  async function handleSaveRole(id: string) {
+    const res = await fetch(`/api/v1/roles/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: editRoleName.trim(), colour: editRoleColour }),
+    })
+    if (res.ok) {
+      setEditingRoleId(null)
+      await loadRoles()
+    }
+  }
+
+  async function handleDeleteRole(id: string) {
+    if (!remapRoleId) return
+    const res = await fetch(`/api/v1/roles/${id}`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ remapToRoleId: remapRoleId }),
+    })
+    if (res.ok) {
+      setDeletingRoleId(null)
+      setRemapRoleId("")
+      await loadRoles()
+    }
+  }
+
+  async function handleAddGoal(roleId: string) {
+    if (!newGoalName.trim()) return
+    setSavingGoal(true)
+    try {
+      const res = await fetch("/api/v1/goals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ roleId, name: newGoalName.trim(), goalType: newGoalType }),
+      })
+      if (res.ok) {
+        setNewGoalName("")
+        setNewGoalType("ongoing")
+        setAddingGoalForRole(null)
+        await loadGoalsForRole(roleId)
+        await loadRoles()
+      }
+    } finally {
+      setSavingGoal(false)
+    }
+  }
+
+  async function handleSaveGoal(id: string, roleId: string) {
+    const body: Record<string, unknown> = { name: editGoalName.trim(), goalType: editGoalType }
+    if (editGoalType === "completable" && editGoalTargetDate) {
+      body.targetDate = editGoalTargetDate
+    } else if (editGoalType === "ongoing") {
+      body.targetDate = null
+    }
+    const res = await fetch(`/api/v1/goals/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    })
+    if (res.ok) {
+      setEditingGoalId(null)
+      await loadGoalsForRole(roleId)
+    }
+  }
+
+  async function handleDeleteGoal(id: string, roleId: string) {
+    if (!remapGoalId) return
+    const res = await fetch(`/api/v1/goals/${id}`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ remapToGoalId: remapGoalId }),
+    })
+    if (res.ok) {
+      setDeletingGoalId(null)
+      setRemapGoalId("")
+      await loadGoalsForRole(roleId)
+      await loadRoles()
+    }
+  }
+
+  async function handleCompleteGoal(id: string, roleId: string) {
+    const res = await fetch(`/api/v1/goals/${id}/complete`, { method: "POST" })
+    if (res.ok) {
+      await loadGoalsForRole(roleId)
+    }
+  }
+
   async function loadKeys() {
     const res = await fetch("/api/v1/settings/api-keys")
     if (res.ok) setKeys(await res.json())
@@ -61,6 +256,7 @@ export default function SettingsPage() {
   useEffect(() => {
     loadKeys()
     loadVaultStatus()
+    loadRoles()
     fetch("/api/v1/google/status").then(r => r.json()).then(setGoogleStatus).catch(() => {})
     // Check push status
     if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
@@ -72,7 +268,7 @@ export default function SettingsPage() {
         setPushStatus(sub ? "enabled" : "disabled")
       })
     }).catch(() => setPushStatus("unsupported"))
-  }, [])
+  }, [loadRoles])
 
   async function generateKey() {
     if (!newKeyName.trim()) return
@@ -302,6 +498,249 @@ export default function SettingsPage() {
             <Button onClick={() => { window.location.href = "/api/v1/google/connect" }}>Connect Google</Button>
           )}
         </div>
+      </section>
+
+      <section>
+        <button
+          onClick={() => setRolesExpanded(!rolesExpanded)}
+          className="flex items-center gap-2 w-full text-left"
+        >
+          <span className="text-xs text-[#666688]">{rolesExpanded ? "\u25BC" : "\u25B6"}</span>
+          <h2 className="text-base font-semibold text-[#c0c0d0]">Roles and Goals</h2>
+        </button>
+        <p className="text-sm text-[#666688] mb-4 mt-1">Organise your work into life roles and goals.</p>
+
+        {rolesExpanded && (
+          <div className="space-y-3">
+            {/* Add Role button */}
+            {!addingRole ? (
+              <button onClick={() => setAddingRole(true)} className="text-sm text-[#00ff88] hover:text-[#00cc6f]">
+                + Add role
+              </button>
+            ) : (
+              <div className="bg-[#111125] border border-[rgba(0,255,136,0.15)] rounded-lg px-4 py-3 space-y-2">
+                <div className="flex gap-2 items-center">
+                  <Input
+                    autoFocus
+                    placeholder="Role name"
+                    value={newRoleName}
+                    onChange={e => setNewRoleName(e.target.value)}
+                    onKeyDown={e => { if (e.key === "Enter") handleAddRole() }}
+                  />
+                  <input
+                    type="color"
+                    value={newRoleColour}
+                    onChange={e => setNewRoleColour(e.target.value)}
+                    className="w-10 h-10 rounded border border-[rgba(0,255,136,0.15)] bg-transparent cursor-pointer"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Button onClick={handleAddRole} disabled={savingRole || !newRoleName.trim()}>
+                    {savingRole ? "Adding..." : "Add"}
+                  </Button>
+                  <button onClick={() => { setAddingRole(false); setNewRoleName("") }} className="text-sm text-[#666688] hover:text-[#c0c0d0]">Cancel</button>
+                </div>
+              </div>
+            )}
+
+            {/* Role cards */}
+            {roles.map(role => (
+              <div key={role.id} className="bg-[#111125] border border-[rgba(0,255,136,0.15)] rounded-lg px-4 py-3">
+                {/* Role header */}
+                {editingRoleId === role.id ? (
+                  <div className="space-y-2">
+                    <div className="flex gap-2 items-center">
+                      <Input
+                        autoFocus
+                        value={editRoleName}
+                        onChange={e => setEditRoleName(e.target.value)}
+                        onKeyDown={e => { if (e.key === "Enter") handleSaveRole(role.id) }}
+                      />
+                      <input
+                        type="color"
+                        value={editRoleColour}
+                        onChange={e => setEditRoleColour(e.target.value)}
+                        className="w-10 h-10 rounded border border-[rgba(0,255,136,0.15)] bg-transparent cursor-pointer"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <Button onClick={() => handleSaveRole(role.id)}>Save</Button>
+                      <button onClick={() => setEditingRoleId(null)} className="text-sm text-[#666688] hover:text-[#c0c0d0]">Cancel</button>
+                    </div>
+                  </div>
+                ) : deletingRoleId === role.id ? (
+                  <div className="space-y-2">
+                    <p className="text-sm text-[#c0c0d0]">Move items from &quot;{role.name}&quot; to:</p>
+                    <select
+                      value={remapRoleId}
+                      onChange={e => setRemapRoleId(e.target.value)}
+                      className="w-full bg-[#111125] border border-[rgba(0,255,136,0.15)] rounded text-[#c0c0d0] text-sm px-3 py-2"
+                    >
+                      <option value="">Select a role...</option>
+                      {roles.filter(r => r.id !== role.id).map(r => (
+                        <option key={r.id} value={r.id}>{r.name}</option>
+                      ))}
+                    </select>
+                    <div className="flex gap-2">
+                      <Button variant="danger" onClick={() => handleDeleteRole(role.id)} disabled={!remapRoleId}>Delete</Button>
+                      <button onClick={() => { setDeletingRoleId(null); setRemapRoleId("") }} className="text-sm text-[#666688] hover:text-[#c0c0d0]">Cancel</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between">
+                    <button onClick={() => toggleRoleExpanded(role.id)} className="flex items-center gap-2 flex-1 text-left">
+                      <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: role.colour }} />
+                      <span className="text-sm font-medium text-[#c0c0d0]">{role.name}</span>
+                      {role.isDefault && <span className="text-xs text-[#666688]">(Default)</span>}
+                      <span className="text-xs text-[#666688]">{role._count.goals} goal{role._count.goals !== 1 ? "s" : ""}</span>
+                    </button>
+                    <div className="flex gap-2">
+                      {!role.isDefault && (
+                        <>
+                          <button
+                            onClick={() => { setEditingRoleId(role.id); setEditRoleName(role.name); setEditRoleColour(role.colour) }}
+                            className="text-xs text-[#666688] hover:text-[#00ff88]"
+                          >Edit</button>
+                          <button
+                            onClick={() => setDeletingRoleId(role.id)}
+                            className="text-xs text-[#666688] hover:text-red-400"
+                          >Delete</button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Goals under this role */}
+                {expandedRoles.has(role.id) && (
+                  <div className="mt-3 ml-5 space-y-2 border-l border-[rgba(0,255,136,0.1)] pl-3">
+                    {(roleGoals[role.id] ?? []).map(goal => (
+                      <div key={goal.id} className="bg-[#0a0a1a] border border-[rgba(0,255,136,0.1)] rounded-lg px-3 py-2">
+                        {editingGoalId === goal.id ? (
+                          <div className="space-y-2">
+                            <Input
+                              autoFocus
+                              value={editGoalName}
+                              onChange={e => setEditGoalName(e.target.value)}
+                              onKeyDown={e => { if (e.key === "Enter") handleSaveGoal(goal.id, role.id) }}
+                            />
+                            <select
+                              value={editGoalType}
+                              onChange={e => setEditGoalType(e.target.value as "ongoing" | "completable")}
+                              className="w-full bg-[#0a0a1a] border border-[rgba(0,255,136,0.15)] rounded text-[#c0c0d0] text-sm px-3 py-2"
+                            >
+                              <option value="ongoing">Ongoing</option>
+                              <option value="completable">Completable</option>
+                            </select>
+                            {editGoalType === "completable" && (
+                              <input
+                                type="date"
+                                value={editGoalTargetDate}
+                                onChange={e => setEditGoalTargetDate(e.target.value)}
+                                className="w-full border border-[rgba(0,255,136,0.15)] rounded-lg px-3 py-2 text-sm bg-[#0a0a1a] text-[#c0c0d0]"
+                              />
+                            )}
+                            <div className="flex gap-2">
+                              <Button onClick={() => handleSaveGoal(goal.id, role.id)}>Save</Button>
+                              <button onClick={() => setEditingGoalId(null)} className="text-sm text-[#666688] hover:text-[#c0c0d0]">Cancel</button>
+                            </div>
+                          </div>
+                        ) : deletingGoalId === goal.id ? (
+                          <div className="space-y-2">
+                            <p className="text-sm text-[#c0c0d0]">Move items from &quot;{goal.name}&quot; to:</p>
+                            <select
+                              value={remapGoalId}
+                              onChange={e => setRemapGoalId(e.target.value)}
+                              className="w-full bg-[#0a0a1a] border border-[rgba(0,255,136,0.15)] rounded text-[#c0c0d0] text-sm px-3 py-2"
+                            >
+                              <option value="">Select a goal...</option>
+                              {Object.values(roleGoals).flat().filter(g => g.id !== goal.id).map(g => (
+                                <option key={g.id} value={g.id}>{g.name}</option>
+                              ))}
+                            </select>
+                            <div className="flex gap-2">
+                              <Button variant="danger" onClick={() => handleDeleteGoal(goal.id, role.id)} disabled={!remapGoalId}>Delete</Button>
+                              <button onClick={() => { setDeletingGoalId(null); setRemapGoalId("") }} className="text-sm text-[#666688] hover:text-[#c0c0d0]">Cancel</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm text-[#c0c0d0]">{goal.name}</span>
+                              {goal.isDefault && <span className="text-xs text-[#666688]">(Default)</span>}
+                              <span className={`text-xs px-1.5 py-0.5 rounded ${goal.goalType === "ongoing" ? "bg-[rgba(99,102,241,0.15)] text-[#818cf8]" : "bg-[rgba(0,255,136,0.1)] text-[#00ff88]"}`}>
+                                {goal.goalType}
+                              </span>
+                              <span className={`text-xs ${goal.status === "completed" ? "text-[#00ff88]" : "text-[#666688]"}`}>
+                                {goal.status}
+                              </span>
+                            </div>
+                            <div className="flex gap-2">
+                              {!goal.isDefault && (
+                                <>
+                                  <button
+                                    onClick={() => {
+                                      setEditingGoalId(goal.id)
+                                      setEditGoalName(goal.name)
+                                      setEditGoalType(goal.goalType)
+                                      setEditGoalTargetDate(goal.targetDate ? goal.targetDate.slice(0, 10) : "")
+                                    }}
+                                    className="text-xs text-[#666688] hover:text-[#00ff88]"
+                                  >Edit</button>
+                                  <button
+                                    onClick={() => setDeletingGoalId(goal.id)}
+                                    className="text-xs text-[#666688] hover:text-red-400"
+                                  >Delete</button>
+                                </>
+                              )}
+                              {goal.goalType === "completable" && goal.status === "active" && (
+                                <button
+                                  onClick={() => handleCompleteGoal(goal.id, role.id)}
+                                  className="text-xs text-[#00ff88] hover:text-[#00cc6f]"
+                                >Complete</button>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+
+                    {/* Add Goal button */}
+                    {addingGoalForRole === role.id ? (
+                      <div className="bg-[#0a0a1a] border border-[rgba(0,255,136,0.1)] rounded-lg px-3 py-2 space-y-2">
+                        <Input
+                          autoFocus
+                          placeholder="Goal name"
+                          value={newGoalName}
+                          onChange={e => setNewGoalName(e.target.value)}
+                          onKeyDown={e => { if (e.key === "Enter") handleAddGoal(role.id) }}
+                        />
+                        <select
+                          value={newGoalType}
+                          onChange={e => setNewGoalType(e.target.value as "ongoing" | "completable")}
+                          className="w-full bg-[#0a0a1a] border border-[rgba(0,255,136,0.15)] rounded text-[#c0c0d0] text-sm px-3 py-2"
+                        >
+                          <option value="ongoing">Ongoing</option>
+                          <option value="completable">Completable</option>
+                        </select>
+                        <div className="flex gap-2">
+                          <Button onClick={() => handleAddGoal(role.id)} disabled={savingGoal || !newGoalName.trim()}>
+                            {savingGoal ? "Adding..." : "Add"}
+                          </Button>
+                          <button onClick={() => { setAddingGoalForRole(null); setNewGoalName("") }} className="text-sm text-[#666688] hover:text-[#c0c0d0]">Cancel</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button onClick={() => setAddingGoalForRole(role.id)} className="text-xs text-[#00ff88] hover:text-[#00cc6f]">
+                        + Add goal
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </section>
 
       <section>
