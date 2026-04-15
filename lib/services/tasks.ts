@@ -50,14 +50,16 @@ export async function getTask(id: string, userId: string) {
 }
 
 export async function createTask(data: CreateTaskInput, actor: Actor, userId: string) {
-  // Verify project access (owner or member can add tasks)
-  const project = await prisma.project.findFirst({
-    where: {
-      id: data.projectId,
-      OR: [{ userId }, { members: { some: { userId } } }],
-    },
-  })
-  if (!project) return null
+  // Verify project access when projectId is provided (owner or member can add tasks)
+  if (data.projectId) {
+    const project = await prisma.project.findFirst({
+      where: {
+        id: data.projectId,
+        OR: [{ userId }, { members: { some: { userId } } }],
+      },
+    })
+    if (!project) return null
+  }
 
   const task = await prisma.task.create({
     data: { ...data, dueDate: data.dueDate ? new Date(data.dueDate) : null },

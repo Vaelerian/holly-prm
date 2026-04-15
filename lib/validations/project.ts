@@ -9,6 +9,7 @@ export const CreateProjectSchema = z.object({
   priority: PrioritySchema.default("medium"),
   targetDate: z.string().date().nullable().default(null),
   notes: z.string().default(""),
+  goalId: z.string().uuid().optional(),
 })
 
 export const UpdateProjectSchema = CreateProjectSchema.partial()

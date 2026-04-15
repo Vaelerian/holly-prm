@@ -2,7 +2,8 @@ import { z } from "zod"
 import { PrioritySchema, ActorSchema } from "@/lib/validations/action-item"
 
 export const CreateTaskSchema = z.object({
-  projectId: z.string().uuid(),
+  projectId: z.string().uuid().nullable().optional().default(null),
+  goalId: z.string().uuid().optional(),
   title: z.string().min(1, "Title is required").max(200),
   description: z.string().default(""),
   status: z.enum(["todo", "in_progress", "done", "cancelled"]).default("todo"),
@@ -12,7 +13,10 @@ export const CreateTaskSchema = z.object({
   isMilestone: z.boolean().default(false),
 })
 
-export const UpdateTaskSchema = CreateTaskSchema.omit({ projectId: true }).partial()
+export const UpdateTaskSchema = CreateTaskSchema.omit({ projectId: true }).partial().extend({
+  projectId: z.string().uuid().nullable().optional(),
+  goalId: z.string().uuid().optional(),
+})
 
 export const UpdateTaskStatusSchema = z.object({
   status: z.enum(["todo", "in_progress", "done", "cancelled"]),
