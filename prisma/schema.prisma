@@ -84,6 +84,17 @@ enum UserStatus {
   rejected
 }
 
+enum GoalType {
+  ongoing
+  completable
+}
+
+enum GoalStatus {
+  active
+  completed
+  archived
+}
+
 model User {
   id           String     @id @default(uuid())
   email        String     @unique
@@ -112,6 +123,50 @@ model User {
   receivedAccess      UserAccessGrant[]   @relation("Grantee")
   createdInteractions Interaction[]       @relation("InteractionCreatedBy")
   contactShares       ContactShare[]
+  roles               Role[]
+  goals               Goal[]
+}
+
+model Role {
+  id          String   @id @default(uuid())
+  name        String
+  description String   @default("")
+  colour      String   @default("#6366F1")
+  icon        String   @default("")
+  isDefault   Boolean  @default(false)
+  sortOrder   Int      @default(0)
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  goals    Goal[]
+  projects Project[] @relation("ProjectRole")
+  tasks    Task[]    @relation("TaskRole")
+
+  @@unique([userId, name])
+}
+
+model Goal {
+  id          String     @id @default(uuid())
+  roleId      String
+  role        Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  name        String
+  description String     @default("")
+  goalType    GoalType   @default(ongoing)
+  status      GoalStatus @default(active)
+  targetDate  DateTime?
+  isDefault   Boolean    @default(false)
+  sortOrder   Int        @default(0)
+  userId      String?
+  user        User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  projects Project[] @relation("ProjectGoal")
+  tasks    Task[]    @relation("TaskGoal")
+
+  @@unique([roleId, name])
 }
 
 model ProjectMember {
@@ -215,6 +270,10 @@ model Project {
   updatedAt   DateTime        @updatedAt
   userId      String?
   user        User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+  roleId              String?
+  role                Role?          @relation("ProjectRole", fields: [roleId], references: [id], onDelete: SetNull)
+  goalId              String?
+  goal                Goal?          @relation("ProjectGoal", fields: [goalId], references: [id], onDelete: SetNull)
   members             ProjectMember[]
   linkedContacts      Contact[]      @relation("ContactProject")
   linkedInteractions  Interaction[]  @relation("InteractionProject")
@@ -222,8 +281,8 @@ model Project {
 
 model Task {
   id          String       @id @default(uuid())
-  projectId   String
-  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId   String?
+  project     Project?     @relation(fields: [projectId], references: [id], onDelete: Cascade)
   title       String
   description String       @default("")
   status      TaskStatus   @default(todo)
@@ -231,6 +290,10 @@ model Task {
   assignedTo  Actor
   dueDate     DateTime?
   isMilestone Boolean      @default(false)
+  roleId      String?
+  role        Role?        @relation("TaskRole", fields: [roleId], references: [id], onDelete: SetNull)
+  goalId      String?
+  goal        Goal?        @relation("TaskGoal", fields: [goalId], references: [id], onDelete: SetNull)
   actionItems ActionItem[]
   createdAt   DateTime     @default(now())
 }
