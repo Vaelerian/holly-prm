@@ -29,6 +29,12 @@ interface CalendarViewProps {
   timeSlots?: ResolvedTimeSlot[]
 }
 
+interface RoleOption {
+  id: string
+  name: string
+  colour: string
+}
+
 type View = "month" | "week" | "agenda"
 
 const TYPE_COLORS: Record<CalendarItemType, string> = {
@@ -62,11 +68,45 @@ function toDateStr(date: Date): string {
   return date.toLocaleDateString("en-CA")
 }
 
-function MonthView({ items, currentDate, setCurrentDate }: { items: CalendarItem[]; currentDate: Date; setCurrentDate: (d: Date) => void; timeSlots?: ResolvedTimeSlot[] }) {
+function minutesToTime(m: number): string {
+  return `${Math.floor(m / 60).toString().padStart(2, "0")}:${(m % 60).toString().padStart(2, "0")}`
+}
+
+/** Deterministic role colour from fallback palette */
+const ROLE_FALLBACK_COLORS = [
+  "#6366F1", "#EC4899", "#F59E0B", "#10B981", "#3B82F6",
+  "#8B5CF6", "#EF4444", "#14B8A6", "#F97316", "#06B6D4",
+]
+
+function getRoleColor(roleId: string, roles: RoleOption[]): string {
+  const role = roles.find(r => r.id === roleId)
+  if (role) return role.colour
+  let hash = 0
+  for (let i = 0; i < roleId.length; i++) {
+    hash = ((hash << 5) - hash + roleId.charCodeAt(i)) | 0
+  }
+  return ROLE_FALLBACK_COLORS[Math.abs(hash) % ROLE_FALLBACK_COLORS.length]
+}
+
+function CapacityBar({ usedMinutes, capacityMinutes, colour }: { usedMinutes: number; capacityMinutes: number; colour: string }) {
+  const pct = capacityMinutes > 0 ? Math.min(100, Math.round((usedMinutes / capacityMinutes) * 100)) : 0
+  return (
+    <div className="w-full h-1 rounded-full bg-[rgba(255,255,255,0.06)] mt-0.5">
+      <div
+        className="h-full rounded-full"
+        style={{ width: `${pct}%`, backgroundColor: colour }}
+      />
+    </div>
+  )
+}
+
+// ─── Month View ───
+
+function MonthView({ items, currentDate, setCurrentDate }: { items: CalendarItem[]; currentDate: Date; setCurrentDate: (d: Date) => void; timeSlots?: ResolvedTimeSlot[]; roles?: RoleOption[] }) {
   const year = currentDate.getFullYear()
   const month = currentDate.getMonth()
   const firstDay = new Date(year, month, 1)
-  const startOffset = firstDay.getDay() // 0=Sun
+  const startOffset = firstDay.getDay()
   const daysInMonth = new Date(year, month + 1, 0).getDate()
   const cells: Array<Date | null> = [...Array(startOffset).fill(null)]
   for (let d = 1; d <= daysInMonth; d++) cells.push(new Date(year, month, d))
@@ -127,12 +167,28 @@ function MonthView({ items, currentDate, setCurrentDate }: { items: CalendarItem
   )
 }
 
-function WeekView({ items, currentDate, setCurrentDate }: { items: CalendarItem[]; currentDate: Date; setCurrentDate: (d: Date) => void; timeSlots?: ResolvedTimeSlot[] }) {
-  // Start of week = Sunday
+// ─── Week View (time-grid) ───
+
+function WeekView({
+  items,
+  currentDate,
+  setCurrentDate,
+  timeSlots = [],
+  roles = [],
+  onSlotClick,
+}: {
+  items: CalendarItem[]
+  currentDate: Date
+  setCurrentDate: (d: Date) => void
+  timeSlots?: ResolvedTimeSlot[]
+  roles?: RoleOption[]
+  onSlotClick?: (slot: ResolvedTimeSlot) => void
+}) {
   const weekStart = new Date(currentDate)
   weekStart.setDate(currentDate.getDate() - currentDate.getDay())
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
   const weekLabel = `${weekStart.toLocaleDateString("en-GB", { day: "numeric", month: "short" })} - ${addDays(weekStart, 6).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}`
+  const todayStr = toDateStr(new Date())
 
   const itemsByDate = new Map<string, CalendarItem[]>()
   for (const item of items) {
@@ -141,6 +197,18 @@ function WeekView({ items, currentDate, setCurrentDate }: { items: CalendarItem[
     itemsByDate.set(item.date, list)
   }
 
+  const slotsByDate = new Map<string, ResolvedTimeSlot[]>()
+  for (const slot of timeSlots) {
+    const list = slotsByDate.get(slot.date) ?? []
+    list.push(slot)
+    slotsByDate.set(slot.date, list)
+  }
+
+  const GRID_START = 360 // 06:00 in minutes
+  const GRID_END = 1320  // 22:00 in minutes
+  const GRID_HEIGHT = (GRID_END - GRID_START) // 960px
+  const hours = Array.from({ length: 17 }, (_, i) => i + 6)
+
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
@@ -148,38 +216,123 @@ function WeekView({ items, currentDate, setCurrentDate }: { items: CalendarItem[
         <span className="text-sm font-semibold text-[#c0c0d0]">{weekLabel}</span>
         <button onClick={() => setCurrentDate(addDays(currentDate, 7))} className="text-[#666688] hover:text-[#c0c0d0] px-2 py-1 text-sm">Next &#8250;</button>
       </div>
-      <div className="grid grid-cols-7 gap-2">
+
+      {/* All-day header */}
+      <div className="grid grid-cols-[48px_repeat(7,1fr)] gap-px bg-[rgba(0,255,136,0.08)] rounded-t-lg overflow-hidden">
+        <div className="bg-[#111125] px-1 py-1 text-xs text-[#444466]">All day</div>
         {days.map(day => {
           const dateStr = toDateStr(day)
+          const isToday = dateStr === todayStr
           const dayItems = itemsByDate.get(dateStr) ?? []
-          const isToday = dateStr === toDateStr(new Date())
           return (
-            <div key={dateStr} className="bg-[#111125] border border-[rgba(0,255,136,0.1)] rounded-lg p-2 min-h-[120px]">
-              <div className={`text-xs font-semibold mb-2 ${isToday ? "text-[#00ff88]" : "text-[#666688]"}`}>
+            <div key={dateStr} className={`bg-[#111125] px-1 py-1 min-h-[40px] ${isToday ? "bg-[rgba(0,255,136,0.03)]" : ""}`}>
+              <div className={`text-xs font-semibold mb-1 ${isToday ? "text-[#00ff88]" : "text-[#666688]"}`}>
                 {day.toLocaleDateString("en-GB", { weekday: "short", day: "numeric" })}
               </div>
-              <div className="space-y-1">
-                {dayItems.map(item => (
+              <div className="space-y-0.5">
+                {dayItems.slice(0, 2).map(item => (
                   item.href ? (
-                    <Link key={item.id} href={item.href} className="block truncate text-xs text-[#c0c0d0] hover:text-[#00ff88]">
-                      <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1 ${TYPE_COLORS[item.type]}`} />
+                    <Link key={item.id} href={item.href} className="block truncate text-[10px] text-[#c0c0d0] hover:text-[#00ff88]">
+                      <span className={`inline-block w-1 h-1 rounded-full mr-0.5 ${TYPE_COLORS[item.type]}`} />
                       {item.title}
                     </Link>
                   ) : (
-                    <div key={item.id} className="truncate text-xs text-[#c0c0d0]">
-                      <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1 ${TYPE_COLORS[item.type]}`} />
+                    <div key={item.id} className="truncate text-[10px] text-[#c0c0d0]">
+                      <span className={`inline-block w-1 h-1 rounded-full mr-0.5 ${TYPE_COLORS[item.type]}`} />
                       {item.title}
                     </div>
                   )
                 ))}
+                {dayItems.length > 2 && <div className="text-[10px] text-[#444466]">+{dayItems.length - 2}</div>}
               </div>
             </div>
           )
         })}
       </div>
+
+      {/* Time grid */}
+      <div className="overflow-y-auto max-h-[600px] border border-[rgba(0,255,136,0.08)] rounded-b-lg">
+        <div className="grid grid-cols-[48px_repeat(7,1fr)]" style={{ height: `${GRID_HEIGHT}px` }}>
+          {/* Hour labels column */}
+          <div className="relative bg-[#0a0a1a]">
+            {hours.map(h => (
+              <div
+                key={h}
+                className="absolute text-[10px] text-[#444466] pr-1 text-right w-full"
+                style={{ top: `${(h - 6) * 60}px` }}
+              >
+                {`${h.toString().padStart(2, "0")}:00`}
+              </div>
+            ))}
+          </div>
+
+          {/* Day columns */}
+          {days.map(day => {
+            const dateStr = toDateStr(day)
+            const isToday = dateStr === todayStr
+            const daySlots = slotsByDate.get(dateStr) ?? []
+
+            return (
+              <div
+                key={dateStr}
+                className={`relative border-l border-[rgba(0,255,136,0.06)] ${isToday ? "bg-[rgba(0,255,136,0.02)]" : "bg-[#111125]"}`}
+              >
+                {hours.map(h => (
+                  <div
+                    key={h}
+                    className="absolute w-full border-t border-[rgba(255,255,255,0.04)]"
+                    style={{ top: `${(h - 6) * 60}px` }}
+                  />
+                ))}
+
+                {daySlots.map(slot => {
+                  const top = Math.max(0, (slot.startMinutes - GRID_START))
+                  const bottom = Math.min(GRID_HEIGHT, (slot.endMinutes - GRID_START))
+                  const height = Math.max(12, bottom - top)
+                  const colour = getRoleColor(slot.roleId, roles)
+
+                  return (
+                    <div
+                      key={slot.id}
+                      className="absolute left-0.5 right-0.5 rounded cursor-pointer hover:brightness-125 transition-all overflow-hidden"
+                      style={{
+                        top: `${top}px`,
+                        height: `${height}px`,
+                        backgroundColor: `${colour}15`,
+                        borderLeft: `3px solid ${colour}`,
+                      }}
+                      onClick={() => onSlotClick?.(slot)}
+                    >
+                      <div className="px-1 py-0.5">
+                        <div className="text-[10px] text-[#c0c0d0] truncate leading-tight">
+                          {slot.title || "Time slot"}
+                        </div>
+                        {height > 24 && (
+                          <div className="text-[9px] text-[#666688] leading-tight">
+                            {minutesToTime(slot.startMinutes)} - {minutesToTime(slot.endMinutes)}
+                          </div>
+                        )}
+                        {height > 36 && (
+                          <CapacityBar
+                            usedMinutes={slot.usedMinutes}
+                            capacityMinutes={slot.capacityMinutes}
+                            colour={colour}
+                          />
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )
+          })}
+        </div>
+      </div>
     </div>
   )
 }
+
+// ─── Agenda View ───
 
 function AgendaView({ items }: { items: CalendarItem[]; timeSlots?: ResolvedTimeSlot[] }) {
   const today = toDateStr(new Date())
@@ -223,6 +376,8 @@ function AgendaView({ items }: { items: CalendarItem[]; timeSlots?: ResolvedTime
     </div>
   )
 }
+
+// ─── Main CalendarView ───
 
 export function CalendarView({ items, filters, timeSlots = [] }: CalendarViewProps) {
   const [view, setView] = useState<View>("month")
