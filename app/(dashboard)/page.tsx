@@ -113,6 +113,20 @@ export default async function DashboardPage() {
               </div>
             </section>
           )}
+
+          {data.scheduleAlerts && (data.scheduleAlerts as { taskId?: string; title?: string; reason?: string }[]).length > 0 && (
+            <section>
+              <h2 className="text-xs font-semibold text-[#ff4444] uppercase tracking-wide mb-3">Scheduling alerts</h2>
+              <div className="space-y-2">
+                {(data.scheduleAlerts as { taskId?: string; title?: string; reason?: string }[]).map((a, i) => (
+                  <div key={a.taskId ?? i} className="bg-[#111125] border border-[rgba(255,68,68,0.2)] rounded-lg px-4 py-2.5">
+                    <p className="text-sm font-medium text-[#c0c0d0]">{a.title}</p>
+                    <p className="text-xs text-[#666688] mt-0.5">{a.reason}</p>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
         </>
       )}
     </div>

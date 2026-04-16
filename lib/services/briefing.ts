@@ -117,6 +117,29 @@ export async function getBriefing(userId: string) {
     // Redis unavailable or invalid JSON - proceed with empty array
   }
 
+  // Read scheduling alerts cache (populated by cron)
+  let scheduleAlerts: unknown[] = []
+  try {
+    const cached = await redis.get(`schedule:results:${userId}`)
+    if (cached) {
+      const parsed = JSON.parse(cached)
+      const alertTaskIds: string[] = parsed.alerts ?? []
+      if (alertTaskIds.length > 0) {
+        const alertTasks = await prisma.task.findMany({
+          where: { id: { in: alertTaskIds } },
+          select: { id: true, title: true, urgency: true, importance: true },
+        })
+        scheduleAlerts = alertTasks.map(t => ({
+          taskId: t.id,
+          title: t.title,
+          reason: `Could not find a time slot (${t.urgency}, ${t.importance})`,
+        }))
+      }
+    }
+  } catch {
+    // proceed with empty
+  }
+
   const now = new Date()
   const followUpCandidates = candidateContacts.filter(c => {
     const daysSince = (now.getTime() - c.lastInteraction!.getTime()) / (1000 * 60 * 60 * 24)
@@ -148,6 +171,7 @@ export async function getBriefing(userId: string) {
     projectHealth,
     recentEmails,
     vaultUpdates,
+    scheduleAlerts,
     generatedAt: new Date(),
   }
 }

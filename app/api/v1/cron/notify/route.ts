@@ -76,6 +76,40 @@ export async function POST(req: NextRequest) {
     console.error("[cron/notify] vault sync failed", e)
   }
 
+  // 4. Scheduling: refresh urgency and reschedule
+  try {
+    // Get all users who have schedulable tasks
+    const usersWithTasks = await prisma.task.findMany({
+      where: { importance: { not: "undefined_imp" }, status: { in: ["todo", "in_progress"] } },
+      select: { roleId: true, role: { select: { userId: true } } },
+      distinct: ["roleId"],
+    })
+    const userIds = [...new Set(usersWithTasks.map(t => t.role?.userId).filter(Boolean) as string[])]
+
+    for (const uid of userIds) {
+      try {
+        const { refreshUrgency, rescheduleAll } = await import("@/lib/services/scheduling-engine")
+        const escalated = await refreshUrgency(uid)
+        const needsReschedule = await prisma.task.count({
+          where: {
+            role: { userId: uid },
+            scheduleState: { in: ["unscheduled", "alert"] },
+            importance: { not: "undefined_imp" },
+            status: { in: ["todo", "in_progress"] },
+          },
+        })
+        if (needsReschedule > 0 || escalated > 0) {
+          const result = await rescheduleAll(uid)
+          await redis.set(`schedule:results:${uid}`, JSON.stringify(result), "EX", 7200)
+        }
+      } catch (e) {
+        console.error(`[cron/notify] scheduling failed for user ${uid}`, e)
+      }
+    }
+  } catch (e) {
+    console.error("[cron/notify] scheduling step failed", e)
+  }
+
   if (!isPushConfigured) {
     return NextResponse.json({ sent: 0 })
   }
