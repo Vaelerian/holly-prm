@@ -3,6 +3,7 @@ import {
   calculateEffectiveImportance,
   importanceToSortOrder,
   urgencyToSortOrder,
+  calculateFloat,
   getDefaultSchedulingPrefs,
   type SchedulingPrefs,
 } from "@/lib/services/scheduling-helpers"
@@ -95,6 +96,54 @@ describe("importanceToSortOrder", () => {
   it("step = 2", () => expect(importanceToSortOrder("step")).toBe(2))
   it("bonus = 3", () => expect(importanceToSortOrder("bonus")).toBe(3))
   it("undefined_imp = 99", () => expect(importanceToSortOrder("undefined_imp")).toBe(99))
+})
+
+describe("calculateFloat", () => {
+  function makeDate(daysFromNow: number): Date {
+    const d = new Date("2025-06-01T00:00:00Z")
+    d.setUTCDate(d.getUTCDate() + daysFromNow)
+    return d
+  }
+
+  const slot = new Date("2025-06-01T00:00:00Z")
+
+  it("5 days float = green", () => {
+    const result = calculateFloat(slot, makeDate(5))
+    expect(result).toEqual({ days: 5, label: "Float: 5 days", colour: "green" })
+  })
+
+  it("3 days float = green", () => {
+    const result = calculateFloat(slot, makeDate(3))
+    expect(result).toEqual({ days: 3, label: "Float: 3 days", colour: "green" })
+  })
+
+  it("2 days float = amber", () => {
+    const result = calculateFloat(slot, makeDate(2))
+    expect(result).toEqual({ days: 2, label: "Float: 2 days", colour: "amber" })
+  })
+
+  it("1 day float = amber, singular", () => {
+    const result = calculateFloat(slot, makeDate(1))
+    expect(result).toEqual({ days: 1, label: "Float: 1 day", colour: "amber" })
+  })
+
+  it("0 days = amber, Due today", () => {
+    const result = calculateFloat(slot, makeDate(0))
+    expect(result).toEqual({ days: 0, label: "Due today", colour: "amber" })
+  })
+
+  it("-3 days = red, Overdue", () => {
+    const result = calculateFloat(slot, makeDate(-3))
+    expect(result).toEqual({ days: -3, label: "Overdue by 3 days", colour: "red" })
+  })
+
+  it("null slotDate returns null", () => {
+    expect(calculateFloat(null, makeDate(5))).toBeNull()
+  })
+
+  it("null dueDate returns null", () => {
+    expect(calculateFloat(slot, null)).toBeNull()
+  })
 })
 
 describe("urgencyToSortOrder", () => {

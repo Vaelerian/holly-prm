@@ -117,6 +117,21 @@ export function importanceToSortOrder(importance: string): number {
   }
 }
 
+export interface FloatResult {
+  days: number
+  label: string
+  colour: "green" | "amber" | "red"
+}
+
+export function calculateFloat(slotDate: Date | null, dueDate: Date | null): FloatResult | null {
+  if (!slotDate || !dueDate) return null
+  const days = Math.ceil((dueDate.getTime() - slotDate.getTime()) / 86400000)
+  if (days < 0) return { days, label: `Overdue by ${Math.abs(days)} days`, colour: "red" }
+  if (days === 0) return { days, label: "Due today", colour: "amber" }
+  if (days <= 2) return { days, label: `Float: ${days} day${days === 1 ? "" : "s"}`, colour: "amber" }
+  return { days, label: `Float: ${days} days`, colour: "green" }
+}
+
 export function urgencyToSortOrder(urgency: string): number {
   switch (urgency) {
     case "dated":
