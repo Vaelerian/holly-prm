@@ -41,22 +41,18 @@ export async function listTasks(opts: ListTasksOptions) {
   if (opts.assignedTo) where.assignedTo = opts.assignedTo
   if (opts.milestoneOnly) where.isMilestone = true
 
-  const include: Record<string, unknown> = {
-    project: { select: { id: true, title: true } },
-    goal: { select: { id: true, name: true } },
-    role: { select: { id: true, name: true, colour: true } },
-  }
-
-  if (opts.includeSlot) {
-    include.timeSlot = {
-      select: { id: true, date: true, startMinutes: true, endMinutes: true, title: true },
-    }
-  }
-
   return prisma.task.findMany({
     where,
     orderBy: { createdAt: "asc" },
-    include,
+    include: {
+      project: { select: { id: true, title: true } },
+      goal: { select: { id: true, name: true } },
+      role: { select: { id: true, name: true, colour: true } },
+      actionItems: { orderBy: { createdAt: "asc" as const } },
+      ...(opts.includeSlot ? {
+        timeSlot: { select: { id: true, date: true, startMinutes: true, endMinutes: true, title: true } },
+      } : {}),
+    },
   })
 }
 
