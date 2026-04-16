@@ -21,6 +21,10 @@ export function AddTaskForm({ projectId, goalId: propGoalId, roleId: propRoleId 
   const [priority, setPriority] = useState("medium")
   const [isMilestone, setIsMilestone] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [showScheduling, setShowScheduling] = useState(false)
+  const [importance, setImportance] = useState("")
+  const [urgency, setUrgency] = useState("")
+  const [effortSize, setEffortSize] = useState("")
 
   // Standalone mode state (no projectId)
   const standalone = !projectId
@@ -100,6 +104,9 @@ export function AddTaskForm({ projectId, goalId: propGoalId, roleId: propRoleId 
         priority,
         isMilestone,
       }
+      if (importance) body.importance = importance
+      if (urgency) body.urgency = urgency
+      if (effortSize) body.effortSize = effortSize
       if (projectId) {
         body.projectId = projectId
       } else {
@@ -192,6 +199,41 @@ export function AddTaskForm({ projectId, goalId: propGoalId, roleId: propRoleId 
           </button>
           <button onClick={() => setOpen(false)} className="text-sm text-[#666688] hover:text-[#c0c0d0]">Cancel</button>
         </div>
+      </div>
+      <div>
+        <button
+          type="button"
+          onClick={() => setShowScheduling(!showScheduling)}
+          className="text-xs text-[#666688] hover:text-[#00ff88]"
+        >
+          {showScheduling ? "Hide scheduling options" : "Scheduling options"}
+        </button>
+        {showScheduling && (
+          <div className="flex items-center gap-3 mt-2">
+            <select value={importance} onChange={e => setImportance(e.target.value)} className="border border-[rgba(0,255,136,0.2)] rounded-lg px-2 py-1 text-sm bg-[#0a0a1a] text-[#c0c0d0]">
+              <option value="">Importance</option>
+              <option value="core">Core</option>
+              <option value="step">Step</option>
+              <option value="bonus">Bonus</option>
+            </select>
+            <select value={urgency} onChange={e => setUrgency(e.target.value)} className="border border-[rgba(0,255,136,0.2)] rounded-lg px-2 py-1 text-sm bg-[#0a0a1a] text-[#c0c0d0]">
+              <option value="">Urgency</option>
+              <option value="dated">Dated</option>
+              <option value="asap">ASAP</option>
+              <option value="soon">Soon</option>
+              <option value="sometime">Sometime</option>
+            </select>
+            <select value={effortSize} onChange={e => setEffortSize(e.target.value)} className="border border-[rgba(0,255,136,0.2)] rounded-lg px-2 py-1 text-sm bg-[#0a0a1a] text-[#c0c0d0]">
+              <option value="">Effort</option>
+              <option value="minutes">Minutes</option>
+              <option value="hour">Hour</option>
+              <option value="half_day">Half Day</option>
+              <option value="day">Day</option>
+              <option value="project_size">Project</option>
+              <option value="milestone">Milestone</option>
+            </select>
+          </div>
+        )}
       </div>
     </div>
   )

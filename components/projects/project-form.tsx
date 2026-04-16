@@ -172,6 +172,15 @@ export function ProjectForm({ defaultValues, projectId }: ProjectFormProps) {
       </div>
 
       <div>
+        <label className="block text-sm font-medium text-[#c0c0d0] mb-1">Scheduling priority</label>
+        <select {...register("projectImportance")} className="w-full border border-[rgba(0,255,136,0.2)] rounded-lg px-3 py-2 text-sm bg-[#0a0a1a] text-[#c0c0d0] focus:outline-none focus:ring-2 focus:ring-[#00ff88]">
+          <option value="same">Same</option>
+          <option value="more">More Important</option>
+          <option value="less">Less Important</option>
+        </select>
+      </div>
+
+      <div>
         <label className="block text-sm font-medium text-[#c0c0d0] mb-1">Target date</label>
         <input type="date" {...register("targetDate")} className="w-full border border-[rgba(0,255,136,0.2)] rounded-lg px-3 py-2 text-sm bg-[#0a0a1a] text-[#c0c0d0] focus:outline-none focus:ring-2 focus:ring-[#00ff88]" />
       </div>

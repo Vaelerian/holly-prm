@@ -2,8 +2,16 @@ import { listTasks } from "@/lib/services/tasks"
 import { listRoles } from "@/lib/services/roles"
 import { TaskRow } from "@/components/tasks/task-row"
 import { AddTaskForm } from "@/components/tasks/add-task-form"
+import { ScheduleAllButton } from "@/components/tasks/schedule-all-button"
 import { auth } from "@/lib/auth"
 import { redirect } from "next/navigation"
+
+const SCHEDULE_STATE_COLORS: Record<string, string> = {
+  floating: "bg-[#00ff88]",
+  fixed: "bg-blue-500",
+  alert: "bg-[#ff4444]",
+  unscheduled: "bg-[#666688]",
+}
 
 interface PageProps { searchParams: Promise<{ status?: string; assignedTo?: string; milestoneOnly?: string; roleId?: string; goalId?: string }> }
 
@@ -67,6 +75,7 @@ export default async function TasksPage({ searchParams }: PageProps) {
       )}
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold text-[#c0c0d0]">Tasks</h1>
+        <ScheduleAllButton />
       </div>
 
       <form className="flex gap-2 flex-wrap">
@@ -117,6 +126,9 @@ export default async function TasksPage({ searchParams }: PageProps) {
                             {projectTasks.map(t => (
                               <div key={t.id} className="flex items-center gap-2">
                                 <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: roleColourMap[roleName] ?? "#666688" }} />
+                                {t.importance !== "undefined_imp" && (
+                                  <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${SCHEDULE_STATE_COLORS[t.scheduleState] ?? "bg-[#666688]"}`} title={t.scheduleState} />
+                                )}
                                 <div className="flex-1">
                                   <TaskRow
                                     id={t.id}
