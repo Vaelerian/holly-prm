@@ -76,6 +76,26 @@ export async function scheduleTask(taskId: string, userId: string): Promise<Sche
   }
 
   const prefs = await getSchedulingPrefs(userId)
+
+  // If task is already assigned to a slot, unassign first
+  if (task.timeSlotId) {
+    const currentEffort = resolveEffortMinutes(
+      { effortMinutes: task.effortMinutes, effortSize: task.effortSize },
+      prefs
+    )
+    await prisma.timeSlot.update({
+      where: { id: task.timeSlotId },
+      data: {
+        usedMinutes: { decrement: currentEffort },
+        taskCount: { decrement: 1 },
+      },
+    })
+    await prisma.task.update({
+      where: { id: taskId },
+      data: { timeSlotId: null, scheduleState: "unscheduled" },
+    })
+  }
+
   const projectImportance = task.project?.projectImportance ?? null
   const effectiveImportance = calculateEffectiveImportance(task.importance, projectImportance)
   const effortMins = resolveEffortMinutes(
