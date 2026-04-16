@@ -3,6 +3,8 @@ import { listRoles } from "@/lib/services/roles"
 import { TaskRow } from "@/components/tasks/task-row"
 import { AddTaskForm } from "@/components/tasks/add-task-form"
 import { ScheduleAllButton } from "@/components/tasks/schedule-all-button"
+import { FloatBadge } from "@/components/tasks/float-badge"
+import { TaskScheduleButton } from "@/components/tasks/task-schedule-button"
 import { auth } from "@/lib/auth"
 import { redirect } from "next/navigation"
 
@@ -13,19 +15,24 @@ const SCHEDULE_STATE_COLORS: Record<string, string> = {
   unscheduled: "bg-[#666688]",
 }
 
-interface PageProps { searchParams: Promise<{ status?: string; assignedTo?: string; milestoneOnly?: string; roleId?: string; goalId?: string }> }
+interface PageProps { searchParams: Promise<{ status?: string; assignedTo?: string; milestoneOnly?: string; roleId?: string; goalId?: string; view?: string }> }
+
+function minutesToTime(m: number): string {
+  return `${Math.floor(m / 60).toString().padStart(2, "0")}:${(m % 60).toString().padStart(2, "0")}`
+}
 
 export default async function TasksPage({ searchParams }: PageProps) {
   const session = await auth()
   if (!session?.userId) redirect("/login")
-  const { status, assignedTo, milestoneOnly, roleId, goalId } = await searchParams
+  const { status, assignedTo, milestoneOnly, roleId, goalId, view } = await searchParams
+  const viewMode = view === "schedule" ? "schedule" : "goal"
   let tasks: Awaited<ReturnType<typeof listTasks>> = []
   let roles: Awaited<ReturnType<typeof listRoles>> = []
   let dbError = false
 
   try {
     ;[tasks, roles] = await Promise.all([
-      listTasks({ status, assignedTo, milestoneOnly: milestoneOnly === "true", roleId, goalId, userId: session.userId }),
+      listTasks({ status, assignedTo, milestoneOnly: milestoneOnly === "true", roleId, goalId, userId: session.userId, includeSlot: viewMode === "schedule" }),
       listRoles(session.userId),
     ])
   } catch (e) {
@@ -33,37 +40,84 @@ export default async function TasksPage({ searchParams }: PageProps) {
     dbError = true
   }
 
-  // Group tasks by role > goal > project
-  const grouped = new Map<string, Map<string, Map<string, typeof tasks>>>()
-  for (const task of tasks) {
-    const roleName = task.role?.name ?? "No role"
-    const roleColour = task.role?.name ? undefined : "#666688"
-    const goalName = task.goal?.name ?? "No goal"
-    const projectTitle = task.project?.title ?? "Direct tasks"
-
-    if (!grouped.has(roleName)) grouped.set(roleName, new Map())
-    const goalMap = grouped.get(roleName)!
-    if (!goalMap.has(goalName)) goalMap.set(goalName, new Map())
-    const projectMap = goalMap.get(goalName)!
-    if (!projectMap.has(projectTitle)) projectMap.set(projectTitle, [])
-    projectMap.get(projectTitle)!.push(task)
-
-    // Store colour for lookup
-    if (task.role && !roleColour) {
-      // We use the role relation data from the task
-    }
-  }
-
-  // Build a colour map from tasks
+  // Build a colour map from roles
   const roleColourMap: Record<string, string> = {}
-  for (const task of tasks) {
-    if (task.role) {
-      // The role select only includes id and name, not colour.
-      // We will use roles list to get colours.
-    }
-  }
   for (const role of roles) {
     roleColourMap[role.name] = role.colour
+  }
+
+  // Role colour by id for schedule view
+  const roleColourById: Record<string, string> = {}
+  for (const role of roles) {
+    roleColourById[role.id] = role.colour
+  }
+
+  // Build URL preserving existing query params
+  function buildUrl(targetView: string): string {
+    const params = new URLSearchParams()
+    params.set("view", targetView)
+    if (status) params.set("status", status)
+    if (assignedTo) params.set("assignedTo", assignedTo)
+    if (milestoneOnly === "true") params.set("milestoneOnly", "true")
+    if (roleId) params.set("roleId", roleId)
+    if (goalId) params.set("goalId", goalId)
+    return `/tasks?${params.toString()}`
+  }
+
+  const activeClass = "px-2 py-1 text-xs rounded bg-[rgba(0,255,136,0.15)] text-[#00ff88]"
+  const inactiveClass = "px-2 py-1 text-xs rounded text-[#666688] hover:text-[#c0c0d0]"
+
+  // Group tasks by role > goal > project for "goal" view
+  const grouped = new Map<string, Map<string, Map<string, typeof tasks>>>()
+  if (viewMode === "goal") {
+    for (const task of tasks) {
+      const roleName = task.role?.name ?? "No role"
+      const goalName = task.goal?.name ?? "No goal"
+      const projectTitle = task.project?.title ?? "Direct tasks"
+
+      if (!grouped.has(roleName)) grouped.set(roleName, new Map())
+      const goalMap = grouped.get(roleName)!
+      if (!goalMap.has(goalName)) goalMap.set(goalName, new Map())
+      const projectMap = goalMap.get(goalName)!
+      if (!projectMap.has(projectTitle)) projectMap.set(projectTitle, [])
+      projectMap.get(projectTitle)!.push(task)
+    }
+  }
+
+  // Schedule view grouping
+  type TaskWithSlot = (typeof tasks)[number] & { timeSlot?: { id: string; date: Date; startMinutes: number; endMinutes: number; title: string } | null }
+  const scheduledTasks: TaskWithSlot[] = []
+  const alertTasks: TaskWithSlot[] = []
+  const unscheduledTasks: TaskWithSlot[] = []
+
+  if (viewMode === "schedule") {
+    for (const t of tasks as TaskWithSlot[]) {
+      if (t.timeSlotId) {
+        scheduledTasks.push(t)
+      } else if (t.scheduleState === "alert") {
+        alertTasks.push(t)
+      } else if (t.importance !== "undefined_imp") {
+        unscheduledTasks.push(t)
+      }
+    }
+    // Sort scheduled by slot date then startMinutes
+    scheduledTasks.sort((a, b) => {
+      const aDate = a.timeSlot?.date ? new Date(a.timeSlot.date).getTime() : 0
+      const bDate = b.timeSlot?.date ? new Date(b.timeSlot.date).getTime() : 0
+      if (aDate !== bDate) return aDate - bDate
+      return (a.timeSlot?.startMinutes ?? 0) - (b.timeSlot?.startMinutes ?? 0)
+    })
+  }
+
+  // Group scheduled tasks by date
+  const scheduledByDate = new Map<string, TaskWithSlot[]>()
+  for (const t of scheduledTasks) {
+    if (t.timeSlot?.date) {
+      const d = new Date(t.timeSlot.date)
+      const dateStr = d.toLocaleDateString("en-CA")
+      if (!scheduledByDate.has(dateStr)) scheduledByDate.set(dateStr, [])
+      scheduledByDate.get(dateStr)!.push(t)
+    }
   }
 
   return (
@@ -75,10 +129,17 @@ export default async function TasksPage({ searchParams }: PageProps) {
       )}
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold text-[#c0c0d0]">Tasks</h1>
-        <ScheduleAllButton />
+        <div className="flex items-center gap-3">
+          <div className="flex gap-1">
+            <a href={buildUrl("goal")} className={viewMode === "goal" ? activeClass : inactiveClass}>By Goal</a>
+            <a href={buildUrl("schedule")} className={viewMode === "schedule" ? activeClass : inactiveClass}>By Schedule</a>
+          </div>
+          <ScheduleAllButton />
+        </div>
       </div>
 
       <form className="flex gap-2 flex-wrap">
+        {view && <input type="hidden" name="view" value={view} />}
         <select name="status" defaultValue={status ?? ""} className="border border-[rgba(0,255,136,0.2)] rounded-lg px-3 py-2 text-sm bg-[#0a0a1a] text-[#c0c0d0] focus:outline-none">
           <option value="">All statuses</option>
           <option value="todo">Todo</option>
@@ -106,7 +167,87 @@ export default async function TasksPage({ searchParams }: PageProps) {
 
       {tasks.length === 0 ? (
         <p className="text-sm text-[#666688]">No tasks match your filters.</p>
+      ) : viewMode === "schedule" ? (
+        /* ─── Schedule View ─── */
+        <div className="space-y-6">
+          {/* Scheduled tasks grouped by date */}
+          {scheduledByDate.size > 0 && (
+            <div className="space-y-4">
+              {Array.from(scheduledByDate.entries()).map(([dateStr, dateTasks]) => (
+                <section key={dateStr}>
+                  <h2 className="text-sm font-semibold text-[#c0c0d0] mb-2">
+                    {new Date(dateStr + "T12:00:00").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+                  </h2>
+                  <div className="space-y-1.5 ml-2">
+                    {dateTasks.map(t => (
+                      <div key={t.id} className="flex items-center gap-2">
+                        <span
+                          className="w-2 h-2 rounded-full flex-shrink-0"
+                          style={{ backgroundColor: t.role?.colour ?? roleColourById[t.roleId ?? ""] ?? "#666688" }}
+                        />
+                        {t.timeSlot && (
+                          <a href="/calendar" className="text-[10px] text-[#666688] hover:text-[#c0c0d0] flex-shrink-0">
+                            {minutesToTime(t.timeSlot.startMinutes)}-{minutesToTime(t.timeSlot.endMinutes)}
+                          </a>
+                        )}
+                        <span className="text-sm text-[#c0c0d0] truncate flex-1">{t.title}</span>
+                        {t.effortSize && t.effortSize !== "undefined_size" && (
+                          <span className="text-[10px] text-[#444466] flex-shrink-0">{t.effortSize}</span>
+                        )}
+                        <FloatBadge
+                          slotDate={t.timeSlot?.date ? new Date(t.timeSlot.date).toLocaleDateString("en-CA") : null}
+                          dueDate={t.dueDate ? t.dueDate.toISOString() : null}
+                        />
+                        <TaskScheduleButton taskId={t.id} importance={t.importance} scheduleState={t.scheduleState} />
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              ))}
+            </div>
+          )}
+
+          {/* Alert tasks */}
+          {alertTasks.length > 0 && (
+            <section>
+              <h2 className="text-sm font-semibold text-[#ff4444] mb-2">Alerts</h2>
+              <div className="space-y-1.5 ml-2">
+                {alertTasks.map(t => (
+                  <div key={t.id} className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full flex-shrink-0 bg-[#ff4444]" />
+                    <span className="text-sm text-[#c0c0d0] truncate flex-1">{t.title}</span>
+                    <TaskScheduleButton taskId={t.id} importance={t.importance} scheduleState={t.scheduleState} />
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* Unscheduled tasks */}
+          {unscheduledTasks.length > 0 && (
+            <section>
+              <h2 className="text-sm font-semibold text-[#666688] mb-2">Unscheduled</h2>
+              <div className="space-y-1.5 ml-2">
+                {unscheduledTasks.map(t => (
+                  <div key={t.id} className="flex items-center gap-2">
+                    <span
+                      className="w-2 h-2 rounded-full flex-shrink-0"
+                      style={{ backgroundColor: t.role?.colour ?? roleColourById[t.roleId ?? ""] ?? "#666688" }}
+                    />
+                    <span className="text-sm text-[#c0c0d0] truncate flex-1">{t.title}</span>
+                    {t.effortSize && t.effortSize !== "undefined_size" && (
+                      <span className="text-[10px] text-[#444466] flex-shrink-0">{t.effortSize}</span>
+                    )}
+                    <FloatBadge slotDate={null} dueDate={t.dueDate ? t.dueDate.toISOString() : null} />
+                    <TaskScheduleButton taskId={t.id} importance={t.importance} scheduleState={t.scheduleState} />
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+        </div>
       ) : (
+        /* ─── Goal View ─── */
         <div className="space-y-6">
           {Array.from(grouped.entries()).map(([roleName, goalMap]) => (
             <section key={roleName}>
@@ -140,6 +281,11 @@ export default async function TasksPage({ searchParams }: PageProps) {
                                     isMilestone={t.isMilestone}
                                   />
                                 </div>
+                                <FloatBadge
+                                  slotDate={null}
+                                  dueDate={t.dueDate ? t.dueDate.toISOString() : null}
+                                />
+                                <TaskScheduleButton taskId={t.id} importance={t.importance} scheduleState={t.scheduleState} />
                               </div>
                             ))}
                           </div>
