@@ -251,7 +251,7 @@ export async function rescheduleAll(userId: string): Promise<RescheduleResult> {
         },
       })
       await prisma.task.update({
-        where: { id: task.task.id },
+        where: { id: task.id },
         data: { timeSlotId: null, scheduleState: "unscheduled" },
       })
     }
