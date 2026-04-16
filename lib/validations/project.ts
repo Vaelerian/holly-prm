@@ -10,6 +10,7 @@ export const CreateProjectSchema = z.object({
   targetDate: z.string().date().nullable().default(null),
   notes: z.string().default(""),
   goalId: z.string().uuid().optional(),
+  projectImportance: z.enum(["more", "same", "less"]).default("same"),
 })
 
 export const UpdateProjectSchema = CreateProjectSchema.partial()

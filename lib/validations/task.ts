@@ -11,6 +11,10 @@ export const CreateTaskSchema = z.object({
   assignedTo: ActorSchema,
   dueDate: z.string().date().nullable().default(null),
   isMilestone: z.boolean().default(false),
+  importance: z.enum(["undefined_imp", "core", "step", "bonus"]).optional(),
+  urgency: z.enum(["undefined_urg", "dated", "asap", "soon", "sometime"]).optional(),
+  effortSize: z.enum(["undefined_size", "minutes", "hour", "half_day", "day", "project_size", "milestone"]).optional(),
+  effortMinutes: z.number().int().min(0).nullable().optional(),
 })
 
 export const UpdateTaskSchema = CreateTaskSchema.omit({ projectId: true }).partial().extend({
