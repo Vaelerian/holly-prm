@@ -32,6 +32,7 @@ export interface AssignedTaskInfo {
   title: string
   effortSize: string
   scheduleState: string
+  projectId: string | null
 }
 
 export interface ResolvedTimeSlot {

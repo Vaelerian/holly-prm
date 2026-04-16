@@ -21,7 +21,7 @@ export async function listTimeSlotsForRange(
     },
     orderBy: [{ date: "asc" }, { startMinutes: "asc" }],
     include: {
-      tasks: { select: { id: true, title: true, effortSize: true, scheduleState: true } },
+      tasks: { select: { id: true, title: true, effortSize: true, scheduleState: true, projectId: true } },
     },
   })
 
@@ -97,11 +97,12 @@ export async function listTimeSlotsForRange(
     title: s.title,
     isVirtual: false,
     repeatPatternId: s.repeatPatternId,
-    assignedTasks: (s.tasks ?? []).map((t: { id: string; title: string; effortSize: string; scheduleState: string }) => ({
+    assignedTasks: (s.tasks ?? []).map((t: { id: string; title: string; effortSize: string; scheduleState: string; projectId: string | null }) => ({
       id: t.id,
       title: t.title,
       effortSize: t.effortSize,
       scheduleState: t.scheduleState,
+      projectId: t.projectId,
     })),
   }))
 

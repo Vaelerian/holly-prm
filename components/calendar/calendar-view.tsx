@@ -878,9 +878,14 @@ function WeekView({
                         {height > 48 && slot.assignedTasks && slot.assignedTasks.length > 0 && (
                           <div className="mt-0.5 space-y-px">
                             {slot.assignedTasks.slice(0, 3).map(t => (
-                              <div key={t.id} className="text-[9px] text-[#888899] truncate leading-tight">
+                              <Link
+                                key={t.id}
+                                href={t.projectId ? `/projects/${t.projectId}` : `/tasks?view=schedule`}
+                                className="block text-[10px] text-[#c0c0d0] hover:text-[#00ff88] truncate mt-0.5"
+                                onClick={e => e.stopPropagation()}
+                              >
                                 {t.scheduleState === "fixed" ? "F" : "~"} {t.title}
-                              </div>
+                              </Link>
                             ))}
                             {slot.assignedTasks.length > 3 && (
                               <div className="text-[8px] text-[#444466]">+{slot.assignedTasks.length - 3} more</div>
