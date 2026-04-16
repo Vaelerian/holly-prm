@@ -109,6 +109,45 @@ enum ExceptionType {
   skipped
 }
 
+enum Importance {
+  undefined_imp
+  core
+  step
+  bonus
+}
+
+enum Urgency {
+  undefined_urg
+  dated
+  asap
+  soon
+  sometime
+}
+
+enum EffortSize {
+  undefined_size
+  minutes
+  hour
+  half_day
+  day
+  project_size
+  milestone
+}
+
+enum ScheduleState {
+  unscheduled
+  floating
+  fixed
+  waiting
+  alert
+}
+
+enum ProjectImportance {
+  more
+  same
+  less
+}
+
 model User {
   id           String     @id @default(uuid())
   email        String     @unique
@@ -283,8 +322,9 @@ model Project {
   status      ProjectStatus   @default(planning)
   priority    Priority        @default(medium)
   targetDate  DateTime?
-  notes       String          @default("")
-  tasks       Task[]
+  notes             String            @default("")
+  projectImportance ProjectImportance @default(same)
+  tasks             Task[]
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
   userId      String?
@@ -313,8 +353,15 @@ model Task {
   role        Role         @relation("TaskRole", fields: [roleId], references: [id], onDelete: SetNull)
   goalId      String
   goal        Goal         @relation("TaskGoal", fields: [goalId], references: [id], onDelete: SetNull)
-  actionItems ActionItem[]
-  createdAt   DateTime     @default(now())
+  actionItems   ActionItem[]
+  createdAt     DateTime      @default(now())
+  importance    Importance    @default(undefined_imp)
+  urgency       Urgency       @default(undefined_urg)
+  effortSize    EffortSize    @default(undefined_size)
+  effortMinutes Int?
+  scheduleState ScheduleState @default(unscheduled)
+  timeSlotId    String?
+  timeSlot      TimeSlot?     @relation(fields: [timeSlotId], references: [id], onDelete: SetNull)
 }
 
 model AuditLog {
@@ -497,6 +544,7 @@ model TimeSlot {
   user            User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
+  tasks           Task[]
 
   @@index([userId, date])
 }
