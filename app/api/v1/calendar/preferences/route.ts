@@ -3,6 +3,17 @@ import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/db"
 import { z } from "zod"
 
+const SchedulingPrefsSchema = z.object({
+  asapDays: z.number().int().min(1).optional(),
+  soonDays: z.number().int().min(1).optional(),
+  sometimeDays: z.number().int().min(1).optional(),
+  scanAheadDays: z.number().int().min(1).optional(),
+  sizeMinutes: z.number().int().min(1).optional(),
+  sizeHour: z.number().int().min(1).optional(),
+  sizeHalfDay: z.number().int().min(1).optional(),
+  sizeDay: z.number().int().min(1).optional(),
+}).optional()
+
 const FiltersSchema = z.object({
   tasks: z.boolean().default(true),
   projects: z.boolean().default(true),
@@ -10,6 +21,7 @@ const FiltersSchema = z.object({
   milestones: z.boolean().default(true),
   actionItems: z.boolean().default(true),
   googleEvents: z.boolean().default(true),
+  scheduling: SchedulingPrefsSchema,
 })
 
 export async function GET(req: NextRequest) {

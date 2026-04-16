@@ -27,6 +27,13 @@ export interface RepeatExceptionData {
   modifiedTitle: string | null
 }
 
+export interface AssignedTaskInfo {
+  id: string
+  title: string
+  effortSize: string
+  scheduleState: string
+}
+
 export interface ResolvedTimeSlot {
   id: string
   roleId: string
@@ -39,6 +46,7 @@ export interface ResolvedTimeSlot {
   title: string
   isVirtual: boolean
   repeatPatternId: string | null
+  assignedTasks?: AssignedTaskInfo[]
 }
 
 /** Format a Date as "YYYY-MM-DD" in UTC. */

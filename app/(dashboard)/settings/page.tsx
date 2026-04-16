@@ -46,6 +46,17 @@ export default function SettingsPage() {
 
   const [googleStatus, setGoogleStatus] = useState<{ connected: boolean; email: string | null }>({ connected: false, email: null })
 
+  // Scheduling preferences
+  const [schedAsapDays, setSchedAsapDays] = useState(1)
+  const [schedSoonDays, setSchedSoonDays] = useState(7)
+  const [schedSometimeDays, setSchedSometimeDays] = useState(30)
+  const [schedScanAheadDays, setSchedScanAheadDays] = useState(30)
+  const [schedSizeMinutes, setSchedSizeMinutes] = useState(20)
+  const [schedSizeHour, setSchedSizeHour] = useState(90)
+  const [schedSizeHalfDay, setSchedSizeHalfDay] = useState(240)
+  const [schedSizeDay, setSchedSizeDay] = useState(480)
+  const [schedSaving, setSchedSaving] = useState(false)
+
   const [vaultCouchDbUrl, setVaultCouchDbUrl] = useState("http://localhost:5984")
   const [vaultCouchDbDatabase, setVaultCouchDbDatabase] = useState("obsidian")
   const [vaultCouchDbUsername, setVaultCouchDbUsername] = useState("")
@@ -253,10 +264,65 @@ export default function SettingsPage() {
     }
   }
 
+  async function loadSchedulingPrefs() {
+    try {
+      const res = await fetch("/api/v1/calendar/preferences")
+      if (res.ok) {
+        const data = await res.json()
+        const s = data?.scheduling
+        if (s && typeof s === "object") {
+          if (typeof s.asapDays === "number") setSchedAsapDays(s.asapDays)
+          if (typeof s.soonDays === "number") setSchedSoonDays(s.soonDays)
+          if (typeof s.sometimeDays === "number") setSchedSometimeDays(s.sometimeDays)
+          if (typeof s.scanAheadDays === "number") setSchedScanAheadDays(s.scanAheadDays)
+          if (typeof s.sizeMinutes === "number") setSchedSizeMinutes(s.sizeMinutes)
+          if (typeof s.sizeHour === "number") setSchedSizeHour(s.sizeHour)
+          if (typeof s.sizeHalfDay === "number") setSchedSizeHalfDay(s.sizeHalfDay)
+          if (typeof s.sizeDay === "number") setSchedSizeDay(s.sizeDay)
+        }
+      }
+    } catch {
+      // Use defaults
+    }
+  }
+
+  async function saveSchedulingPrefs() {
+    setSchedSaving(true)
+    try {
+      // Read current prefs, merge scheduling key, save back
+      const getRes = await fetch("/api/v1/calendar/preferences")
+      let existing: Record<string, unknown> = {}
+      if (getRes.ok) existing = await getRes.json()
+      const updated = {
+        ...existing,
+        scheduling: {
+          asapDays: schedAsapDays,
+          soonDays: schedSoonDays,
+          sometimeDays: schedSometimeDays,
+          scanAheadDays: schedScanAheadDays,
+          sizeMinutes: schedSizeMinutes,
+          sizeHour: schedSizeHour,
+          sizeHalfDay: schedSizeHalfDay,
+          sizeDay: schedSizeDay,
+        },
+      }
+      await fetch("/api/v1/calendar/preferences", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updated),
+      })
+    } catch (e) {
+      console.error("[settings] save scheduling prefs failed", e)
+    } finally {
+      setSchedSaving(false)
+    }
+  }
+
   useEffect(() => {
     loadKeys()
     loadVaultStatus()
     loadRoles()
+    loadSchedulingPrefs()
     fetch("/api/v1/google/status").then(r => r.json()).then(setGoogleStatus).catch(() => {})
     // Check push status
     if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
@@ -741,6 +807,61 @@ export default function SettingsPage() {
             ))}
           </div>
         )}
+      </section>
+
+      <section>
+        <h2 className="text-base font-semibold text-[#c0c0d0] mb-1">Scheduling</h2>
+        <p className="text-sm text-[#666688] mb-4">Configure how the scheduling engine assigns tasks to time slots.</p>
+
+        <div className="space-y-3">
+          <div className="bg-[#111125] border border-[rgba(0,255,136,0.15)] rounded-lg px-4 py-3">
+            <p className="text-sm font-medium text-[#c0c0d0] mb-2">Urgency windows (days)</p>
+            <div className="grid grid-cols-4 gap-3">
+              <div>
+                <p className="text-xs text-[#666688] mb-1">ASAP</p>
+                <input type="number" min={1} value={schedAsapDays} onChange={e => setSchedAsapDays(Number(e.target.value) || 1)} className="w-full bg-[#0a0a1a] border border-[rgba(0,255,136,0.15)] rounded px-2 py-1.5 text-sm text-[#c0c0d0]" />
+              </div>
+              <div>
+                <p className="text-xs text-[#666688] mb-1">Soon</p>
+                <input type="number" min={1} value={schedSoonDays} onChange={e => setSchedSoonDays(Number(e.target.value) || 7)} className="w-full bg-[#0a0a1a] border border-[rgba(0,255,136,0.15)] rounded px-2 py-1.5 text-sm text-[#c0c0d0]" />
+              </div>
+              <div>
+                <p className="text-xs text-[#666688] mb-1">Sometime</p>
+                <input type="number" min={1} value={schedSometimeDays} onChange={e => setSchedSometimeDays(Number(e.target.value) || 30)} className="w-full bg-[#0a0a1a] border border-[rgba(0,255,136,0.15)] rounded px-2 py-1.5 text-sm text-[#c0c0d0]" />
+              </div>
+              <div>
+                <p className="text-xs text-[#666688] mb-1">Scan ahead</p>
+                <input type="number" min={1} value={schedScanAheadDays} onChange={e => setSchedScanAheadDays(Number(e.target.value) || 30)} className="w-full bg-[#0a0a1a] border border-[rgba(0,255,136,0.15)] rounded px-2 py-1.5 text-sm text-[#c0c0d0]" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-[#111125] border border-[rgba(0,255,136,0.15)] rounded-lg px-4 py-3">
+            <p className="text-sm font-medium text-[#c0c0d0] mb-2">Effort sizes (minutes)</p>
+            <div className="grid grid-cols-4 gap-3">
+              <div>
+                <p className="text-xs text-[#666688] mb-1">Minutes</p>
+                <input type="number" min={1} value={schedSizeMinutes} onChange={e => setSchedSizeMinutes(Number(e.target.value) || 20)} className="w-full bg-[#0a0a1a] border border-[rgba(0,255,136,0.15)] rounded px-2 py-1.5 text-sm text-[#c0c0d0]" />
+              </div>
+              <div>
+                <p className="text-xs text-[#666688] mb-1">Hour</p>
+                <input type="number" min={1} value={schedSizeHour} onChange={e => setSchedSizeHour(Number(e.target.value) || 90)} className="w-full bg-[#0a0a1a] border border-[rgba(0,255,136,0.15)] rounded px-2 py-1.5 text-sm text-[#c0c0d0]" />
+              </div>
+              <div>
+                <p className="text-xs text-[#666688] mb-1">Half Day</p>
+                <input type="number" min={1} value={schedSizeHalfDay} onChange={e => setSchedSizeHalfDay(Number(e.target.value) || 240)} className="w-full bg-[#0a0a1a] border border-[rgba(0,255,136,0.15)] rounded px-2 py-1.5 text-sm text-[#c0c0d0]" />
+              </div>
+              <div>
+                <p className="text-xs text-[#666688] mb-1">Day</p>
+                <input type="number" min={1} value={schedSizeDay} onChange={e => setSchedSizeDay(Number(e.target.value) || 480)} className="w-full bg-[#0a0a1a] border border-[rgba(0,255,136,0.15)] rounded px-2 py-1.5 text-sm text-[#c0c0d0]" />
+              </div>
+            </div>
+          </div>
+
+          <Button onClick={saveSchedulingPrefs} disabled={schedSaving}>
+            {schedSaving ? "Saving..." : "Save scheduling preferences"}
+          </Button>
+        </div>
       </section>
 
       <section>

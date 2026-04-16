@@ -13,13 +13,16 @@ export async function listTimeSlotsForRange(
   const rangeStart = new Date(`${startDate}T00:00:00Z`)
   const rangeEnd = new Date(`${endDate}T23:59:59Z`)
 
-  // Fetch concrete time slots
+  // Fetch concrete time slots with assigned tasks
   const concreteSlots = await prisma.timeSlot.findMany({
     where: {
       userId,
       date: { gte: rangeStart, lte: rangeEnd },
     },
     orderBy: [{ date: "asc" }, { startMinutes: "asc" }],
+    include: {
+      tasks: { select: { id: true, title: true, effortSize: true, scheduleState: true } },
+    },
   })
 
   // Fetch repeat patterns that could produce dates in this range
@@ -94,6 +97,12 @@ export async function listTimeSlotsForRange(
     title: s.title,
     isVirtual: false,
     repeatPatternId: s.repeatPatternId,
+    assignedTasks: (s.tasks ?? []).map((t: { id: string; title: string; effortSize: string; scheduleState: string }) => ({
+      id: t.id,
+      title: t.title,
+      effortSize: t.effortSize,
+      scheduleState: t.scheduleState,
+    })),
   }))
 
   // Merge and sort
