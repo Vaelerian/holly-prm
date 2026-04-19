@@ -30,6 +30,7 @@ export function ProjectForm({ defaultValues, projectId }: ProjectFormProps) {
       priority: "medium",
       targetDate: null,
       notes: "",
+      visibility: "personal",
     },
   })
 
@@ -169,6 +170,15 @@ export function ProjectForm({ defaultValues, projectId }: ProjectFormProps) {
             <option value="critical">Critical</option>
           </select>
         </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-[#c0c0d0] mb-1">Visibility</label>
+        <select {...register("visibility")} className="w-full border border-[rgba(0,255,136,0.2)] rounded-lg px-3 py-2 text-sm bg-[#0a0a1a] text-[#c0c0d0] focus:outline-none focus:ring-2 focus:ring-[#00ff88]">
+          <option value="personal">Personal</option>
+          <option value="shared">Shared</option>
+        </select>
+        <p className="text-xs text-[#666688] mt-1">Personal projects are only visible to you. Shared projects are visible to all approved users who can also add tasks.</p>
       </div>
 
       <div>

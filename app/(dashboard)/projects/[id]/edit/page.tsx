@@ -27,6 +27,7 @@ export default async function EditProjectPage({ params }: PageProps) {
           notes: project.notes,
           goalId: project.goalId,
           roleId: project.roleId,
+          visibility: project.visibility,
         }}
       />
     </div>
