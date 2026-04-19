@@ -6,18 +6,21 @@ import { useRouter } from "next/navigation"
 interface RoleOption { id: string; name: string; colour: string }
 interface GoalOption { id: string; name: string }
 interface ProjectOption { id: string; title: string }
+interface UserOption { id: string; name: string; email: string }
 
 interface AddTaskFormProps {
   projectId?: string
   goalId?: string
   roleId?: string
+  projectVisibility?: "personal" | "shared"
 }
 
-export function AddTaskForm({ projectId, goalId: propGoalId, roleId: propRoleId }: AddTaskFormProps) {
+export function AddTaskForm({ projectId, goalId: propGoalId, roleId: propRoleId, projectVisibility }: AddTaskFormProps) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [title, setTitle] = useState("")
   const [assignedTo, setAssignedTo] = useState<"ian" | "holly">("ian")
+  const [assignedToUserId, setAssignedToUserId] = useState<string>("")
   const [priority, setPriority] = useState("medium")
   const [isMilestone, setIsMilestone] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -25,6 +28,7 @@ export function AddTaskForm({ projectId, goalId: propGoalId, roleId: propRoleId 
   const [importance, setImportance] = useState("")
   const [urgency, setUrgency] = useState("")
   const [effortSize, setEffortSize] = useState("")
+  const [users, setUsers] = useState<UserOption[]>([])
 
   // Standalone mode state (no projectId)
   const standalone = !projectId
@@ -80,6 +84,18 @@ export function AddTaskForm({ projectId, goalId: propGoalId, roleId: propRoleId 
     }
   }, [standalone, open, selectedGoalId, fetchProjects])
 
+  useEffect(() => {
+    if (projectVisibility !== "shared" || !open) return
+    async function loadUsers() {
+      const res = await fetch("/api/v1/users")
+      if (res.ok) {
+        const data: UserOption[] = await res.json()
+        setUsers(data)
+      }
+    }
+    loadUsers()
+  }, [projectVisibility, open])
+
   function handleRoleChange(roleId: string) {
     setSelectedRoleId(roleId)
     setSelectedGoalId("")
@@ -104,6 +120,7 @@ export function AddTaskForm({ projectId, goalId: propGoalId, roleId: propRoleId 
         priority,
         isMilestone,
       }
+      if (assignedToUserId) body.assignedToUserId = assignedToUserId
       if (importance) body.importance = importance
       if (urgency) body.urgency = urgency
       if (effortSize) body.effortSize = effortSize
@@ -200,6 +217,21 @@ export function AddTaskForm({ projectId, goalId: propGoalId, roleId: propRoleId 
           <button onClick={() => setOpen(false)} className="text-sm text-[#666688] hover:text-[#c0c0d0]">Cancel</button>
         </div>
       </div>
+      {projectVisibility === "shared" && (
+        <div className="flex items-center gap-3">
+          <label className="text-xs text-[#666688]">Assigned user</label>
+          <select
+            value={assignedToUserId}
+            onChange={e => setAssignedToUserId(e.target.value)}
+            className="border border-[rgba(0,255,136,0.2)] rounded-lg px-2 py-1 text-sm bg-[#0a0a1a] text-[#c0c0d0]"
+          >
+            <option value="">Unassigned</option>
+            {users.map(u => (
+              <option key={u.id} value={u.id}>{u.name}</option>
+            ))}
+          </select>
+        </div>
+      )}
       <div>
         <button
           type="button"
