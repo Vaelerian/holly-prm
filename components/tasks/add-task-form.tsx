@@ -126,6 +126,10 @@ export function AddTaskForm({ projectId, goalId: propGoalId, roleId: propRoleId,
       if (effortSize) body.effortSize = effortSize
       if (projectId) {
         body.projectId = projectId
+        // Project context: the task must land in the project's goal, otherwise
+        // the service falls back to the user's default goal and rejects the
+        // create because project.goalId !== goalId.
+        if (propGoalId) body.goalId = propGoalId
       } else {
         body.goalId = selectedGoalId || undefined
         if (selectedProjectId) body.projectId = selectedProjectId

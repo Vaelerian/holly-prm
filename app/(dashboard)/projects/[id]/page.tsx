@@ -97,7 +97,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
             ))}
           </div>
         )}
-        <AddTaskForm projectId={id} projectVisibility={project.visibility} />
+        <AddTaskForm projectId={id} goalId={project.goalId} roleId={project.roleId} projectVisibility={project.visibility} />
       </section>
 
       {actionItems.length > 0 && (
