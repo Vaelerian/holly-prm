@@ -110,9 +110,18 @@ Each project has a scheduling priority setting: Same, More Important, or Less Im
 
 This is useful for long-running background projects (set to Less Important) versus urgent deadline projects (set to More Important).
 
+### Visibility
+
+Each project has a visibility setting that controls who can see and contribute to it:
+
+- **Personal** (default): Only you can see and edit this project. Other users will not see it in their projects list.
+- **Shared**: All approved users can see the project, view its tasks, add tasks to it, and have tasks assigned to them. Only the project owner can edit the project settings or delete it.
+
+Shared projects display a "Shared" badge on the project card and in the detail view. Use shared projects for collaborative work where multiple team members need to contribute.
+
 ### Project Members
 
-Project owners can add other users as members. Members can view the project and its tasks, and add tasks to the project.
+Project owners can also add specific users as members. Members can view the project and add tasks without needing the project to be fully shared with everyone. This is useful when you want to collaborate with a small group rather than the entire user base.
 
 ---
 
@@ -126,8 +135,15 @@ Tasks are individual pieces of work. They can belong to a project or exist direc
 - Status: todo, in progress, done, cancelled
 - Priority: low, medium, high, critical
 - Assigned to: Ian or Holly (your name or the AI assistant)
+- Assigned user (shared projects only): any approved user
 - Due date (optional)
 - Milestone flag (for key project milestones)
+
+### Task Assignment on Shared Projects
+
+When a task is added to a shared project, an additional "Assigned user" dropdown appears alongside the standard Ian/Holly selector. This lets you pick any approved user of the system to be responsible for the task.
+
+The existing Ian/Holly assignment is kept for the scheduling engine and dashboard briefing. The new user assignment shows up on task rows as an info badge so everyone can see who owns the task.
 
 ### Scheduling Fields
 

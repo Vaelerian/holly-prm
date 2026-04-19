@@ -42,6 +42,8 @@ Lists all users with approved status. Each entry shows:
 - Set up scheduling preferences, roles, and goals
 - Share contacts with other approved users (if granted access)
 - View read-only Obsidian Vault status on their Profile page
+- Mark their projects as "Shared" to let all approved users see and contribute
+- Assign tasks on shared projects to any approved user
 
 **What users cannot do:**
 - Access the Admin panel or any admin API routes
