@@ -25,12 +25,13 @@ export async function listTasks(opts: ListTasksOptions) {
       OR: [
         { userId: opts.userId },
         { members: { some: { userId: opts.userId } } },
+        { visibility: "shared" },
       ],
     }
   } else {
     // Tasks can belong to a project OR be directly under a goal
     where.OR = [
-      { project: { OR: [{ userId: opts.userId }, { members: { some: { userId: opts.userId } } }] } },
+      { project: { OR: [{ userId: opts.userId }, { members: { some: { userId: opts.userId } } }, { visibility: "shared" }] } },
       { projectId: null, goal: { userId: opts.userId } },
     ]
   }
@@ -49,6 +50,7 @@ export async function listTasks(opts: ListTasksOptions) {
       goal: { select: { id: true, name: true } },
       role: { select: { id: true, name: true, colour: true } },
       actionItems: { orderBy: { createdAt: "asc" as const } },
+      assignedToUser: { select: { id: true, name: true } },
       ...(opts.includeSlot ? {
         timeSlot: { select: { id: true, date: true, startMinutes: true, endMinutes: true, title: true } },
       } : {}),
@@ -61,7 +63,7 @@ export async function getTask(id: string, userId: string) {
     where: {
       id,
       OR: [
-        { project: { OR: [{ userId }, { members: { some: { userId } } }] } },
+        { project: { OR: [{ userId }, { members: { some: { userId } } }, { visibility: "shared" }] } },
         { projectId: null, goal: { userId } },
       ],
     },
@@ -70,6 +72,7 @@ export async function getTask(id: string, userId: string) {
       goal: { select: { id: true, name: true } },
       role: { select: { id: true, name: true } },
       actionItems: { orderBy: { createdAt: "asc" } },
+      assignedToUser: { select: { id: true, name: true } },
     },
   })
 }
@@ -92,7 +95,7 @@ export async function createTask(data: CreateTaskInput, actor: Actor, userId: st
     const project = await prisma.project.findFirst({
       where: {
         id: data.projectId,
-        OR: [{ userId }, { members: { some: { userId } } }],
+        OR: [{ userId }, { members: { some: { userId } } }, { visibility: "shared" }],
       },
     })
     if (!project) return null
@@ -127,7 +130,7 @@ export async function updateTask(id: string, data: UpdateTaskInput, actor: Actor
     where: {
       id,
       OR: [
-        { project: { OR: [{ userId }, { members: { some: { userId } } }] } },
+        { project: { OR: [{ userId }, { members: { some: { userId } } }, { visibility: "shared" }] } },
         { projectId: null, goal: { userId } },
       ],
     },
@@ -170,12 +173,12 @@ export async function updateTask(id: string, data: UpdateTaskInput, actor: Actor
 }
 
 export async function deleteTask(id: string, actor: Actor, userId: string) {
-  // Owner can delete: project owner or goal owner when no project
+  // Owner can delete: project owner, member, shared project, or goal owner when no project
   const existing = await prisma.task.findFirst({
     where: {
       id,
       OR: [
-        { project: { userId } },
+        { project: { OR: [{ userId }, { members: { some: { userId } } }, { visibility: "shared" }] } },
         { projectId: null, goal: { userId } },
       ],
     },

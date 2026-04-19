@@ -9,6 +9,7 @@ export const CreateTaskSchema = z.object({
   status: z.enum(["todo", "in_progress", "done", "cancelled"]).default("todo"),
   priority: PrioritySchema.default("medium"),
   assignedTo: ActorSchema,
+  assignedToUserId: z.string().uuid().nullable().optional(),
   dueDate: z.string().date().nullable().default(null),
   isMilestone: z.boolean().default(false),
   importance: z.enum(["undefined_imp", "core", "step", "bonus"]).optional(),

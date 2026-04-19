@@ -61,6 +61,7 @@ describe("listProjects", () => {
           OR: [
             { userId: "user-1" },
             { members: { some: { userId: "user-1" } } },
+            { visibility: "shared" },
           ],
         }),
       })

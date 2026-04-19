@@ -45,7 +45,7 @@ describe("listTasks", () => {
       expect.objectContaining({
         where: expect.objectContaining({
           OR: [
-            { project: { OR: [{ userId: "user-1" }, { members: { some: { userId: "user-1" } } }] } },
+            { project: { OR: [{ userId: "user-1" }, { members: { some: { userId: "user-1" } } }, { visibility: "shared" }] } },
             { projectId: null, goal: { userId: "user-1" } },
           ],
         }),
@@ -89,7 +89,7 @@ describe("getTask", () => {
       where: {
         id: "task-1",
         OR: [
-          { project: { OR: [{ userId: "user-1" }, { members: { some: { userId: "user-1" } } }] } },
+          { project: { OR: [{ userId: "user-1" }, { members: { some: { userId: "user-1" } } }, { visibility: "shared" }] } },
           { projectId: null, goal: { userId: "user-1" } },
         ],
       },
@@ -244,7 +244,7 @@ describe("deleteTask", () => {
       where: {
         id: "task-1",
         OR: [
-          { project: { userId: "member-user" } },
+          { project: { OR: [{ userId: "member-user" }, { members: { some: { userId: "member-user" } } }, { visibility: "shared" }] } },
           { projectId: null, goal: { userId: "member-user" } },
         ],
       },

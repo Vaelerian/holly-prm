@@ -148,6 +148,11 @@ enum ProjectImportance {
   less
 }
 
+enum ProjectVisibility {
+  personal
+  shared
+}
+
 model User {
   id           String     @id @default(uuid())
   email        String     @unique
@@ -181,6 +186,7 @@ model User {
   timeSlots           TimeSlot[]
   repeatPatterns      RepeatPattern[]
   repeatExceptions    RepeatException[]
+  assignedTasks       Task[]   @relation("TaskAssignee")
 }
 
 model Role {
@@ -324,6 +330,7 @@ model Project {
   targetDate  DateTime?
   notes             String            @default("")
   projectImportance ProjectImportance @default(same)
+  visibility        ProjectVisibility @default(personal)
   tasks             Task[]
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
@@ -346,7 +353,9 @@ model Task {
   description String       @default("")
   status      TaskStatus   @default(todo)
   priority    Priority     @default(medium)
-  assignedTo  Actor
+  assignedTo       Actor
+  assignedToUserId String?
+  assignedToUser   User?    @relation("TaskAssignee", fields: [assignedToUserId], references: [id], onDelete: SetNull)
   dueDate     DateTime?
   isMilestone Boolean      @default(false)
   roleId      String

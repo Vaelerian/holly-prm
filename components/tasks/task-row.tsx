@@ -9,6 +9,7 @@ interface TaskRowProps {
   status: string
   priority: string
   assignedTo: string
+  assignedToUser?: { id: string; name: string } | null
   dueDate: string | null
   isMilestone: boolean
   onStatusChange?: (id: string, newStatus: string) => void
@@ -35,7 +36,7 @@ const priorityVariant: Record<string, "default" | "success" | "warning" | "dange
   critical: "danger",
 }
 
-export function TaskRow({ id, title, status: initialStatus, priority, assignedTo, dueDate, isMilestone, onStatusChange }: TaskRowProps) {
+export function TaskRow({ id, title, status: initialStatus, priority, assignedTo, assignedToUser, dueDate, isMilestone, onStatusChange }: TaskRowProps) {
   const [status, setStatus] = useState(initialStatus)
   const [saving, setSaving] = useState(false)
 
@@ -76,6 +77,9 @@ export function TaskRow({ id, title, status: initialStatus, priority, assignedTo
       <div className="flex items-center gap-2 flex-shrink-0">
         <Badge variant={priorityVariant[priority] ?? "default"}>{priority}</Badge>
         <Badge variant="default">{assignedTo}</Badge>
+        {assignedToUser && (
+          <Badge variant="info">{assignedToUser.name}</Badge>
+        )}
         {dueDate && (
           <span className="text-xs text-[#666688]">{new Date(dueDate).toLocaleDateString("en-GB")}</span>
         )}

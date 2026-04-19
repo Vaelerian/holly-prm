@@ -16,6 +16,7 @@ export async function listProjects(opts: ListProjectsOptions) {
     OR: [
       { userId: opts.userId },
       { members: { some: { userId: opts.userId } } },
+      { visibility: "shared" },
     ],
   }
   if (opts.status) where.status = opts.status as ProjectStatus
@@ -41,12 +42,16 @@ export async function getProject(id: string, userId: string) {
       OR: [
         { userId },
         { members: { some: { userId } } },
+        { visibility: "shared" },
       ],
     },
     include: {
       tasks: {
         orderBy: [{ isMilestone: "desc" }, { createdAt: "asc" }],
-        include: { actionItems: { orderBy: { createdAt: "asc" } } },
+        include: {
+          actionItems: { orderBy: { createdAt: "asc" } },
+          assignedToUser: { select: { id: true, name: true } },
+        },
       },
       members: { include: { user: { select: { id: true, name: true, email: true } } } },
       goal: { select: { id: true, name: true } },

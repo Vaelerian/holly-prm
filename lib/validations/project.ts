@@ -11,6 +11,7 @@ export const CreateProjectSchema = z.object({
   notes: z.string().default(""),
   goalId: z.string().uuid().optional(),
   projectImportance: z.enum(["more", "same", "less"]).default("same"),
+  visibility: z.enum(["personal", "shared"]).default("personal"),
 })
 
 export const UpdateProjectSchema = CreateProjectSchema.partial()

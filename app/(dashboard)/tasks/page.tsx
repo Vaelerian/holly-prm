@@ -277,6 +277,7 @@ export default async function TasksPage({ searchParams }: PageProps) {
                                     status={t.status}
                                     priority={t.priority}
                                     assignedTo={t.assignedTo}
+                                    assignedToUser={t.assignedToUser}
                                     dueDate={t.dueDate ? t.dueDate.toISOString() : null}
                                     isMilestone={t.isMilestone}
                                   />
