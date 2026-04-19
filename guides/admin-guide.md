@@ -16,7 +16,7 @@ The admin account is created automatically on first login. It gets a real databa
 
 ## The Admin Panel
 
-Access the Admin panel from the sidebar. It has four sections:
+Access the Admin panel from the sidebar. It has six sections:
 
 ### Pending Approval
 
@@ -38,11 +38,10 @@ Lists all users with approved status. Each entry shows:
 **What users can do once approved:**
 - Log in and access all standard features (Dashboard, Contacts, Projects, Tasks, Calendar, Reports, Profile, Settings)
 - Create and manage their own contacts, projects, tasks, interactions, and action items
-- Generate API keys for Holly (the AI agent)
 - Connect their Google account for Gmail and Calendar integration
-- Configure Obsidian vault sync
 - Set up scheduling preferences, roles, and goals
 - Share contacts with other approved users (if granted access)
+- View read-only Obsidian Vault status on their Profile page
 
 **What users cannot do:**
 - Access the Admin panel or any admin API routes
@@ -51,6 +50,8 @@ Lists all users with approved status. Each entry shows:
 - Create access grants between arbitrary users (only admin can do this)
 - Claim unclaimed data records
 - See data belonging to other users (unless explicitly shared)
+- Generate Holly API keys (admin-only)
+- Configure Obsidian vault connection or trigger vault sync (admin-only)
 
 ### Claim Unclaimed Data
 
@@ -80,6 +81,48 @@ Controls cross-user data sharing. Access grants allow one user (the grantee) to 
 
 **Revoking a grant:**
 Click the Revoke button next to any existing grant. The grantee immediately loses access.
+
+### Holly API Keys
+
+Holly (Openclaw) is an AI assistant that connects to the PRM via API keys. Because the keys grant programmatic access to system data, they are managed centrally by the administrator.
+
+**Generating a key:**
+1. Enter a descriptive name (e.g. "Holly production")
+2. Click Generate
+3. Copy the plaintext key immediately - it is only shown once
+4. Configure Holly with this key
+
+**Revoking a key:**
+Click Revoke next to any existing key. Any agents still using that key will lose access immediately.
+
+Existing keys are listed with their name and last-used date but never reveal the plaintext value again.
+
+### Obsidian Vault
+
+Connects Holly PRM to an Obsidian vault via the Self-hosted LiveSync CouchDB backend. This is a single shared vault configuration for the deployment.
+
+**CouchDB connection:**
+- URL - the CouchDB endpoint (e.g. http://localhost:5984)
+- Database - the database name (e.g. obsidian)
+- Username and Password - CouchDB credentials
+- E2E passphrase - the LiveSync end-to-end encryption passphrase
+
+Click Test to verify connectivity and passphrase validity.
+
+**Sync schedule:**
+Choose cron presets for weekdays and weekends:
+- Every hour
+- Every 2 hours
+- Every 4 hours
+- Twice daily (9am and 5pm)
+- Once daily (9am)
+
+**Actions:**
+- Sync enabled checkbox - toggle whether scheduled syncs run
+- Save - persist the configuration
+- Sync now - trigger an immediate sync
+
+Users see a read-only vault status on their Profile page (Configured / Not Configured, Accessible yes/no, Last sync timestamp) but cannot edit the configuration.
 
 ## User Registration Flow
 
@@ -146,6 +189,7 @@ When deploying new versions, the container startup command runs `prisma migrate 
 - Users connect their Google account individually via Settings
 
 **Vault sync issues:**
-- Users configure their own CouchDB connection in Settings
-- The E2E passphrase must match their LiveSync configuration
-- Test the connection in Settings before enabling sync
+- Vault configuration is admin-only (Admin panel > Obsidian Vault)
+- The E2E passphrase must match the LiveSync configuration
+- Test the connection in the Admin panel before enabling sync
+- Users can view the current vault status (configured/accessible/last sync) on their Profile page

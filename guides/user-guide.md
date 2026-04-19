@@ -337,19 +337,14 @@ To disconnect, click "Disconnect" in Settings.
 
 ## Obsidian Vault (CouchDB/LiveSync)
 
-If you use Obsidian with the LiveSync plugin, Holly PRM can search and sync your vault notes.
+If the deployment has an Obsidian vault configured, Holly PRM can search and sync vault notes.
 
-Configure in Settings under "Obsidian Vault":
-1. Enter your CouchDB connection details (URL, database, username, password)
-2. Enter your LiveSync E2E encryption passphrase
-3. Click "Test" to verify the connection
-4. Set the sync schedule (how often to check for changes)
-5. Enable sync and click "Save"
+Vault configuration is admin-only. On your Profile page you will see a read-only "Obsidian Vault" section showing:
+- Status: Configured or Not Configured
+- Accessible: Yes or No (once configured)
+- Last sync timestamp
 
-Once configured:
-- Holly (the AI agent) can search your vault notes via API
-- The vault sync runs on the cron schedule and syncs changes to the briefing
-- Manual sync is available via the "Sync now" button
+If the vault is not configured or not accessible, contact the administrator. The administrator manages the CouchDB connection, E2E passphrase, sync schedule, and can trigger manual syncs from the Admin panel.
 
 ---
 
@@ -368,15 +363,9 @@ Notifications are triggered by the cron job, so they depend on the cron being co
 
 ## Holly API Keys
 
-Holly (Openclaw) is an AI assistant that can access your data to provide briefings, log interactions, manage tasks, and more.
+Holly (Openclaw) is an AI assistant that can access the PRM to provide briefings, log interactions, manage tasks, and more.
 
-To connect Holly:
-1. Go to Settings > Holly API Keys
-2. Click "Generate" with a descriptive name (e.g. "Holly production")
-3. Copy the displayed API key immediately - it is only shown once
-4. Configure Holly with this key
-
-You can revoke keys at any time by clicking "Revoke" next to the key.
+API keys are managed by the administrator (in the Admin panel). If you need a key for a new Holly deployment or a key revoked, contact the administrator.
 
 ---
 

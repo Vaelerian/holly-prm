@@ -4,13 +4,20 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 
+interface VaultStatus {
+  configured: boolean
+  accessible: boolean
+  lastSyncAt: string | null
+}
+
 interface Props {
   initialName: string
   initialEmail: string
   hasPassword: boolean
+  vaultStatus?: VaultStatus
 }
 
-export function ProfileForm({ initialName, initialEmail, hasPassword }: Props) {
+export function ProfileForm({ initialName, initialEmail, hasPassword, vaultStatus }: Props) {
   const [name, setName] = useState(initialName)
   const [email, setEmail] = useState(initialEmail)
   const [identityLoading, setIdentityLoading] = useState(false)
@@ -101,6 +108,37 @@ export function ProfileForm({ initialName, initialEmail, hasPassword }: Props) {
               {passwordLoading ? "Updating..." : "Update password"}
             </Button>
           </form>
+        </div>
+      )}
+
+      {vaultStatus && (
+        <div className="bg-[#111125] border border-[rgba(0,255,136,0.15)] rounded-lg px-4 py-4 space-y-3">
+          <p className="text-sm font-medium text-[#c0c0d0]">Obsidian Vault</p>
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-[#666688]">Status</span>
+              <span className={`text-xs ${vaultStatus.configured ? "text-[#00ff88]" : "text-[#666688]"}`}>
+                {vaultStatus.configured ? "Configured" : "Not Configured"}
+              </span>
+            </div>
+            {vaultStatus.configured && (
+              <>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-[#666688]">Accessible</span>
+                  <span className={`text-xs ${vaultStatus.accessible ? "text-[#00ff88]" : "text-[#ff4444]"}`}>
+                    {vaultStatus.accessible ? "Yes" : "No"}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-[#666688]">Last sync</span>
+                  <span className="text-xs text-[#c0c0d0]">
+                    {vaultStatus.lastSyncAt ? new Date(vaultStatus.lastSyncAt).toLocaleString("en-GB") : "Never"}
+                  </span>
+                </div>
+              </>
+            )}
+          </div>
+          <p className="text-xs text-[#666688]">Vault configuration is managed by the administrator.</p>
         </div>
       )}
     </div>
