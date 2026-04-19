@@ -43,6 +43,9 @@ export default async function ProjectDetailPage({ params }: PageProps) {
             <Badge variant={project.priority === "critical" ? "danger" : project.priority === "high" ? "warning" : "default"}>
               {project.priority}
             </Badge>
+            <Badge variant={project.visibility === "shared" ? "success" : "default"}>
+              {project.visibility === "shared" ? "Shared" : "Personal"}
+            </Badge>
             {project.targetDate && (
               <span className="text-xs text-[#666688]">Due {new Date(project.targetDate).toLocaleDateString("en-GB")}</span>
             )}

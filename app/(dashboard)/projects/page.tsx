@@ -97,6 +97,7 @@ export default async function ProjectsPage({ searchParams }: PageProps) {
                     targetDate={p.targetDate}
                     taskDoneCount={taskDoneCount}
                     taskTotalCount={regularTasks.length}
+                    visibility={p.visibility}
                   />
                 </div>
               </div>
