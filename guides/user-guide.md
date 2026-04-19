@@ -81,6 +81,12 @@ Log interactions with your contacts to track your relationship:
 
 The form opens in a modal and lets you log an interaction against any of your contacts from anywhere in the app.
 
+### Mobile navigation
+
+The bottom nav on mobile shows four primary sections (Home, Contacts, Tasks, Calendar) plus the "+" Log button in the centre. Tap the "More" button on the right to reach Projects, Reports, Profile, Settings, and Admin (if applicable). Sign out is also in the More menu.
+
+On desktop the left sidebar shows every section at once.
+
 ### Sharing Contacts
 
 If an administrator has created an access grant, you may be able to see another user's contacts. Shared contacts appear in your contacts list with a "Shared by [name]" label. You can add interactions to shared contacts but cannot edit or delete them.
