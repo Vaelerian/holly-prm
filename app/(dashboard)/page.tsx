@@ -45,7 +45,9 @@ export default async function DashboardPage() {
                 {data.overdueContacts.map(c => (
                   <Link key={c.id} href={`/contacts/${c.id}`} className="flex items-center justify-between bg-[#111125] border border-[rgba(255,60,60,0.25)] rounded-lg px-4 py-2.5 hover:border-red-400 transition-colors">
                     <span className="text-sm font-medium text-[#c0c0d0]">{c.name}</span>
-                    <span className="text-xs text-red-400">Score: {c.healthScore}</span>
+                    <span className="text-xs text-red-400">
+                      {c.lastInteraction === null ? "Awaiting first contact" : `Score: ${c.healthScore}`}
+                    </span>
                   </Link>
                 ))}
               </div>
