@@ -50,20 +50,6 @@ export default function SettingsPage() {
   const [schedSizeDay, setSchedSizeDay] = useState(480)
   const [schedSaving, setSchedSaving] = useState(false)
 
-  const [vaultCouchDbUrl, setVaultCouchDbUrl] = useState("http://localhost:5984")
-  const [vaultCouchDbDatabase, setVaultCouchDbDatabase] = useState("obsidian")
-  const [vaultCouchDbUsername, setVaultCouchDbUsername] = useState("")
-  const [vaultCouchDbPassword, setVaultCouchDbPassword] = useState("")
-  const [vaultE2ePassphrase, setVaultE2ePassphrase] = useState("")
-  const [vaultWorkdayCron, setVaultWorkdayCron] = useState("0 * * * 1-5")
-  const [vaultWeekendCron, setVaultWeekendCron] = useState("0 */4 * * 0,6")
-  const [vaultEnabled, setVaultEnabled] = useState(true)
-  const [vaultLastSyncAt, setVaultLastSyncAt] = useState<string | null>(null)
-  const [vaultTestStatus, setVaultTestStatus] = useState<"idle" | "testing" | "ok" | "fail">("idle")
-  const [vaultSaving, setVaultSaving] = useState(false)
-  const [vaultSyncing, setVaultSyncing] = useState(false)
-  const [vaultSyncResult, setVaultSyncResult] = useState<{ updatedNotes: unknown[]; errors: string[] } | null>(null)
-
   // --- Roles and Goals state ---
   const [rolesExpanded, setRolesExpanded] = useState(true)
   const [roles, setRoles] = useState<RoleData[]>([])
@@ -237,21 +223,6 @@ export default function SettingsPage() {
     }
   }
 
-  async function loadVaultStatus() {
-    const res = await fetch("/api/v1/vault/status")
-    if (res.ok) {
-      const data = await res.json()
-      if (data.config) {
-        setVaultCouchDbUrl(data.config.couchDbUrl ?? "http://localhost:5984")
-        setVaultCouchDbDatabase(data.config.couchDbDatabase ?? "obsidian")
-        setVaultWorkdayCron(data.config.workdayCron)
-        setVaultWeekendCron(data.config.weekendCron)
-        setVaultEnabled(data.config.enabled)
-        setVaultLastSyncAt(data.config.lastSyncAt ?? null)
-      }
-    }
-  }
-
   async function loadSchedulingPrefs() {
     try {
       const res = await fetch("/api/v1/calendar/preferences")
@@ -307,7 +278,6 @@ export default function SettingsPage() {
   }
 
   useEffect(() => {
-    loadVaultStatus()
     loadRoles()
     loadSchedulingPrefs()
     fetch("/api/v1/google/status").then(r => r.json()).then(setGoogleStatus).catch(() => {})
@@ -322,77 +292,6 @@ export default function SettingsPage() {
       })
     }).catch(() => setPushStatus("unsupported"))
   }, [loadRoles])
-
-  async function testVaultConnection() {
-    setVaultTestStatus("testing")
-    try {
-      // Save current config so the status check reflects the inputs
-      await fetch("/api/v1/vault/config", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          couchDbUrl: vaultCouchDbUrl,
-          couchDbDatabase: vaultCouchDbDatabase,
-          couchDbUsername: vaultCouchDbUsername,
-          couchDbPassword: vaultCouchDbPassword,
-          e2ePassphrase: vaultE2ePassphrase,
-          workdayCron: vaultWorkdayCron,
-          weekendCron: vaultWeekendCron,
-          enabled: vaultEnabled,
-        }),
-      })
-      const res = await fetch("/api/v1/vault/status")
-      if (res.ok) {
-        const data = await res.json()
-        setVaultTestStatus(data.accessible ? "ok" : "fail")
-      } else {
-        setVaultTestStatus("fail")
-      }
-    } catch {
-      setVaultTestStatus("fail")
-    }
-  }
-
-  async function saveVaultConfig() {
-    setVaultSaving(true)
-    try {
-      await fetch("/api/v1/vault/config", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          couchDbUrl: vaultCouchDbUrl,
-          couchDbDatabase: vaultCouchDbDatabase,
-          couchDbUsername: vaultCouchDbUsername,
-          couchDbPassword: vaultCouchDbPassword,
-          e2ePassphrase: vaultE2ePassphrase,
-          workdayCron: vaultWorkdayCron,
-          weekendCron: vaultWeekendCron,
-          enabled: vaultEnabled,
-        }),
-      })
-    } catch (e) {
-      console.error("[settings] save vault config failed", e)
-    } finally {
-      setVaultSaving(false)
-    }
-  }
-
-  async function syncVaultNow() {
-    setVaultSyncing(true)
-    setVaultSyncResult(null)
-    try {
-      const res = await fetch("/api/v1/vault/sync", { method: "POST" })
-      if (res.ok) {
-        const data = await res.json()
-        setVaultSyncResult(data)
-        await loadVaultStatus()
-      }
-    } catch (e) {
-      console.error("[settings] vault sync failed", e)
-    } finally {
-      setVaultSyncing(false)
-    }
-  }
 
   async function enableNotifications() {
     if (!("serviceWorker" in navigator)) return
@@ -793,143 +692,6 @@ export default function SettingsPage() {
           <Button onClick={saveSchedulingPrefs} disabled={schedSaving}>
             {schedSaving ? "Saving..." : "Save scheduling preferences"}
           </Button>
-        </div>
-      </section>
-
-      <section>
-        <h2 className="text-base font-semibold text-[#c0c0d0] mb-1">Obsidian Vault</h2>
-        <p className="text-sm text-[#666688] mb-4">Connect your Obsidian vault for note search and sync.</p>
-
-        <div className="space-y-3">
-          {/* CouchDB connection */}
-          <div className="bg-[#111125] border border-[rgba(0,255,136,0.15)] rounded-lg px-4 py-3 space-y-3">
-            <p className="text-sm font-medium text-[#c0c0d0]">CouchDB connection</p>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <p className="text-xs text-[#666688] mb-1">URL</p>
-                <Input
-                  placeholder="http://localhost:5984"
-                  value={vaultCouchDbUrl}
-                  onChange={e => setVaultCouchDbUrl(e.target.value)}
-                />
-              </div>
-              <div>
-                <p className="text-xs text-[#666688] mb-1">Database</p>
-                <Input
-                  placeholder="obsidian"
-                  value={vaultCouchDbDatabase}
-                  onChange={e => setVaultCouchDbDatabase(e.target.value)}
-                />
-              </div>
-              <div>
-                <p className="text-xs text-[#666688] mb-1">Username</p>
-                <Input
-                  placeholder="admin"
-                  value={vaultCouchDbUsername}
-                  onChange={e => setVaultCouchDbUsername(e.target.value)}
-                />
-              </div>
-              <div>
-                <p className="text-xs text-[#666688] mb-1">Password</p>
-                <Input
-                  type="password"
-                  placeholder="password"
-                  value={vaultCouchDbPassword}
-                  onChange={e => setVaultCouchDbPassword(e.target.value)}
-                />
-              </div>
-            </div>
-            <div>
-              <p className="text-xs text-[#666688] mb-1">E2E passphrase</p>
-              <div className="flex gap-2">
-                <Input
-                  type="password"
-                  placeholder="LiveSync E2E encryption passphrase"
-                  value={vaultE2ePassphrase}
-                  onChange={e => setVaultE2ePassphrase(e.target.value)}
-                  className="flex-1"
-                />
-                <Button
-                  onClick={testVaultConnection}
-                  disabled={vaultTestStatus === "testing" || !vaultCouchDbUsername.trim() || !vaultCouchDbPassword.trim()}
-                >
-                  {vaultTestStatus === "testing" ? "Testing..." : "Test"}
-                </Button>
-              </div>
-            </div>
-            {vaultTestStatus === "ok" && <p className="text-xs text-[#00ff88]">Connected</p>}
-            {vaultTestStatus === "fail" && <p className="text-xs text-[#ff4444]">Not accessible</p>}
-          </div>
-
-          {/* Sync schedule */}
-          <div className="bg-[#111125] border border-[rgba(0,255,136,0.15)] rounded-lg px-4 py-3">
-            <p className="text-sm font-medium text-[#c0c0d0] mb-2">Sync schedule</p>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <p className="text-xs text-[#666688] mb-1">Work days</p>
-                <select
-                  value={vaultWorkdayCron}
-                  onChange={e => setVaultWorkdayCron(e.target.value)}
-                  className="w-full bg-[#111125] border border-[rgba(0,255,136,0.15)] rounded text-[#c0c0d0] text-sm px-3 py-2"
-                >
-                  <option value="0 * * * 1-5">Every hour</option>
-                  <option value="0 */2 * * 1-5">Every 2 hours</option>
-                  <option value="0 */4 * * 1-5">Every 4 hours</option>
-                  <option value="0 9,17 * * 1-5">Twice daily (9am and 5pm)</option>
-                  <option value="0 9 * * 1-5">Once daily (9am)</option>
-                </select>
-              </div>
-              <div>
-                <p className="text-xs text-[#666688] mb-1">Weekends</p>
-                <select
-                  value={vaultWeekendCron}
-                  onChange={e => setVaultWeekendCron(e.target.value)}
-                  className="w-full bg-[#111125] border border-[rgba(0,255,136,0.15)] rounded text-[#c0c0d0] text-sm px-3 py-2"
-                >
-                  <option value="0 * * * 0,6">Every hour</option>
-                  <option value="0 */2 * * 0,6">Every 2 hours</option>
-                  <option value="0 */4 * * 0,6">Every 4 hours</option>
-                  <option value="0 9,17 * * 0,6">Twice daily (9am and 5pm)</option>
-                  <option value="0 9 * * 0,6">Once daily (9am)</option>
-                </select>
-              </div>
-            </div>
-          </div>
-
-          {/* Enabled + last synced + actions */}
-          <div className="bg-[#111125] border border-[rgba(0,255,136,0.15)] rounded-lg px-4 py-3 space-y-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-[#c0c0d0]">Sync enabled</p>
-                <p className="text-xs text-[#666688]">
-                  Last synced: {vaultLastSyncAt ? new Date(vaultLastSyncAt).toLocaleString("en-GB") : "Never"}
-                </p>
-              </div>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={vaultEnabled}
-                  onChange={e => setVaultEnabled(e.target.checked)}
-                  className="w-4 h-4 accent-[#00ff88]"
-                />
-                <span className="text-sm text-[#c0c0d0]">{vaultEnabled ? "Enabled" : "Disabled"}</span>
-              </label>
-            </div>
-            <div className="flex gap-2">
-              <Button onClick={saveVaultConfig} disabled={vaultSaving}>
-                {vaultSaving ? "Saving..." : "Save"}
-              </Button>
-              <Button onClick={syncVaultNow} disabled={vaultSyncing}>
-                {vaultSyncing ? "Syncing..." : "Sync now"}
-              </Button>
-            </div>
-            {vaultSyncResult && (
-              <p className="text-xs text-[#666688]">
-                Synced - {vaultSyncResult.updatedNotes.length} note{vaultSyncResult.updatedNotes.length !== 1 ? "s" : ""} updated
-                {vaultSyncResult.errors.length > 0 && `, ${vaultSyncResult.errors.length} error${vaultSyncResult.errors.length !== 1 ? "s" : ""}`}
-              </p>
-            )}
-          </div>
         </div>
       </section>
     </div>
