@@ -15,14 +15,26 @@ export default async function ProfilePage() {
   })
   if (!user) redirect("/login")
 
-  const vaultConfig = await getVaultConfig(userId)
-  const vaultStatus = vaultConfig
-    ? {
+  // Vault status is non-critical - don't let failures break the profile page
+  let vaultStatus = { configured: false, accessible: false, lastSyncAt: null as string | null }
+  try {
+    const vaultConfig = await getVaultConfig(userId)
+    if (vaultConfig) {
+      let accessible = false
+      try {
+        accessible = await isCouchDbAccessible(userId)
+      } catch {
+        accessible = false
+      }
+      vaultStatus = {
         configured: true,
-        accessible: await isCouchDbAccessible(userId),
+        accessible,
         lastSyncAt: vaultConfig.lastSyncAt ? vaultConfig.lastSyncAt.toISOString() : null,
       }
-    : { configured: false, accessible: false, lastSyncAt: null }
+    }
+  } catch (e) {
+    console.error("[profile] vault status lookup failed", e)
+  }
 
   return (
     <div className="p-6 space-y-6 max-w-lg">
