@@ -23,11 +23,11 @@ export function Dialog({ open, onClose, title, children }: DialogProps) {
     <dialog
       ref={ref}
       onClose={onClose}
-      className="rounded-xl shadow-xl p-0 w-full max-w-lg backdrop:bg-black/40 open:flex open:flex-col"
+      className="rounded-xl shadow-xl p-0 w-full max-w-lg bg-[#111125] border border-[rgba(0,255,136,0.15)] text-[#c0c0d0] backdrop:bg-black/60 open:flex open:flex-col"
     >
-      <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
-        <h2 className="text-base font-semibold text-gray-900">{title}</h2>
-        <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+      <div className="flex items-center justify-between px-5 py-4 border-b border-[rgba(0,255,136,0.15)]">
+        <h2 className="text-base font-semibold text-[#c0c0d0]">{title}</h2>
+        <button onClick={onClose} className="text-[#666688] hover:text-[#c0c0d0] text-xl leading-none">&times;</button>
       </div>
       <div className="px-5 py-4 overflow-y-auto">{children}</div>
     </dialog>

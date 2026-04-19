@@ -75,6 +75,12 @@ Log interactions with your contacts to track your relationship:
 - Follow-up tracking: mark if follow-up is required, set a follow-up date
 - Location and duration (optional)
 
+**How to log an interaction:**
+- **Desktop**: Click the "Log interaction" button near the bottom of the left sidebar
+- **Mobile**: Tap the green "+" button in the centre of the bottom navigation
+
+The form opens in a modal and lets you log an interaction against any of your contacts from anywhere in the app.
+
 ### Sharing Contacts
 
 If an administrator has created an access grant, you may be able to see another user's contacts. Shared contacts appear in your contacts list with a "Shared by [name]" label. You can add interactions to shared contacts but cannot edit or delete them.

@@ -19,7 +19,12 @@ const adminLinks = [
   { href: "/admin", label: "Admin" },
 ]
 
-export function Sidebar({ isAdmin }: { isAdmin?: boolean } = {}) {
+interface SidebarProps {
+  isAdmin?: boolean
+  onLogPress?: () => void
+}
+
+export function Sidebar({ isAdmin, onLogPress }: SidebarProps = {}) {
   const pathname = usePathname()
 
   return (
@@ -40,6 +45,15 @@ export function Sidebar({ isAdmin }: { isAdmin?: boolean } = {}) {
           </Link>
         ))}
       </div>
+      {onLogPress && (
+        <button
+          onClick={onLogPress}
+          className="mx-3 mb-2 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-[#0a0a1a] bg-[#00ff88] hover:bg-[#00cc6f] rounded-lg transition-colors"
+        >
+          <span className="text-base leading-none">+</span>
+          Log interaction
+        </button>
+      )}
       <button
         onClick={() => signOut({ callbackUrl: "/login" })}
         className="px-4 py-3 text-xs text-[#666688] hover:text-[#c0c0d0] text-left border-t border-[rgba(0,255,136,0.15)] transition-colors"
