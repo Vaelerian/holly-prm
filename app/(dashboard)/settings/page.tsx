@@ -4,8 +4,6 @@ import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 
-interface ApiKey { id: string; name: string; lastUsed: string | null; createdAt: string }
-
 interface RoleData {
   id: string
   name: string
@@ -36,11 +34,6 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
 }
 
 export default function SettingsPage() {
-  const [keys, setKeys] = useState<ApiKey[]>([])
-  const [newKeyName, setNewKeyName] = useState("")
-  const [newKeyPlaintext, setNewKeyPlaintext] = useState("")
-  const [loading, setLoading] = useState(false)
-
   const [pushStatus, setPushStatus] = useState<"unknown" | "enabled" | "disabled" | "unsupported">("unknown")
   const [pushWorking, setPushWorking] = useState(false)
 
@@ -244,11 +237,6 @@ export default function SettingsPage() {
     }
   }
 
-  async function loadKeys() {
-    const res = await fetch("/api/v1/settings/api-keys")
-    if (res.ok) setKeys(await res.json())
-  }
-
   async function loadVaultStatus() {
     const res = await fetch("/api/v1/vault/status")
     if (res.ok) {
@@ -319,7 +307,6 @@ export default function SettingsPage() {
   }
 
   useEffect(() => {
-    loadKeys()
     loadVaultStatus()
     loadRoles()
     loadSchedulingPrefs()
@@ -335,26 +322,6 @@ export default function SettingsPage() {
       })
     }).catch(() => setPushStatus("unsupported"))
   }, [loadRoles])
-
-  async function generateKey() {
-    if (!newKeyName.trim()) return
-    setLoading(true)
-    const res = await fetch("/api/v1/settings/api-keys", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: newKeyName }),
-    })
-    const data = await res.json()
-    setNewKeyPlaintext(data.key)
-    setNewKeyName("")
-    await loadKeys()
-    setLoading(false)
-  }
-
-  async function deleteKey(id: string) {
-    await fetch(`/api/v1/settings/api-keys/${id}`, { method: "DELETE" })
-    await loadKeys()
-  }
 
   async function testVaultConnection() {
     setVaultTestStatus("testing")
@@ -481,41 +448,6 @@ export default function SettingsPage() {
   return (
     <div className="p-6 max-w-2xl space-y-8">
       <h1 className="text-xl font-semibold text-[#c0c0d0]">Settings</h1>
-
-      <section>
-        <h2 className="text-base font-semibold text-[#c0c0d0] mb-1">Holly API Keys</h2>
-        <p className="text-sm text-[#666688] mb-4">API keys allow Holly (Openclaw) to access your data. Keys are shown once only.</p>
-
-        {newKeyPlaintext && (
-          <div className="bg-[rgba(0,255,136,0.08)] border border-[rgba(0,255,136,0.25)] rounded-lg p-4 mb-4">
-            <p className="text-sm font-medium text-[#00ff88] mb-1">New API key (copy now - not shown again):</p>
-            <code className="text-sm font-mono text-[#00ff88] break-all">{newKeyPlaintext}</code>
-          </div>
-        )}
-
-        <div className="flex gap-2 mb-4">
-          <Input placeholder="Key name (e.g. Holly production)" value={newKeyName} onChange={e => setNewKeyName(e.target.value)} />
-          <Button onClick={generateKey} disabled={loading || !newKeyName.trim()}>Generate</Button>
-        </div>
-
-        {keys.length === 0 ? (
-          <p className="text-sm text-[#666688]">No API keys yet.</p>
-        ) : (
-          <div className="space-y-2">
-            {keys.map(k => (
-              <div key={k.id} className="flex items-center justify-between bg-[#111125] border border-[rgba(0,255,136,0.15)] rounded-lg px-4 py-3">
-                <div>
-                  <p className="text-sm font-medium text-[#c0c0d0]">{k.name}</p>
-                  <p className="text-xs text-[#666688]">
-                    Last used: {k.lastUsed ? new Date(k.lastUsed).toLocaleDateString("en-GB") : "Never"}
-                  </p>
-                </div>
-                <Button variant="danger" size="sm" onClick={() => deleteKey(k.id)}>Revoke</Button>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
 
       <section>
         <h2 className="text-base font-semibold text-[#c0c0d0] mb-1">Notifications</h2>

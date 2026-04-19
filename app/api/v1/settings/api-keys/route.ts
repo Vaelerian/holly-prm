@@ -8,6 +8,7 @@ const CreateKeySchema = z.object({ name: z.string().min(1) })
 export async function GET() {
   const session = await auth()
   if (!session) return NextResponse.json({ error: "Unauthorized", code: "UNAUTHORIZED" }, { status: 401 })
+  if (session.role !== "admin") return NextResponse.json({ error: "Forbidden", code: "FORBIDDEN" }, { status: 403 })
   const userId = session?.userId
   if (!userId) return NextResponse.json({ error: "Unauthorized", code: "UNAUTHORIZED" }, { status: 401 })
   const keys = await listApiKeys(userId)
@@ -17,6 +18,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   const session = await auth()
   if (!session) return NextResponse.json({ error: "Unauthorized", code: "UNAUTHORIZED" }, { status: 401 })
+  if (session.role !== "admin") return NextResponse.json({ error: "Forbidden", code: "FORBIDDEN" }, { status: 403 })
   const userId = session?.userId
   if (!userId) return NextResponse.json({ error: "Unauthorized", code: "UNAUTHORIZED" }, { status: 401 })
   const body = await req.json()

@@ -5,6 +5,7 @@ import { deleteApiKey } from "@/lib/services/api-keys"
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth()
   if (!session) return NextResponse.json({ error: "Unauthorized", code: "UNAUTHORIZED" }, { status: 401 })
+  if (session.role !== "admin") return NextResponse.json({ error: "Forbidden", code: "FORBIDDEN" }, { status: 403 })
   const userId = session?.userId
   if (!userId) return NextResponse.json({ error: "Unauthorized", code: "UNAUTHORIZED" }, { status: 401 })
   const { id } = await params
