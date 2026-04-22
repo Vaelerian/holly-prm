@@ -5,10 +5,11 @@ import { redis } from "@/lib/redis"
 import { randomUUID } from "crypto"
 
 export async function GET(req: NextRequest) {
+  const base = process.env.AUTH_URL ?? req.url
   const session = await auth()
-  if (!session) return NextResponse.redirect(new URL("/login", req.url))
+  if (!session) return NextResponse.redirect(new URL("/login", base))
   const userId = session?.userId
-  if (!userId) return NextResponse.redirect(new URL("/login", req.url))
+  if (!userId) return NextResponse.redirect(new URL("/login", base))
 
   const state = randomUUID()
   await redis.set(`google:oauth:state:${state}`, userId, "EX", 600)

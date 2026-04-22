@@ -6,8 +6,9 @@ import { redis } from "@/lib/redis"
 import { encrypt } from "@/lib/encryption"
 
 export async function GET(req: NextRequest) {
+  const base = process.env.AUTH_URL ?? req.url
   const session = await auth()
-  if (!session) return NextResponse.redirect(new URL("/login", req.url))
+  if (!session) return NextResponse.redirect(new URL("/login", base))
 
   const { searchParams } = req.nextUrl
   const code = searchParams.get("code")
@@ -15,13 +16,13 @@ export async function GET(req: NextRequest) {
   const error = searchParams.get("error")
 
   if (error || !code || !state) {
-    return NextResponse.redirect(new URL("/settings?error=oauth_failed", req.url))
+    return NextResponse.redirect(new URL("/settings?error=oauth_failed", base))
   }
 
   const stateKey = `google:oauth:state:${state}`
   const storedUserId = await redis.get(stateKey).catch(() => null)
   if (!storedUserId) {
-    return NextResponse.redirect(new URL("/settings?error=oauth_failed", req.url))
+    return NextResponse.redirect(new URL("/settings?error=oauth_failed", base))
   }
   await redis.del(stateKey).catch(() => {})
 
@@ -33,7 +34,7 @@ export async function GET(req: NextRequest) {
 
   const { tokens } = await client.getToken(code)
   if (!tokens.access_token || !tokens.refresh_token || !tokens.expiry_date) {
-    return NextResponse.redirect(new URL("/settings?error=oauth_failed", req.url))
+    return NextResponse.redirect(new URL("/settings?error=oauth_failed", base))
   }
 
   // Get the email address from the id_token
@@ -61,5 +62,5 @@ export async function GET(req: NextRequest) {
     },
   })
 
-  return NextResponse.redirect(new URL("/settings?connected=google", req.url))
+  return NextResponse.redirect(new URL("/settings?connected=google", base))
 }
