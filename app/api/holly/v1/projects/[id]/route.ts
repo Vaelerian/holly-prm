@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { validateHollyRequest } from "@/lib/holly-auth"
-import { getProject, updateProject } from "@/lib/services/projects"
+import { getProject, updateProject, deleteProject } from "@/lib/services/projects"
 import { UpdateProjectSchema } from "@/lib/validations/project"
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -44,4 +44,16 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (!existing) return NextResponse.json({ error: "Not found", code: "NOT_FOUND" }, { status: 404 })
   const project = await updateProject(id, parsed.data, "holly", authResult.userId)
   return NextResponse.json(project)
+}
+
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const authResult = await validateHollyRequest(req)
+  if (!authResult.valid) {
+    if (authResult.rateLimited) return NextResponse.json({ error: "Rate limit exceeded", code: "RATE_LIMITED" }, { status: 429, headers: { "Retry-After": "60" } })
+    return NextResponse.json({ error: "Unauthorized", code: "UNAUTHORIZED" }, { status: 401 })
+  }
+  const { id } = await params
+  const result = await deleteProject(id, "holly", authResult.userId)
+  if (!result) return NextResponse.json({ error: "Not found", code: "NOT_FOUND" }, { status: 404 })
+  return new NextResponse(null, { status: 204 })
 }
