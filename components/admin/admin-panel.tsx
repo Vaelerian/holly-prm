@@ -4,11 +4,14 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 
+type VaultAccess = "none" | "read" | "readwrite"
+
 interface User {
   id: string
   email: string
   name: string
   status: string
+  vaultAccess: VaultAccess
   createdAt: Date
 }
 
@@ -68,6 +71,26 @@ export function AdminPanel({ users, grants: initialGrants }: Props) {
 
   const pending = userList.filter(u => u.status === "pending")
   const approved = userList.filter(u => u.status === "approved")
+
+  async function updateVaultAccess(id: string, vaultAccess: VaultAccess) {
+    setWorking(`vault-${id}`)
+    setActionError(null)
+    try {
+      const res = await fetch(`/api/admin/users/${id}/vault-access`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ vaultAccess }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        setActionError(data.error ?? "Failed to update vault access")
+        return
+      }
+      setUserList(prev => prev.map(u => u.id === id ? { ...u, vaultAccess } : u))
+    } finally {
+      setWorking(null)
+    }
+  }
 
   async function updateStatus(id: string, action: "approve" | "reject") {
     setWorking(id)
@@ -301,14 +324,27 @@ export function AdminPanel({ users, grants: initialGrants }: Props) {
         ) : (
           <div className="space-y-2">
             {approved.map(u => (
-              <div key={u.id} className="bg-[#111125] border border-[rgba(0,255,136,0.15)] rounded-lg px-4 py-3 flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-[#c0c0d0]">{u.name}</p>
-                  <p className="text-xs text-[#666688]">{u.email}</p>
+              <div key={u.id} className="bg-[#111125] border border-[rgba(0,255,136,0.15)] rounded-lg px-4 py-3 flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-[#c0c0d0] truncate">{u.name}</p>
+                  <p className="text-xs text-[#666688] truncate">{u.email}</p>
                 </div>
-                <Button size="sm" variant="danger" onClick={() => updateStatus(u.id, "reject")} disabled={working === u.id}>
-                  Revoke
-                </Button>
+                <div className="flex items-center gap-2 shrink-0">
+                  <label className="text-xs text-[#666688]">Obsidian:</label>
+                  <select
+                    value={u.vaultAccess}
+                    onChange={e => updateVaultAccess(u.id, e.target.value as VaultAccess)}
+                    disabled={working === `vault-${u.id}`}
+                    className="bg-[#0a0a1a] border border-[rgba(0,255,136,0.15)] rounded text-[#c0c0d0] text-xs px-2 py-1"
+                  >
+                    <option value="none">No access</option>
+                    <option value="read">Read only</option>
+                    <option value="readwrite">Read + write</option>
+                  </select>
+                  <Button size="sm" variant="danger" onClick={() => updateStatus(u.id, "reject")} disabled={working === u.id}>
+                    Revoke
+                  </Button>
+                </div>
               </div>
             ))}
           </div>

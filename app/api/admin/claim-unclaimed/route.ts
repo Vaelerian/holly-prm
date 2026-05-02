@@ -24,10 +24,12 @@ export async function POST(req: NextRequest) {
   }
 
   const filter = { where: { userId: null }, data: { userId } }
+  // VaultConfig is system-wide and no longer carries a userId, so it is not
+  // claimable. Vault access is granted per-user via the User.vaultAccess field.
   const [
     contacts, interactions, actionItems, projects, auditLogs,
     knowledgeItems, hollyApiKeys, pushSubscriptions, googleTokens,
-    calendarSyncs, userPreferences, vaultConfigs, vaultNotes,
+    calendarSyncs, userPreferences, vaultNotes,
   ] = await Promise.all([
     prisma.contact.updateMany(filter),
     prisma.interaction.updateMany(filter),
@@ -40,7 +42,6 @@ export async function POST(req: NextRequest) {
     prisma.googleToken.updateMany(filter),
     prisma.calendarSync.updateMany(filter),
     prisma.userPreference.updateMany(filter),
-    prisma.vaultConfig.updateMany(filter),
     prisma.vaultNote.updateMany(filter),
   ])
 
@@ -52,7 +53,7 @@ export async function POST(req: NextRequest) {
       auditLogs: auditLogs.count, knowledgeItems: knowledgeItems.count,
       hollyApiKeys: hollyApiKeys.count, pushSubscriptions: pushSubscriptions.count,
       googleTokens: googleTokens.count, calendarSyncs: calendarSyncs.count,
-      userPreferences: userPreferences.count, vaultConfigs: vaultConfigs.count,
+      userPreferences: userPreferences.count,
       vaultNotes: vaultNotes.count,
     },
   })

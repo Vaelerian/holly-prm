@@ -124,7 +124,15 @@ Choose cron presets for weekdays and weekends:
 - Save - persist the configuration
 - Sync now - trigger an immediate sync
 
-Users see a read-only vault status on their Profile page (Configured / Not Configured, Accessible yes/no, Last sync timestamp) but cannot edit the configuration.
+**Per-user access:**
+Each approved user has an "Obsidian:" dropdown in the Approved users list with three options:
+- No access (default) - the user does not see the vault and cannot search, read or write
+- Read only - the user can search and read notes but cannot create or modify them
+- Read + write - the user can search, read, create and update notes
+
+The administrator account always has full access regardless of this setting.
+
+Users see a read-only vault status on their Profile page showing their access level alongside the configured / accessible / last sync indicators. The configuration itself remains admin-only.
 
 ## User Registration Flow
 

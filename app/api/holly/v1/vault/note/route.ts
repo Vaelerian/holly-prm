@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { validateHollyRequest } from "@/lib/holly-auth"
-import { getNoteContent, createNote, updateNote, isVaultAccessible } from "@/lib/services/vault"
+import { getNoteContent, createNote, updateNote, isVaultAccessible, canReadVault, canWriteVault } from "@/lib/services/vault"
 
 const VALID_ENTITY_TYPE = /^[a-zA-Z]+$/
 const VALID_ENTITY_ID = /^[a-zA-Z0-9_-]+$/
@@ -24,6 +24,10 @@ export async function GET(req: NextRequest) {
   if (!auth.ok) return auth.response
   const { userId } = auth
 
+  if (!(await canReadVault(userId))) {
+    return NextResponse.json({ error: "vault_access_denied", code: "VAULT_ACCESS_DENIED" }, { status: 403 })
+  }
+
   const accessible = await isVaultAccessible(userId)
   if (!accessible) return NextResponse.json({ error: "vault_not_configured", code: "VAULT_NOT_CONFIGURED" }, { status: 503 })
 
@@ -40,6 +44,10 @@ export async function POST(req: NextRequest) {
   const auth = await checkAuth(req)
   if (!auth.ok) return auth.response
   const { userId } = auth
+
+  if (!(await canWriteVault(userId))) {
+    return NextResponse.json({ error: "vault_write_denied", code: "VAULT_WRITE_DENIED" }, { status: 403 })
+  }
 
   const accessible = await isVaultAccessible(userId)
   if (!accessible) return NextResponse.json({ error: "vault_not_configured", code: "VAULT_NOT_CONFIGURED" }, { status: 503 })
@@ -71,6 +79,10 @@ export async function PATCH(req: NextRequest) {
   const auth = await checkAuth(req)
   if (!auth.ok) return auth.response
   const { userId } = auth
+
+  if (!(await canWriteVault(userId))) {
+    return NextResponse.json({ error: "vault_write_denied", code: "VAULT_WRITE_DENIED" }, { status: 403 })
+  }
 
   const accessible = await isVaultAccessible(userId)
   if (!accessible) return NextResponse.json({ error: "vault_not_configured", code: "VAULT_NOT_CONFIGURED" }, { status: 503 })

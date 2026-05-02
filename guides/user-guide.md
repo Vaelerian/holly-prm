@@ -365,14 +365,20 @@ To disconnect, click "Disconnect" in Settings.
 
 ## Obsidian Vault (CouchDB/LiveSync)
 
-If the deployment has an Obsidian vault configured, Holly PRM can search and sync vault notes.
+If the deployment has an Obsidian vault configured, Holly PRM can search and sync vault notes. Access is granted per user by the administrator.
 
-Vault configuration is admin-only. On your Profile page you will see a read-only "Obsidian Vault" section showing:
+On your Profile page you will see a read-only "Obsidian Vault" section showing:
+- Your access: No access, Read only, or Read + write
 - Status: Configured or Not Configured
 - Accessible: Yes or No (once configured)
 - Last sync timestamp
 
-If the vault is not configured or not accessible, contact the administrator. The administrator manages the CouchDB connection, E2E passphrase, sync schedule, and can trigger manual syncs from the Admin panel.
+Access levels:
+- No access (default for new users): the vault is invisible to you
+- Read only: you can search and view notes but not create or modify them
+- Read + write: you can also create new notes and update existing ones
+
+Vault configuration itself is admin-only. If you need access changed, or the vault is not configured or not accessible, contact the administrator. The administrator manages the CouchDB connection, E2E passphrase, sync schedule, and can trigger manual syncs from the Admin panel.
 
 ---
 

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { validateHollyRequest } from "@/lib/holly-auth"
-import { searchVault, isVaultAccessible } from "@/lib/services/vault"
+import { searchVault, isVaultAccessible, canReadVault } from "@/lib/services/vault"
 
 export async function GET(req: NextRequest) {
   const authResult = await validateHollyRequest(req)
@@ -9,6 +9,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized", code: "UNAUTHORIZED" }, { status: 401 })
   }
   const { userId } = authResult
+
+  if (!(await canReadVault(userId))) {
+    return NextResponse.json({ error: "vault_access_denied", code: "VAULT_ACCESS_DENIED" }, { status: 403 })
+  }
 
   const accessible = await isVaultAccessible(userId)
   if (!accessible) {

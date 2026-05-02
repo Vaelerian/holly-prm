@@ -2,7 +2,7 @@ import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/db"
 import { redirect } from "next/navigation"
 import { ProfileForm } from "@/components/profile/profile-form"
-import { getVaultConfig, isCouchDbAccessible } from "@/lib/services/vault"
+import { getVaultConfig, isCouchDbAccessible, getUserVaultAccess } from "@/lib/services/vault"
 
 export default async function ProfilePage() {
   const session = await auth()
@@ -16,24 +16,33 @@ export default async function ProfilePage() {
   if (!user) redirect("/login")
 
   // Vault status is non-critical - don't let failures break the profile page
-  let vaultStatus = { configured: false, accessible: false, lastSyncAt: null as string | null }
-  try {
-    const vaultConfig = await getVaultConfig(userId)
-    if (vaultConfig) {
-      let accessible = false
-      try {
-        accessible = await isCouchDbAccessible(userId)
-      } catch {
-        accessible = false
+  const access = session.role === "admin" ? "readwrite" : await getUserVaultAccess(userId)
+  let vaultStatus = {
+    configured: false,
+    accessible: false,
+    lastSyncAt: null as string | null,
+    access,
+  }
+  if (access !== "none") {
+    try {
+      const vaultConfig = await getVaultConfig(userId)
+      if (vaultConfig) {
+        let accessible = false
+        try {
+          accessible = await isCouchDbAccessible(userId)
+        } catch {
+          accessible = false
+        }
+        vaultStatus = {
+          configured: true,
+          accessible,
+          lastSyncAt: vaultConfig.lastSyncAt ? vaultConfig.lastSyncAt.toISOString() : null,
+          access,
+        }
       }
-      vaultStatus = {
-        configured: true,
-        accessible,
-        lastSyncAt: vaultConfig.lastSyncAt ? vaultConfig.lastSyncAt.toISOString() : null,
-      }
+    } catch (e) {
+      console.error("[profile] vault status lookup failed", e)
     }
-  } catch (e) {
-    console.error("[profile] vault status lookup failed", e)
   }
 
   return (

@@ -51,6 +51,12 @@ enum ProjectCategory {
   volunteer
 }
 
+enum VaultAccess {
+  none
+  read
+  readwrite
+}
+
 enum ProjectStatus {
   planning
   active
@@ -154,13 +160,14 @@ enum ProjectVisibility {
 }
 
 model User {
-  id           String     @id @default(uuid())
-  email        String     @unique
+  id           String      @id @default(uuid())
+  email        String      @unique
   name         String
   passwordHash String?
-  status       UserStatus @default(pending)
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  status       UserStatus  @default(pending)
+  vaultAccess  VaultAccess @default(none)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
 
   contacts          Contact[]
   interactions      Interaction[]
@@ -174,7 +181,6 @@ model User {
   googleToken       GoogleToken?
   calendarSyncs     CalendarSync[]
   userPreference    UserPreference?
-  vaultConfig       VaultConfig?
   vaultNotes        VaultNote[]
   passwordResetTokens PasswordResetToken[]
   grantedAccess       UserAccessGrant[]   @relation("Grantor")
@@ -481,8 +487,6 @@ model VaultConfig {
   enabled         Boolean   @default(true)
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
-  userId          String?   @unique
-  user            User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
 }
 
 model VaultNote {

@@ -8,6 +8,7 @@ interface VaultStatus {
   configured: boolean
   accessible: boolean
   lastSyncAt: string | null
+  access: "none" | "read" | "readwrite"
 }
 
 interface Props {
@@ -116,25 +117,35 @@ export function ProfileForm({ initialName, initialEmail, hasPassword, vaultStatu
           <p className="text-sm font-medium text-[#c0c0d0]">Obsidian Vault</p>
           <div className="space-y-1">
             <div className="flex items-center justify-between">
-              <span className="text-xs text-[#666688]">Status</span>
-              <span className={`text-xs ${vaultStatus.configured ? "text-[#00ff88]" : "text-[#666688]"}`}>
-                {vaultStatus.configured ? "Configured" : "Not Configured"}
+              <span className="text-xs text-[#666688]">Your access</span>
+              <span className={`text-xs ${vaultStatus.access === "none" ? "text-[#666688]" : "text-[#00ff88]"}`}>
+                {vaultStatus.access === "none" ? "No access" : vaultStatus.access === "read" ? "Read only" : "Read + write"}
               </span>
             </div>
-            {vaultStatus.configured && (
+            {vaultStatus.access !== "none" && (
               <>
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-[#666688]">Accessible</span>
-                  <span className={`text-xs ${vaultStatus.accessible ? "text-[#00ff88]" : "text-[#ff4444]"}`}>
-                    {vaultStatus.accessible ? "Yes" : "No"}
+                  <span className="text-xs text-[#666688]">Status</span>
+                  <span className={`text-xs ${vaultStatus.configured ? "text-[#00ff88]" : "text-[#666688]"}`}>
+                    {vaultStatus.configured ? "Configured" : "Not Configured"}
                   </span>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-[#666688]">Last sync</span>
-                  <span className="text-xs text-[#c0c0d0]">
-                    {vaultStatus.lastSyncAt ? new Date(vaultStatus.lastSyncAt).toLocaleString("en-GB") : "Never"}
-                  </span>
-                </div>
+                {vaultStatus.configured && (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-[#666688]">Accessible</span>
+                      <span className={`text-xs ${vaultStatus.accessible ? "text-[#00ff88]" : "text-[#ff4444]"}`}>
+                        {vaultStatus.accessible ? "Yes" : "No"}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-[#666688]">Last sync</span>
+                      <span className="text-xs text-[#c0c0d0]">
+                        {vaultStatus.lastSyncAt ? new Date(vaultStatus.lastSyncAt).toLocaleString("en-GB") : "Never"}
+                      </span>
+                    </div>
+                  </>
+                )}
               </>
             )}
           </div>

@@ -29,8 +29,9 @@ export interface VaultSearchResult {
   frontmatter: Record<string, unknown>
 }
 
-// Phase 5: single global VaultConfig; userId param accepted for API compatibility
-// but ignored until Phase 6 adds per-user vault support.
+// Single global VaultConfig. The userId parameter is kept for source compatibility
+// with older callers but no longer scopes the lookup; per-user permissions are
+// enforced via canReadVault / canWriteVault below.
 export async function getVaultConfig(_userId?: string): Promise<VaultConfig | null> {
   return prisma.vaultConfig.findFirst()
 }
@@ -43,6 +44,28 @@ export async function isVaultAccessible(_userId?: string): Promise<boolean> {
 
 // Legacy alias for existing callers
 export const isCouchDbAccessible = isVaultAccessible
+
+export type VaultAccessLevel = "none" | "read" | "readwrite"
+
+// Resolve a user's effective access level. Admin (matched via ADMIN_EMAIL) is
+// always treated as readwrite regardless of the stored field.
+export async function getUserVaultAccess(userId: string): Promise<VaultAccessLevel> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { email: true, vaultAccess: true },
+  })
+  if (!user) return "none"
+  if (process.env.ADMIN_EMAIL && user.email === process.env.ADMIN_EMAIL) return "readwrite"
+  return user.vaultAccess as VaultAccessLevel
+}
+
+export async function canReadVault(userId: string): Promise<boolean> {
+  return (await getUserVaultAccess(userId)) !== "none"
+}
+
+export async function canWriteVault(userId: string): Promise<boolean> {
+  return (await getUserVaultAccess(userId)) === "readwrite"
+}
 
 function stripEncryptedPrefix(value: string): string | null {
   if (!value.startsWith(LIVESYNC_ENCRYPTED_PREFIX)) return null
