@@ -9,7 +9,7 @@ const completableRequiresTargetDate = (
 }
 const targetDateRefinement = {
   message: "Completable goals require a target date; ongoing goals must not have one.",
-  path: ["targetDate"] as const,
+  path: ["targetDate"],
 }
 
 export const CreateGoalSchema = z
