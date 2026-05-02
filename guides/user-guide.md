@@ -276,24 +276,24 @@ When you click on a slot that comes from a repeating pattern, you get options:
 
 ## Roles and Goals
 
-Manage your roles and goals in the Settings page under "Roles and Goals":
+Roles are long-term and managed under Settings. Goals change more often, so they have their own top-level page reachable from the menu bar (or the More sheet on mobile).
 
-### Roles
+### Roles (Settings page)
 
 Roles are top-level areas of responsibility. Examples: Work, Personal, Volunteer, Health.
 
-- Each role has a name, colour (used in calendar and task displays), and optional description
+- Each role has a name and a colour (used in calendar and task displays)
 - Create roles to match your life areas
 - A default "Unassigned" role exists and cannot be deleted
 - Deleting a role requires choosing another role to move its goals, projects, and tasks to
 
-### Goals
+### Goals (Goals page)
 
-Goals sit under roles and represent objectives you are working towards.
+Goals sit under roles and represent objectives you are working towards. The Goals page shows them grouped by role and lets you add, edit, complete, or remove them.
 
-- Each goal has a name, type (ongoing or completable), and optional description
-- **Ongoing goals** never complete (e.g. "Career Development", "Stay Healthy")
-- **Completable goals** have an optional target date and can be marked as completed
+- Each goal has a name and a type (ongoing or completable)
+- **Ongoing goals** never complete and have no target date (e.g. "Career Development", "Stay Healthy")
+- **Completable goals** require a target date when you create or edit them, and can be marked as completed once you reach the goal
 - A default "General" goal exists under the default role and cannot be deleted
 - Deleting a goal requires choosing another goal to move its projects and tasks to
 
