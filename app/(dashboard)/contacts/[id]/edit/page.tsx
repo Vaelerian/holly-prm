@@ -15,7 +15,16 @@ export default async function EditContactPage({ params }: { params: Promise<{ id
       <h1 className="text-xl font-semibold text-[#c0c0d0] mb-6">Edit contact</h1>
       <ContactForm
         contactId={contact.id}
-        defaultValues={{ name: contact.name, type: contact.type as any, notes: contact.notes, interactionFreqDays: contact.interactionFreqDays, isFamilyMember: contact.isFamilyMember, tags: contact.tags }}
+        defaultValues={{
+          name: contact.name,
+          type: contact.type as any,
+          notes: contact.notes,
+          interactionFreqDays: contact.interactionFreqDays,
+          isFamilyMember: contact.isFamilyMember,
+          tags: contact.tags,
+          emails: (contact.emails ?? []) as { label: string; value: string }[],
+          phones: (contact.phones ?? []) as { label: string; value: string }[],
+        }}
       />
     </div>
   )

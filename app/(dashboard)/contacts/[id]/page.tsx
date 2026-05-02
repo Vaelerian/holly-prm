@@ -48,6 +48,42 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
         )}
       </div>
 
+      {(() => {
+        const emails = (contact.emails ?? []) as { label: string; value: string }[]
+        const phones = (contact.phones ?? []) as { label: string; value: string }[]
+        if (emails.length === 0 && phones.length === 0) return null
+        return (
+          <div className="grid grid-cols-2 gap-6">
+            {emails.length > 0 && (
+              <div>
+                <h2 className="text-xs font-semibold text-[#666688] uppercase tracking-wide mb-2">Email</h2>
+                <ul className="space-y-1">
+                  {emails.map((e, i) => (
+                    <li key={i} className="text-sm">
+                      {e.label && <span className="text-[#666688] mr-2">{e.label}</span>}
+                      <a href={`mailto:${e.value}`} className="text-[#00ff88] hover:text-[#00cc6f] break-all">{e.value}</a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {phones.length > 0 && (
+              <div>
+                <h2 className="text-xs font-semibold text-[#666688] uppercase tracking-wide mb-2">Phone</h2>
+                <ul className="space-y-1">
+                  {phones.map((p, i) => (
+                    <li key={i} className="text-sm">
+                      {p.label && <span className="text-[#666688] mr-2">{p.label}</span>}
+                      <a href={`tel:${p.value}`} className="text-[#00ff88] hover:text-[#00cc6f]">{p.value}</a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )
+      })()}
+
       {contact.notes && (
         <div>
           <h2 className="text-xs font-semibold text-[#666688] uppercase tracking-wide mb-2">Notes</h2>
