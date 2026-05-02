@@ -41,11 +41,14 @@ Users see a read-only status of this integration on their Profile page. All vaul
 
 Skip this unless you are connecting an external Holly/Openclaw agent to the PRM.
 
-1. In the Admin panel, scroll to "Holly API Keys"
-2. Enter a descriptive name (for example "Holly production")
-3. Click Generate
-4. Copy the plaintext key that appears - it is shown only once
-5. Configure your Holly deployment with this key
+API keys live on each user's own Settings page so the assistant always acts on the right person's data.
+
+1. Sign in as the user whose data the assistant should access
+2. Open Settings and scroll to "Holly API Keys"
+3. Enter a descriptive name (for example "Openclaw production")
+4. Click Generate
+5. Copy the plaintext key that appears - it is shown only once
+6. Configure your Holly deployment with this key
 
 ### Step 5: Set up cross-user access grants (optional)
 

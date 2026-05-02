@@ -22,13 +22,6 @@ interface Grant {
   createdAt: Date
 }
 
-interface ApiKey {
-  id: string
-  name: string
-  lastUsed: string | null
-  createdAt: string
-}
-
 interface Props {
   users: User[]
   grants: Grant[]
@@ -47,12 +40,6 @@ export function AdminPanel({ users, grants: initialGrants }: Props) {
   const [grantorEmail, setGrantorEmail] = useState("")
   const [granteeEmail, setGranteeEmail] = useState("")
   const [grantError, setGrantError] = useState<string | null>(null)
-
-  // Holly API Keys
-  const [apiKeys, setApiKeys] = useState<ApiKey[]>([])
-  const [newKeyName, setNewKeyName] = useState("")
-  const [newKeyPlaintext, setNewKeyPlaintext] = useState("")
-  const [apiKeyLoading, setApiKeyLoading] = useState(false)
 
   // Obsidian Vault
   const [vaultCouchDbUrl, setVaultCouchDbUrl] = useState("http://localhost:5984")
@@ -166,36 +153,6 @@ export function AdminPanel({ users, grants: initialGrants }: Props) {
     }
   }
 
-  async function loadApiKeys() {
-    const res = await fetch("/api/v1/settings/api-keys")
-    if (res.ok) setApiKeys(await res.json())
-  }
-
-  async function generateApiKey() {
-    if (!newKeyName.trim()) return
-    setApiKeyLoading(true)
-    try {
-      const res = await fetch("/api/v1/settings/api-keys", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newKeyName }),
-      })
-      if (res.ok) {
-        const data = await res.json()
-        setNewKeyPlaintext(data.key)
-        setNewKeyName("")
-        await loadApiKeys()
-      }
-    } finally {
-      setApiKeyLoading(false)
-    }
-  }
-
-  async function deleteApiKey(id: string) {
-    await fetch(`/api/v1/settings/api-keys/${id}`, { method: "DELETE" })
-    await loadApiKeys()
-  }
-
   async function loadVaultStatus() {
     const res = await fetch("/api/v1/vault/status")
     if (res.ok) {
@@ -282,7 +239,6 @@ export function AdminPanel({ users, grants: initialGrants }: Props) {
   }
 
   useEffect(() => {
-    loadApiKeys()
     loadVaultStatus()
   }, [])
 
@@ -412,41 +368,6 @@ export function AdminPanel({ users, grants: initialGrants }: Props) {
                 <Button size="sm" variant="danger" onClick={() => revokeGrant(g.id)}>
                   Revoke
                 </Button>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
-
-      <section>
-        <h2 className="text-base font-semibold text-[#c0c0d0] mb-1">Holly API Keys</h2>
-        <p className="text-sm text-[#666688] mb-4">API keys allow Holly (Openclaw) to access your data. Keys are shown once only.</p>
-
-        {newKeyPlaintext && (
-          <div className="bg-[rgba(0,255,136,0.08)] border border-[rgba(0,255,136,0.25)] rounded-lg p-4 mb-4">
-            <p className="text-sm font-medium text-[#00ff88] mb-1">New API key (copy now - not shown again):</p>
-            <code className="text-sm font-mono text-[#00ff88] break-all">{newKeyPlaintext}</code>
-          </div>
-        )}
-
-        <div className="flex gap-2 mb-4">
-          <Input placeholder="Key name (e.g. Holly production)" value={newKeyName} onChange={e => setNewKeyName(e.target.value)} />
-          <Button onClick={generateApiKey} disabled={apiKeyLoading || !newKeyName.trim()}>Generate</Button>
-        </div>
-
-        {apiKeys.length === 0 ? (
-          <p className="text-sm text-[#666688]">No API keys yet.</p>
-        ) : (
-          <div className="space-y-2">
-            {apiKeys.map(k => (
-              <div key={k.id} className="flex items-center justify-between bg-[#111125] border border-[rgba(0,255,136,0.15)] rounded-lg px-4 py-3">
-                <div>
-                  <p className="text-sm font-medium text-[#c0c0d0]">{k.name}</p>
-                  <p className="text-xs text-[#666688]">
-                    Last used: {k.lastUsed ? new Date(k.lastUsed).toLocaleDateString("en-GB") : "Never"}
-                  </p>
-                </div>
-                <Button variant="danger" size="sm" onClick={() => deleteApiKey(k.id)}>Revoke</Button>
               </div>
             ))}
           </div>

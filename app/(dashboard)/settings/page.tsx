@@ -14,6 +14,13 @@ interface RoleData {
   _count: { goals: number }
 }
 
+interface ApiKey {
+  id: string
+  name: string
+  lastUsed: string | null
+  createdAt: string
+}
+
 interface GoalData {
   id: string
   roleId: string
@@ -86,6 +93,12 @@ export default function SettingsPage() {
   // Delete goal
   const [deletingGoalId, setDeletingGoalId] = useState<string | null>(null)
   const [remapGoalId, setRemapGoalId] = useState("")
+
+  // Holly API keys
+  const [apiKeys, setApiKeys] = useState<ApiKey[]>([])
+  const [newKeyName, setNewKeyName] = useState("")
+  const [newKeyPlaintext, setNewKeyPlaintext] = useState("")
+  const [apiKeyLoading, setApiKeyLoading] = useState(false)
 
   const loadRoles = useCallback(async () => {
     const res = await fetch("/api/v1/roles")
@@ -223,6 +236,36 @@ export default function SettingsPage() {
     }
   }
 
+  async function loadApiKeys() {
+    const res = await fetch("/api/v1/settings/api-keys")
+    if (res.ok) setApiKeys(await res.json())
+  }
+
+  async function generateApiKey() {
+    if (!newKeyName.trim()) return
+    setApiKeyLoading(true)
+    try {
+      const res = await fetch("/api/v1/settings/api-keys", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newKeyName }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setNewKeyPlaintext(data.key)
+        setNewKeyName("")
+        await loadApiKeys()
+      }
+    } finally {
+      setApiKeyLoading(false)
+    }
+  }
+
+  async function deleteApiKey(id: string) {
+    await fetch(`/api/v1/settings/api-keys/${id}`, { method: "DELETE" })
+    await loadApiKeys()
+  }
+
   async function loadSchedulingPrefs() {
     try {
       const res = await fetch("/api/v1/calendar/preferences")
@@ -279,6 +322,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     loadRoles()
+    loadApiKeys()
     loadSchedulingPrefs()
     fetch("/api/v1/google/status").then(r => r.json()).then(setGoogleStatus).catch(() => {})
     // Check push status
@@ -395,6 +439,41 @@ export default function SettingsPage() {
             <Button onClick={() => { window.location.href = "/api/v1/google/connect" }}>Connect Google</Button>
           )}
         </div>
+      </section>
+
+      <section>
+        <h2 className="text-base font-semibold text-[#c0c0d0] mb-1">Holly API Keys</h2>
+        <p className="text-sm text-[#666688] mb-4">API keys allow Holly (Openclaw) to read and write your data on your behalf. Keys are tied to your account and shown once only.</p>
+
+        {newKeyPlaintext && (
+          <div className="bg-[rgba(0,255,136,0.08)] border border-[rgba(0,255,136,0.25)] rounded-lg p-4 mb-4">
+            <p className="text-sm font-medium text-[#00ff88] mb-1">New API key (copy now - not shown again):</p>
+            <code className="text-sm font-mono text-[#00ff88] break-all">{newKeyPlaintext}</code>
+          </div>
+        )}
+
+        <div className="flex gap-2 mb-4">
+          <Input placeholder="Key name (e.g. Openclaw production)" value={newKeyName} onChange={e => setNewKeyName(e.target.value)} />
+          <Button onClick={generateApiKey} disabled={apiKeyLoading || !newKeyName.trim()}>Generate</Button>
+        </div>
+
+        {apiKeys.length === 0 ? (
+          <p className="text-sm text-[#666688]">No API keys yet.</p>
+        ) : (
+          <div className="space-y-2">
+            {apiKeys.map(k => (
+              <div key={k.id} className="flex items-center justify-between bg-[#111125] border border-[rgba(0,255,136,0.15)] rounded-lg px-4 py-3">
+                <div>
+                  <p className="text-sm font-medium text-[#c0c0d0]">{k.name}</p>
+                  <p className="text-xs text-[#666688]">
+                    Last used: {k.lastUsed ? new Date(k.lastUsed).toLocaleDateString("en-GB") : "Never"}
+                  </p>
+                </div>
+                <Button variant="danger" size="sm" onClick={() => deleteApiKey(k.id)}>Revoke</Button>
+              </div>
+            ))}
+          </div>
+        )}
       </section>
 
       <section>

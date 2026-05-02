@@ -52,8 +52,10 @@ Lists all users with approved status. Each entry shows:
 - Create access grants between arbitrary users (only admin can do this)
 - Claim unclaimed data records
 - See data belonging to other users (unless explicitly shared)
-- Generate Holly API keys (admin-only)
-- Configure Obsidian vault connection or trigger vault sync (admin-only)
+- Configure the Obsidian vault connection or trigger vault sync (admin-only)
+- Grant per-user Obsidian read or read+write access from the Approved users list
+
+Holly API keys are managed per user on each user's Settings page, including the administrator's own keys. There is no central admin view of every user's keys.
 
 ### Claim Unclaimed Data
 
@@ -86,18 +88,9 @@ Click the Revoke button next to any existing grant. The grantee immediately lose
 
 ### Holly API Keys
 
-Holly (Openclaw) is an AI assistant that connects to the PRM via API keys. Because the keys grant programmatic access to system data, they are managed centrally by the administrator.
+Holly (Openclaw) is an AI assistant that connects to the PRM via API keys. Each key is tied to the user who generated it, so the assistant acts on that user's data only. Key management has moved to each user's own Settings page; an administrator manages their own keys there alongside everyone else.
 
-**Generating a key:**
-1. Enter a descriptive name (e.g. "Holly production")
-2. Click Generate
-3. Copy the plaintext key immediately - it is only shown once
-4. Configure Holly with this key
-
-**Revoking a key:**
-Click Revoke next to any existing key. Any agents still using that key will lose access immediately.
-
-Existing keys are listed with their name and last-used date but never reveal the plaintext value again.
+The administrator no longer has central oversight of other users' keys; trust the per-user Settings page and revoke a user's account if their assistant integration must be cut off entirely.
 
 ### Obsidian Vault
 

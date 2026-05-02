@@ -397,9 +397,18 @@ Notifications are triggered by the cron job, so they depend on the cron being co
 
 ## Holly API Keys
 
-Holly (Openclaw) is an AI assistant that can access the PRM to provide briefings, log interactions, manage tasks, and more.
+Holly (Openclaw) is an AI assistant that can access the PRM to provide briefings, log interactions, manage tasks, and more. Each API key is tied to your account, so when Openclaw uses one of your keys it only sees and modifies your data.
 
-API keys are managed by the administrator (in the Admin panel). If you need a key for a new Holly deployment or a key revoked, contact the administrator.
+Manage your keys on the Settings page under "Holly API Keys":
+
+1. Enter a descriptive name (e.g. "Openclaw production")
+2. Click Generate
+3. Copy the plaintext key immediately - it is only shown once
+4. Configure Holly with this key
+
+Existing keys are listed with their name and last-used date. Click Revoke to invalidate any key you no longer need; any agent still using that key will lose access immediately.
+
+Keys grant read and write access. If an agent must be limited to a subset of your data, generate a separate key for it and revoke that key when you are finished.
 
 ---
 
