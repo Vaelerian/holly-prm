@@ -53,12 +53,13 @@ Contacts are the core of Holly PRM. Each contact tracks:
 - Name, type (personal, work, family, volunteer)
 - Multiple email addresses, each with an optional label (e.g. "work", "personal")
 - Multiple phone numbers, each with an optional label (e.g. "mobile", "home")
+- Multiple postal addresses, each with an optional label (e.g. "home", "work") and structured fields for line 1, line 2, city, region, postcode, and country
 - Health score (0-100, automatically calculated based on interaction frequency)
 - Interaction frequency target (how often you want to be in touch)
 - Tags and notes
 - Whether they are a family member
 
-On the contact form, use the "+ Add email" and "+ Add phone" buttons to add as many of each as you need. The label is free text so you can use whatever convention suits you. On the contact detail page the values become clickable mailto: and tel: links.
+On the contact form, use the "+ Add email", "+ Add phone", and "+ Add address" buttons to add as many of each as you need. Labels are free text so you can use whatever convention suits you. On the contact detail page the values become clickable: emails open your mail client, phone numbers your dialler, and addresses open in Google Maps.
 
 ### Health Score
 

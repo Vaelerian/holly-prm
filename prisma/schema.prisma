@@ -257,6 +257,7 @@ model Contact {
   type                ContactType
   emails              Json          @default("[]")
   phones              Json          @default("[]")
+  addresses           Json          @default("[]")
   healthScore         Int           @default(100)
   lastInteraction     DateTime?
   interactionFreqDays Int?

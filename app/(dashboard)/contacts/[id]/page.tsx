@@ -51,33 +51,70 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
       {(() => {
         const emails = (contact.emails ?? []) as { label: string; value: string }[]
         const phones = (contact.phones ?? []) as { label: string; value: string }[]
-        if (emails.length === 0 && phones.length === 0) return null
+        const addresses = (contact.addresses ?? []) as {
+          label: string
+          line1: string
+          line2: string
+          city: string
+          region: string
+          postcode: string
+          country: string
+        }[]
+        if (emails.length === 0 && phones.length === 0 && addresses.length === 0) return null
         return (
-          <div className="grid grid-cols-2 gap-6">
-            {emails.length > 0 && (
-              <div>
-                <h2 className="text-xs font-semibold text-[#666688] uppercase tracking-wide mb-2">Email</h2>
-                <ul className="space-y-1">
-                  {emails.map((e, i) => (
-                    <li key={i} className="text-sm">
-                      {e.label && <span className="text-[#666688] mr-2">{e.label}</span>}
-                      <a href={`mailto:${e.value}`} className="text-[#00ff88] hover:text-[#00cc6f] break-all">{e.value}</a>
-                    </li>
-                  ))}
-                </ul>
+          <div className="space-y-6">
+            {(emails.length > 0 || phones.length > 0) && (
+              <div className="grid grid-cols-2 gap-6">
+                {emails.length > 0 && (
+                  <div>
+                    <h2 className="text-xs font-semibold text-[#666688] uppercase tracking-wide mb-2">Email</h2>
+                    <ul className="space-y-1">
+                      {emails.map((e, i) => (
+                        <li key={i} className="text-sm">
+                          {e.label && <span className="text-[#666688] mr-2">{e.label}</span>}
+                          <a href={`mailto:${e.value}`} className="text-[#00ff88] hover:text-[#00cc6f] break-all">{e.value}</a>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {phones.length > 0 && (
+                  <div>
+                    <h2 className="text-xs font-semibold text-[#666688] uppercase tracking-wide mb-2">Phone</h2>
+                    <ul className="space-y-1">
+                      {phones.map((p, i) => (
+                        <li key={i} className="text-sm">
+                          {p.label && <span className="text-[#666688] mr-2">{p.label}</span>}
+                          <a href={`tel:${p.value}`} className="text-[#00ff88] hover:text-[#00cc6f]">{p.value}</a>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
             )}
-            {phones.length > 0 && (
+            {addresses.length > 0 && (
               <div>
-                <h2 className="text-xs font-semibold text-[#666688] uppercase tracking-wide mb-2">Phone</h2>
-                <ul className="space-y-1">
-                  {phones.map((p, i) => (
-                    <li key={i} className="text-sm">
-                      {p.label && <span className="text-[#666688] mr-2">{p.label}</span>}
-                      <a href={`tel:${p.value}`} className="text-[#00ff88] hover:text-[#00cc6f]">{p.value}</a>
-                    </li>
-                  ))}
-                </ul>
+                <h2 className="text-xs font-semibold text-[#666688] uppercase tracking-wide mb-2">Addresses</h2>
+                <div className="grid sm:grid-cols-2 gap-3">
+                  {addresses.map((a, i) => {
+                    const lines = [a.line1, a.line2, [a.city, a.region].filter(Boolean).join(", "), a.postcode, a.country].filter(Boolean)
+                    const mapsQuery = encodeURIComponent(lines.join(", "))
+                    return (
+                      <div key={i} className="bg-[#111125] border border-[rgba(0,255,136,0.15)] rounded-lg px-3 py-2 text-sm">
+                        {a.label && <p className="text-xs text-[#666688] uppercase tracking-wide mb-1">{a.label}</p>}
+                        <a
+                          href={`https://www.google.com/maps/search/?api=1&query=${mapsQuery}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[#c0c0d0] hover:text-[#00ff88]"
+                        >
+                          {lines.map((line, idx) => <span key={idx} className="block">{line}</span>)}
+                        </a>
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
             )}
           </div>

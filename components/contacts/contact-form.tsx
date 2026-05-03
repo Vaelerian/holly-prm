@@ -26,6 +26,7 @@ export function ContactForm({ defaultValues, contactId }: ContactFormProps) {
       type: "personal",
       emails: [],
       phones: [],
+      addresses: [],
       interactionFreqDays: null,
       isFamilyMember: false,
       tags: [],
@@ -37,6 +38,7 @@ export function ContactForm({ defaultValues, contactId }: ContactFormProps) {
 
   const emails = useFieldArray({ control, name: "emails" })
   const phones = useFieldArray({ control, name: "phones" })
+  const addresses = useFieldArray({ control, name: "addresses" })
 
   async function onSubmit(data: CreateContactInput) {
     setSaving(true)
@@ -124,6 +126,68 @@ export function ContactForm({ defaultValues, contactId }: ContactFormProps) {
           </div>
         ))}
         <Button type="button" variant="ghost" size="sm" onClick={() => phones.append({ label: "", value: "" })}>+ Add phone</Button>
+      </div>
+
+      <div className="space-y-2">
+        <label className="block text-sm font-medium text-[#c0c0d0]">Addresses</label>
+        {addresses.fields.length === 0 && (
+          <p className="text-xs text-[#666688]">No addresses. Click Add to include one (home, work, etc.).</p>
+        )}
+        {addresses.fields.map((field, index) => (
+          <div key={field.id} className="bg-[#0a0a1a] border border-[rgba(0,255,136,0.15)] rounded-lg px-3 py-3 space-y-2">
+            <div className="flex gap-2 items-center">
+              <input
+                {...register(`addresses.${index}.label` as const)}
+                placeholder="Label (e.g. home, work)"
+                className="flex-1 border border-[rgba(0,255,136,0.2)] rounded-lg px-3 py-2 text-sm bg-[#0a0a1a] text-[#c0c0d0]"
+              />
+              <Button type="button" variant="ghost" size="sm" onClick={() => addresses.remove(index)}>Remove</Button>
+            </div>
+            <input
+              {...register(`addresses.${index}.line1` as const)}
+              placeholder="Address line 1"
+              className="block w-full border border-[rgba(0,255,136,0.2)] rounded-lg px-3 py-2 text-sm bg-[#0a0a1a] text-[#c0c0d0]"
+            />
+            {errors.addresses?.[index]?.line1?.message && (
+              <p className="text-xs text-red-400">{errors.addresses[index]?.line1?.message}</p>
+            )}
+            <input
+              {...register(`addresses.${index}.line2` as const)}
+              placeholder="Address line 2 (optional)"
+              className="block w-full border border-[rgba(0,255,136,0.2)] rounded-lg px-3 py-2 text-sm bg-[#0a0a1a] text-[#c0c0d0]"
+            />
+            <div className="grid grid-cols-2 gap-2">
+              <input
+                {...register(`addresses.${index}.city` as const)}
+                placeholder="City"
+                className="border border-[rgba(0,255,136,0.2)] rounded-lg px-3 py-2 text-sm bg-[#0a0a1a] text-[#c0c0d0]"
+              />
+              <input
+                {...register(`addresses.${index}.region` as const)}
+                placeholder="Region / county"
+                className="border border-[rgba(0,255,136,0.2)] rounded-lg px-3 py-2 text-sm bg-[#0a0a1a] text-[#c0c0d0]"
+              />
+              <input
+                {...register(`addresses.${index}.postcode` as const)}
+                placeholder="Postcode"
+                className="border border-[rgba(0,255,136,0.2)] rounded-lg px-3 py-2 text-sm bg-[#0a0a1a] text-[#c0c0d0]"
+              />
+              <input
+                {...register(`addresses.${index}.country` as const)}
+                placeholder="Country"
+                className="border border-[rgba(0,255,136,0.2)] rounded-lg px-3 py-2 text-sm bg-[#0a0a1a] text-[#c0c0d0]"
+              />
+            </div>
+          </div>
+        ))}
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => addresses.append({ label: "", line1: "", line2: "", city: "", region: "", postcode: "", country: "" })}
+        >
+          + Add address
+        </Button>
       </div>
 
       <div className="space-y-1">

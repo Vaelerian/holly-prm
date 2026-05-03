@@ -24,6 +24,15 @@ export default async function EditContactPage({ params }: { params: Promise<{ id
           tags: contact.tags,
           emails: (contact.emails ?? []) as { label: string; value: string }[],
           phones: (contact.phones ?? []) as { label: string; value: string }[],
+          addresses: (contact.addresses ?? []) as {
+            label: string
+            line1: string
+            line2: string
+            city: string
+            region: string
+            postcode: string
+            country: string
+          }[],
         }}
       />
     </div>
