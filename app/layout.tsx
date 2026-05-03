@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -17,6 +17,17 @@ export const metadata: Metadata = {
   description: "Personal relationship and project manager",
   manifest: "/manifest.json",
   appleWebApp: { capable: true, statusBarStyle: "black-translucent" },
+};
+
+// Lock the viewport so iOS Safari does not auto-zoom on focus (it does this
+// when an input has a font-size below 16px) and never zooms back out. Combined
+// with the 16px-on-mobile rule in globals.css, inputs no longer trigger zoom
+// at all.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({

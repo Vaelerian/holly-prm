@@ -13,7 +13,7 @@ export function AppShell({ children, isAdmin }: { children: React.ReactNode; isA
   return (
     <div className="flex min-h-screen bg-[#0a0a1a]">
       <Sidebar isAdmin={isAdmin} onLogPress={() => setLogOpen(true)} />
-      <main className="flex-1 pb-20 md:pb-0 overflow-y-auto">
+      <main className="flex-1 pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-0 overflow-y-auto">
         {children}
       </main>
       <BottomNav
