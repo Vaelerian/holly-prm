@@ -9,6 +9,11 @@ export async function getBriefing(userId: string) {
   todayEnd.setHours(23, 59, 59, 999)
   const fourteenDaysFromNow = new Date()
   fourteenDaysFromNow.setDate(fourteenDaysFromNow.getDate() + 14)
+  const sevenDaysFromNow = new Date()
+  sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7)
+  sevenDaysFromNow.setHours(23, 59, 59, 999)
+  const thirtyDaysFromNow = new Date()
+  thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30)
 
   const [
     overdueContacts,
@@ -21,6 +26,9 @@ export async function getBriefing(userId: string) {
     candidateContacts,
     recentInteractions,
     activeProjects,
+    tasksThisWeek,
+    goalsNearingTarget,
+    taskStatusGroups,
   ] = await Promise.all([
     prisma.contact.findMany({
       where: { userId, interactionFreqDays: { not: null }, OR: [{ healthScore: { lt: 100 } }, { lastInteraction: null }] },
@@ -91,8 +99,51 @@ export async function getBriefing(userId: string) {
         id: true,
         title: true,
         status: true,
+        targetDate: true,
         tasks: { select: { status: true } },
       },
+    }),
+    // Tasks due in the next 7 days (excluding today's, which we already
+    // surface separately)
+    prisma.task.findMany({
+      where: {
+        project: { OR: [{ userId }, { members: { some: { userId } } }] },
+        dueDate: { gt: todayEnd, lte: sevenDaysFromNow },
+        status: { notIn: ["done", "cancelled"] },
+      },
+      orderBy: { dueDate: "asc" },
+      take: 50,
+      select: {
+        id: true,
+        title: true,
+        dueDate: true,
+        status: true,
+        isMilestone: true,
+        projectId: true,
+      },
+    }),
+    // Completable goals with a target date within 30 days
+    prisma.goal.findMany({
+      where: {
+        userId,
+        goalType: "completable",
+        status: "active",
+        targetDate: { not: null, lte: thirtyDaysFromNow },
+      },
+      orderBy: { targetDate: "asc" },
+      take: 10,
+      select: {
+        id: true,
+        name: true,
+        targetDate: true,
+        role: { select: { name: true, colour: true } },
+      },
+    }),
+    // Task status breakdown across the user's accessible tasks
+    prisma.task.groupBy({
+      by: ["status"],
+      where: { project: { OR: [{ userId }, { members: { some: { userId } } }] } },
+      _count: { _all: true },
     }),
   ])
 
@@ -146,17 +197,47 @@ export async function getBriefing(userId: string) {
     return daysSince > c.interactionFreqDays! * 0.8
   })
 
-  const projectHealth = activeProjects.map(p => ({
-    id: p.id,
-    title: p.title,
-    status: p.status,
-    tasksTotal: p.tasks.length,
-    tasksCompleted: p.tasks.filter(t => t.status === "done").length,
-    percentComplete:
-      p.tasks.length > 0
-        ? Math.round((p.tasks.filter(t => t.status === "done").length / p.tasks.length) * 100)
-        : 0,
-  }))
+  const projectHealth = activeProjects
+    .map(p => ({
+      id: p.id,
+      title: p.title,
+      status: p.status,
+      targetDate: p.targetDate,
+      tasksTotal: p.tasks.length,
+      tasksCompleted: p.tasks.filter(t => t.status === "done").length,
+      percentComplete:
+        p.tasks.length > 0
+          ? Math.round((p.tasks.filter(t => t.status === "done").length / p.tasks.length) * 100)
+          : 0,
+    }))
+    // Most-progressed (or earliest-due) first so the dashboard surfaces the
+    // projects closest to closing out at the top.
+    .sort((a, b) => b.percentComplete - a.percentComplete)
+
+  const goalsNearingCompletion = goalsNearingTarget.map(g => {
+    const days = Math.ceil((g.targetDate!.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+    return {
+      id: g.id,
+      name: g.name,
+      targetDate: g.targetDate,
+      daysRemaining: days,
+      role: g.role,
+    }
+  })
+
+  // Normalise the groupBy result into a fixed shape so the UI does not have
+  // to handle missing keys.
+  const taskMix = {
+    todo: 0,
+    in_progress: 0,
+    done: 0,
+    blocked: 0,
+    cancelled: 0,
+  } as Record<string, number>
+  for (const row of taskStatusGroups) {
+    if (row.status in taskMix) taskMix[row.status] = row._count._all
+  }
+  const taskTotal = Object.values(taskMix).reduce((a, b) => a + b, 0)
 
   return {
     overdueContacts,
@@ -164,11 +245,15 @@ export async function getBriefing(userId: string) {
     openActionItems,
     openProjectsCount,
     tasksDueTodayCount,
+    tasksThisWeek,
     upcomingMilestones,
     myActionItems,
     followUpCandidates,
     recentInteractions,
     projectHealth,
+    goalsNearingCompletion,
+    taskMix,
+    taskTotal,
     recentEmails,
     vaultUpdates,
     scheduleAlerts,
