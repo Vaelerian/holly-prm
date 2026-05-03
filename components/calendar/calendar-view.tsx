@@ -28,6 +28,7 @@ interface CalendarViewProps {
   items: CalendarItem[]
   filters: CalendarFilters
   timeSlots?: ResolvedTimeSlot[]
+  initialRoles?: RoleOption[]
 }
 
 interface RoleOption {
@@ -704,7 +705,7 @@ function MonthView({
                         <div
                           key={roleId}
                           className="h-1 rounded-full"
-                          style={{ backgroundColor: getRoleColor(roleId, roles), opacity: 0.6 }}
+                          style={{ backgroundColor: getRoleColor(roleId, roles) }}
                         />
                       ))}
                     </div>
@@ -998,14 +999,16 @@ function AgendaView({
 
 // ─── Main CalendarView ───
 
-export function CalendarView({ items, filters, timeSlots = [] }: CalendarViewProps) {
+export function CalendarView({ items, filters, timeSlots = [], initialRoles = [] }: CalendarViewProps) {
   const router = useRouter()
   const [view, setView] = useState<View>("month")
   const [currentDate, setCurrentDate] = useState(new Date())
   const [showSlotForm, setShowSlotForm] = useState(false)
   const [selectedSlot, setSelectedSlot] = useState<ResolvedTimeSlot | null>(null)
-  const [roles, setRoles] = useState<RoleOption[]>([])
-  const [rolesLoaded, setRolesLoaded] = useState(false)
+  const [roles, setRoles] = useState<RoleOption[]>(initialRoles)
+  // Already populated from the server when initialRoles is non-empty so we
+  // skip the lazy refetch in that case.
+  const [rolesLoaded, setRolesLoaded] = useState(initialRoles.length > 0)
 
   useEffect(() => {
     const saved = sessionStorage.getItem("calendarView") as View | null

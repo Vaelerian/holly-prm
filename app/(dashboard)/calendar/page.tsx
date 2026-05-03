@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db"
 import { auth } from "@/lib/auth"
 import { fetchGoogleEvents } from "@/lib/services/calendar-sync"
 import { listTimeSlotsForRange } from "@/lib/services/time-slots"
+import { listRoles } from "@/lib/services/roles"
 import type { ResolvedTimeSlot } from "@/lib/services/repeat-expand"
 import { CalendarView, CalendarItem } from "@/components/calendar/calendar-view"
 import Link from "next/link"
@@ -12,6 +13,7 @@ export default async function CalendarPage() {
 
   let items: CalendarItem[] = []
   let timeSlots: ResolvedTimeSlot[] = []
+  let roles: Awaited<ReturnType<typeof listRoles>> = []
   let filters = { tasks: true, projects: true, followUps: true, milestones: true, actionItems: true, googleEvents: true }
   let dbError = false
 
@@ -25,7 +27,7 @@ export default async function CalendarPage() {
 
   try {
     const userWhere = userId ? { userId } : {}
-    const [tasks, projects, followUps, actionItems, googleEvents, pref, fetchedSlots] = await Promise.all([
+    const [tasks, projects, followUps, actionItems, googleEvents, pref, fetchedSlots, fetchedRoles] = await Promise.all([
       prisma.task.findMany({
         where: { dueDate: { not: null }, status: { notIn: ["done", "cancelled"] } },
         select: { id: true, title: true, dueDate: true, isMilestone: true, projectId: true },
@@ -45,10 +47,12 @@ export default async function CalendarPage() {
       userId ? fetchGoogleEvents(42, userId) : Promise.resolve([]),
       prisma.userPreference.findFirst(userId ? { where: { userId } } : undefined),
       userId ? listTimeSlotsForRange(userId, rangeStartStr, rangeEndStr) : Promise.resolve([]),
+      userId ? listRoles(userId) : Promise.resolve([]),
     ])
 
     if (pref) filters = pref.calendarFilters as typeof filters
     timeSlots = fetchedSlots
+    roles = fetchedRoles
 
     for (const t of tasks) {
       items.push({
@@ -111,7 +115,14 @@ export default async function CalendarPage() {
         </div>
       )}
 
-      {!dbError && <CalendarView items={items} filters={filters} timeSlots={timeSlots} />}
+      {!dbError && (
+        <CalendarView
+          items={items}
+          filters={filters}
+          timeSlots={timeSlots}
+          initialRoles={roles.map(r => ({ id: r.id, name: r.name, colour: r.colour }))}
+        />
+      )}
     </div>
   )
 }
