@@ -15,6 +15,11 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: var(--font-geist-sans), system-ui, sans-serif;
+  /* Pad below the dynamic island / notch / status bar on iOS PWAs.
+     viewport-fit=cover lets the page render edge-to-edge so the bottom
+     home-indicator area can be respected; without this top inset the
+     content slides under the camera and clock. */
+  padding-top: env(safe-area-inset-top);
 }
 
 /* Scrollbar */
