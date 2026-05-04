@@ -37,7 +37,7 @@ interface RoleOption {
   colour: string
 }
 
-type View = "month" | "week" | "agenda"
+type View = "month" | "week" | "roles" | "agenda"
 
 const TYPE_COLORS: Record<CalendarItemType, string> = {
   task: "bg-blue-500",
@@ -549,7 +549,35 @@ interface ConcreteSlotEditProps {
 
 function ConcreteSlotEdit({ slot, roles, onClose, onRefresh }: ConcreteSlotEditProps) {
   const [deleting, setDeleting] = useState(false)
+  const [rescheduling, setRescheduling] = useState(false)
+  const [rescheduleResult, setRescheduleResult] = useState<string | null>(null)
   const [error, setError] = useState("")
+
+  async function handleRescheduleSlot() {
+    setRescheduling(true)
+    setRescheduleResult(null)
+    setError("")
+    try {
+      const res = await fetch("/api/v1/schedule/reschedule", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slotId: slot.id }),
+      })
+      if (!res.ok) {
+        const d = await res.json()
+        throw new Error(d.error || "Failed to reschedule")
+      }
+      const data = await res.json()
+      const count = (data.scheduled?.length ?? 0) as number
+      const alertCount = (data.alerts?.length ?? 0) as number
+      setRescheduleResult(`${count} re-placed, ${alertCount} alert${alertCount !== 1 ? "s" : ""}`)
+      onRefresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to reschedule")
+    } finally {
+      setRescheduling(false)
+    }
+  }
 
   async function handleSave(data: Record<string, unknown>) {
     const res = await fetch(`/api/v1/time-slots/${slot.id}`, {
@@ -606,13 +634,23 @@ function ConcreteSlotEdit({ slot, roles, onClose, onRefresh }: ConcreteSlotEditP
         onCancel={onClose}
         submitLabel="Save"
       />
-      <button
-        onClick={handleDelete}
-        disabled={deleting}
-        className="mt-2 px-3 py-1.5 text-sm text-red-400 hover:text-red-300 rounded disabled:opacity-50"
-      >
-        {deleting ? "Deleting..." : "Delete slot"}
-      </button>
+      <div className="mt-2 flex items-center gap-3 flex-wrap">
+        <button
+          onClick={handleRescheduleSlot}
+          disabled={rescheduling}
+          className="px-3 py-1.5 text-sm text-[#00ff88] hover:text-[#00cc6f] disabled:opacity-50"
+        >
+          {rescheduling ? "Rescheduling..." : "Reschedule contents"}
+        </button>
+        {rescheduleResult && <span className="text-xs text-[#666688]">{rescheduleResult}</span>}
+        <button
+          onClick={handleDelete}
+          disabled={deleting}
+          className="px-3 py-1.5 text-sm text-red-400 hover:text-red-300 rounded disabled:opacity-50 ml-auto"
+        >
+          {deleting ? "Deleting..." : "Delete slot"}
+        </button>
+      </div>
     </div>
   )
 }
@@ -906,6 +944,143 @@ function WeekView({
   )
 }
 
+// ─── Roles Grid View (role × date matrix with capacity bars) ───
+
+function RoleGridView({
+  currentDate,
+  setCurrentDate,
+  timeSlots,
+  roles,
+  weeksToShow,
+  setWeeksToShow,
+  onSlotClick,
+}: {
+  currentDate: Date
+  setCurrentDate: (d: Date) => void
+  timeSlots: ResolvedTimeSlot[]
+  roles: RoleOption[]
+  weeksToShow: 1 | 2 | 3
+  setWeeksToShow: (w: 1 | 2 | 3) => void
+  onSlotClick?: (slot: ResolvedTimeSlot) => void
+}) {
+  // Start from Monday of current week so labels align with Mentor.
+  const weekStart = new Date(currentDate)
+  const offsetToMonday = (currentDate.getDay() + 6) % 7
+  weekStart.setDate(currentDate.getDate() - offsetToMonday)
+  const days = Array.from({ length: weeksToShow * 7 }, (_, i) => addDays(weekStart, i))
+  const rangeLabel = `${days[0].toLocaleDateString("en-GB", { day: "numeric", month: "short" })} - ${days[days.length - 1].toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`
+  const todayStr = toDateStr(new Date())
+
+  const slotsByRoleDate = new Map<string, ResolvedTimeSlot[]>()
+  for (const slot of timeSlots) {
+    const key = `${slot.roleId}:${slot.date}`
+    const list = slotsByRoleDate.get(key) ?? []
+    list.push(slot)
+    slotsByRoleDate.set(key, list)
+  }
+
+  const gridTemplate = `140px repeat(${days.length}, minmax(96px, 1fr))`
+
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
+        <button onClick={() => setCurrentDate(addDays(currentDate, -weeksToShow * 7))} className="text-[#666688] hover:text-[#c0c0d0] px-2 py-1 text-sm">&#8249; Prev</button>
+        <button onClick={() => setCurrentDate(new Date())} className="px-3 py-1 text-xs bg-[rgba(0,255,136,0.1)] border border-[rgba(0,255,136,0.2)] rounded text-[#00ff88]">Today</button>
+        <button onClick={() => setCurrentDate(addDays(currentDate, weeksToShow * 7))} className="text-[#666688] hover:text-[#c0c0d0] px-2 py-1 text-sm">Next &#8250;</button>
+        <span className="text-sm font-semibold text-[#c0c0d0] mx-2">{rangeLabel}</span>
+        <div className="flex gap-1 ml-auto">
+          {([1, 2, 3] as const).map(w => (
+            <button
+              key={w}
+              onClick={() => setWeeksToShow(w)}
+              className={`px-2 py-1 text-xs rounded ${weeksToShow === w ? "bg-[rgba(0,255,136,0.2)] text-[#00ff88] border border-[rgba(0,255,136,0.3)]" : "text-[#666688] border border-transparent hover:text-[#c0c0d0]"}`}
+            >
+              {w}w
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="overflow-x-auto border border-[rgba(0,255,136,0.08)] rounded-lg">
+        <div className="min-w-max">
+          {/* Header row */}
+          <div className="grid bg-[rgba(0,255,136,0.05)]" style={{ gridTemplateColumns: gridTemplate }}>
+            <div className="px-2 py-1.5 text-xs font-semibold text-[#666688]">Role</div>
+            {days.map(d => {
+              const dateStr = toDateStr(d)
+              const isToday = dateStr === todayStr
+              return (
+                <div key={dateStr} className={`px-1 py-1.5 text-xs text-center border-l border-[rgba(0,255,136,0.05)] ${isToday ? "text-[#00ff88] font-bold" : "text-[#666688]"}`}>
+                  <div>{d.toLocaleDateString("en-GB", { weekday: "short" })}</div>
+                  <div className="text-[10px]">{d.getDate()}</div>
+                </div>
+              )
+            })}
+          </div>
+
+          {/* Role rows */}
+          {roles.length === 0 ? (
+            <div className="px-3 py-6 text-sm text-[#666688]">No roles configured. Add one in Settings.</div>
+          ) : (
+            roles.map(role => (
+              <div
+                key={role.id}
+                className="grid border-t border-[rgba(0,255,136,0.06)]"
+                style={{ gridTemplateColumns: gridTemplate }}
+              >
+                <div className="bg-[#0a0a1a] px-2 py-2 flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: role.colour }} />
+                  <span className="text-sm text-[#c0c0d0] truncate">{role.name}</span>
+                </div>
+                {days.map(d => {
+                  const dateStr = toDateStr(d)
+                  const cellSlots = slotsByRoleDate.get(`${role.id}:${dateStr}`) ?? []
+                  const isToday = dateStr === todayStr
+                  if (cellSlots.length === 0) {
+                    return (
+                      <div
+                        key={dateStr}
+                        className={`min-h-[60px] border-l border-[rgba(0,255,136,0.05)] ${isToday ? "bg-[rgba(0,255,136,0.02)]" : "bg-[#111125]"}`}
+                      />
+                    )
+                  }
+                  const totalCap = cellSlots.reduce((a, s) => a + s.capacityMinutes, 0)
+                  const totalUsed = cellSlots.reduce((a, s) => a + s.usedMinutes, 0)
+                  const pct = totalCap > 0 ? Math.min(100, Math.round((totalUsed / totalCap) * 100)) : 0
+                  const head = cellSlots[0]
+                  return (
+                    <button
+                      key={dateStr}
+                      onClick={() => onSlotClick?.(head)}
+                      className={`text-left min-h-[60px] px-1.5 py-1 border-l border-[rgba(0,255,136,0.05)] hover:bg-[rgba(0,255,136,0.04)] transition-colors ${isToday ? "bg-[rgba(0,255,136,0.02)]" : "bg-[#111125]"}`}
+                    >
+                      <div className="flex items-center gap-1 mb-1">
+                        <div className="flex-1 h-1.5 rounded-full bg-[rgba(255,255,255,0.06)] overflow-hidden">
+                          <div
+                            className="h-full rounded-full"
+                            style={{ width: `${pct}%`, background: role.colour }}
+                          />
+                        </div>
+                        <span className="text-[10px] text-[#c0c0d0]">{pct}%</span>
+                      </div>
+                      <div className="text-[10px] text-[#c0c0d0] truncate">
+                        {minutesToTime(head.startMinutes)} {head.title || "Time slot"}
+                      </div>
+                      {cellSlots.length > 1 && (
+                        <div className="text-[9px] text-[#666688]">+{cellSlots.length - 1} more</div>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Agenda View ───
 
 function AgendaView({
@@ -1005,6 +1180,7 @@ export function CalendarView({ items, filters, timeSlots = [], initialRoles = []
   const [currentDate, setCurrentDate] = useState(new Date())
   const [showSlotForm, setShowSlotForm] = useState(false)
   const [selectedSlot, setSelectedSlot] = useState<ResolvedTimeSlot | null>(null)
+  const [weeksToShow, setWeeksToShow] = useState<1 | 2 | 3>(2)
   const [roles, setRoles] = useState<RoleOption[]>(initialRoles)
   // Already populated from the server when initialRoles is non-empty so we
   // skip the lazy refetch in that case.
@@ -1071,7 +1247,7 @@ export function CalendarView({ items, filters, timeSlots = [], initialRoles = []
   return (
     <div>
       <div className="flex items-center gap-1 mb-6 flex-wrap">
-        {(["month", "week", "agenda"] as View[]).map(v => (
+        {(["month", "week", "roles", "agenda"] as View[]).map(v => (
           <button
             key={v}
             onClick={() => switchView(v)}
@@ -1138,6 +1314,17 @@ export function CalendarView({ items, filters, timeSlots = [], initialRoles = []
           setCurrentDate={setCurrentDate}
           timeSlots={timeSlots}
           roles={roles}
+          onSlotClick={handleSlotClick}
+        />
+      )}
+      {view === "roles" && (
+        <RoleGridView
+          currentDate={currentDate}
+          setCurrentDate={setCurrentDate}
+          timeSlots={timeSlots}
+          roles={roles}
+          weeksToShow={weeksToShow}
+          setWeeksToShow={setWeeksToShow}
           onSlotClick={handleSlotClick}
         />
       )}

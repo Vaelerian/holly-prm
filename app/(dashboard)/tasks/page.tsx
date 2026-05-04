@@ -85,7 +85,17 @@ export default async function TasksPage({ searchParams }: PageProps) {
   }
 
   // Schedule view grouping
-  type TaskWithSlot = (typeof tasks)[number] & { timeSlot?: { id: string; date: Date; startMinutes: number; endMinutes: number; title: string } | null }
+  interface SlotInfo {
+    id: string
+    date: Date
+    startMinutes: number
+    endMinutes: number
+    title: string
+    capacityMinutes: number
+    usedMinutes: number
+    roleId: string
+  }
+  type TaskWithSlot = (typeof tasks)[number] & { timeSlot?: SlotInfo | null }
   const scheduledTasks: TaskWithSlot[] = []
   const alertTasks: TaskWithSlot[] = []
   const unscheduledTasks: TaskWithSlot[] = []
@@ -109,15 +119,24 @@ export default async function TasksPage({ searchParams }: PageProps) {
     })
   }
 
-  // Group scheduled tasks by date
-  const scheduledByDate = new Map<string, TaskWithSlot[]>()
+  // Group scheduled tasks by date, then by slot. Each slot renders a header
+  // (time / title / role / capacity bar) with its tasks indented underneath.
+  interface SlotGroup { slot: SlotInfo; tasks: TaskWithSlot[] }
+  const scheduledByDate = new Map<string, Map<string, SlotGroup>>()
   for (const t of scheduledTasks) {
-    if (t.timeSlot?.date) {
-      const d = new Date(t.timeSlot.date)
-      const dateStr = d.toLocaleDateString("en-CA")
-      if (!scheduledByDate.has(dateStr)) scheduledByDate.set(dateStr, [])
-      scheduledByDate.get(dateStr)!.push(t)
+    if (!t.timeSlot?.date) continue
+    const dateStr = new Date(t.timeSlot.date).toLocaleDateString("en-CA")
+    let dateMap = scheduledByDate.get(dateStr)
+    if (!dateMap) {
+      dateMap = new Map()
+      scheduledByDate.set(dateStr, dateMap)
     }
+    let group = dateMap.get(t.timeSlot.id)
+    if (!group) {
+      group = { slot: t.timeSlot, tasks: [] }
+      dateMap.set(t.timeSlot.id, group)
+    }
+    group.tasks.push(t)
   }
 
   return (
@@ -170,40 +189,70 @@ export default async function TasksPage({ searchParams }: PageProps) {
       ) : viewMode === "schedule" ? (
         /* ─── Schedule View ─── */
         <div className="space-y-6">
-          {/* Scheduled tasks grouped by date */}
+          {/* Scheduled tasks grouped by date, then by slot */}
           {scheduledByDate.size > 0 && (
-            <div className="space-y-4">
-              {Array.from(scheduledByDate.entries()).map(([dateStr, dateTasks]) => (
-                <section key={dateStr}>
-                  <h2 className="text-sm font-semibold text-[#c0c0d0] mb-2">
-                    {new Date(dateStr + "T12:00:00").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
-                  </h2>
-                  <div className="space-y-1.5 ml-2">
-                    {dateTasks.map(t => (
-                      <div key={t.id} className="flex items-center gap-2">
-                        <span
-                          className="w-2 h-2 rounded-full flex-shrink-0"
-                          style={{ backgroundColor: t.role?.colour ?? roleColourById[t.roleId ?? ""] ?? "#666688" }}
-                        />
-                        {t.timeSlot && (
-                          <a href="/calendar" className="text-[10px] text-[#666688] hover:text-[#c0c0d0] flex-shrink-0">
-                            {minutesToTime(t.timeSlot.startMinutes)}-{minutesToTime(t.timeSlot.endMinutes)}
-                          </a>
-                        )}
-                        <span className="text-sm text-[#c0c0d0] truncate flex-1">{t.title}</span>
-                        {t.effortSize && t.effortSize !== "undefined_size" && (
-                          <span className="text-[10px] text-[#444466] flex-shrink-0">{t.effortSize}</span>
-                        )}
-                        <FloatBadge
-                          slotDate={t.timeSlot?.date ? new Date(t.timeSlot.date).toLocaleDateString("en-CA") : null}
-                          dueDate={t.dueDate ? t.dueDate.toISOString() : null}
-                        />
-                        <TaskScheduleButton taskId={t.id} importance={t.importance} scheduleState={t.scheduleState} />
-                      </div>
-                    ))}
-                  </div>
-                </section>
-              ))}
+            <div className="space-y-5">
+              {Array.from(scheduledByDate.entries()).map(([dateStr, slotMap]) => {
+                const slotGroups = Array.from(slotMap.values()).sort(
+                  (a, b) => a.slot.startMinutes - b.slot.startMinutes
+                )
+                return (
+                  <section key={dateStr}>
+                    <h2 className="text-sm font-semibold text-[#c0c0d0] mb-2">
+                      {new Date(dateStr + "T12:00:00").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+                    </h2>
+                    <div className="space-y-3 ml-2">
+                      {slotGroups.map(({ slot, tasks: slotTasks }) => {
+                        const colour = roleColourById[slot.roleId] ?? "#666688"
+                        const pct = slot.capacityMinutes > 0
+                          ? Math.min(100, Math.round((slot.usedMinutes / slot.capacityMinutes) * 100))
+                          : 0
+                        return (
+                          <div key={slot.id} className="bg-[#0a0a1a] border border-[rgba(0,255,136,0.1)] rounded-lg px-3 py-2 space-y-1.5">
+                            {/* Slot header */}
+                            <div className="flex items-center gap-2">
+                              <span
+                                className="w-2 h-2 rounded-full flex-shrink-0"
+                                style={{ backgroundColor: colour }}
+                              />
+                              <span className="text-xs text-[#666688] flex-shrink-0">
+                                {minutesToTime(slot.startMinutes)}-{minutesToTime(slot.endMinutes)}
+                              </span>
+                              <span className="text-sm text-[#c0c0d0] truncate flex-1">{slot.title || "Time slot"}</span>
+                              <span className="text-[10px] text-[#666688]">{slotTasks.length} task{slotTasks.length === 1 ? "" : "s"}</span>
+                              <div className="w-16 h-1.5 rounded-full bg-[rgba(255,255,255,0.06)] overflow-hidden flex-shrink-0">
+                                <div className="h-full rounded-full" style={{ width: `${pct}%`, background: colour }} />
+                              </div>
+                              <span className="text-[10px] text-[#c0c0d0] w-8 text-right">{pct}%</span>
+                            </div>
+                            {/* Tasks indented under slot */}
+                            <div className="space-y-1 pl-4 border-l border-[rgba(0,255,136,0.08)] ml-1">
+                              {slotTasks.map(t => (
+                                <div key={t.id} className="flex items-center gap-2">
+                                  <span className="text-sm text-[#c0c0d0] truncate flex-1">
+                                    {t.isMilestone && <span className="text-[#a855f7] mr-1">★</span>}
+                                    {t.title}
+                                  </span>
+                                  {(t.effortMinutes != null || (t.effortSize && t.effortSize !== "undefined_size")) && (
+                                    <span className="text-[10px] text-[#444466] flex-shrink-0">
+                                      {t.effortMinutes != null ? `${t.effortMinutes}m` : t.effortSize}
+                                    </span>
+                                  )}
+                                  <FloatBadge
+                                    slotDate={t.timeSlot?.date ? new Date(t.timeSlot.date).toLocaleDateString("en-CA") : null}
+                                    dueDate={t.dueDate ? t.dueDate.toISOString() : null}
+                                  />
+                                  <TaskScheduleButton taskId={t.id} importance={t.importance} scheduleState={t.scheduleState} />
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </section>
+                )
+              })}
             </div>
           )}
 

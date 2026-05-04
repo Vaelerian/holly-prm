@@ -28,6 +28,7 @@ export function AddTaskForm({ projectId, goalId: propGoalId, roleId: propRoleId,
   const [importance, setImportance] = useState("")
   const [urgency, setUrgency] = useState("")
   const [effortSize, setEffortSize] = useState("")
+  const [effortMinutes, setEffortMinutes] = useState("")
   const [users, setUsers] = useState<UserOption[]>([])
 
   // Standalone mode state (no projectId)
@@ -124,6 +125,10 @@ export function AddTaskForm({ projectId, goalId: propGoalId, roleId: propRoleId,
       if (importance) body.importance = importance
       if (urgency) body.urgency = urgency
       if (effortSize) body.effortSize = effortSize
+      const customMinutes = effortMinutes.trim() === "" ? null : Number(effortMinutes)
+      if (customMinutes !== null && Number.isFinite(customMinutes) && customMinutes >= 0) {
+        body.effortMinutes = customMinutes
+      }
       if (projectId) {
         body.projectId = projectId
         // Project context: the task must land in the project's goal, otherwise
@@ -245,7 +250,7 @@ export function AddTaskForm({ projectId, goalId: propGoalId, roleId: propRoleId,
           {showScheduling ? "Hide scheduling options" : "Scheduling options"}
         </button>
         {showScheduling && (
-          <div className="flex items-center gap-3 mt-2">
+          <div className="flex items-center gap-3 mt-2 flex-wrap">
             <select value={importance} onChange={e => setImportance(e.target.value)} className="border border-[rgba(0,255,136,0.2)] rounded-lg px-2 py-1 text-sm bg-[#0a0a1a] text-[#c0c0d0]">
               <option value="">Importance</option>
               <option value="core">Core</option>
@@ -268,6 +273,18 @@ export function AddTaskForm({ projectId, goalId: propGoalId, roleId: propRoleId,
               <option value="project_size">Project</option>
               <option value="milestone">Milestone</option>
             </select>
+            <label className="flex items-center gap-1 text-xs text-[#666688]">
+              or
+              <input
+                type="number"
+                min={0}
+                step={5}
+                value={effortMinutes}
+                onChange={e => setEffortMinutes(e.target.value)}
+                placeholder="custom min"
+                className="w-24 border border-[rgba(0,255,136,0.2)] rounded-lg px-2 py-1 text-sm bg-[#0a0a1a] text-[#c0c0d0] placeholder:text-[#444466]"
+              />
+            </label>
           </div>
         )}
       </div>

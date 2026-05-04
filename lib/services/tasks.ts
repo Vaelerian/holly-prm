@@ -52,7 +52,18 @@ export async function listTasks(opts: ListTasksOptions) {
       actionItems: { orderBy: { createdAt: "asc" as const } },
       assignedToUser: { select: { id: true, name: true } },
       ...(opts.includeSlot ? {
-        timeSlot: { select: { id: true, date: true, startMinutes: true, endMinutes: true, title: true } },
+        timeSlot: {
+          select: {
+            id: true,
+            date: true,
+            startMinutes: true,
+            endMinutes: true,
+            title: true,
+            capacityMinutes: true,
+            usedMinutes: true,
+            roleId: true,
+          },
+        },
       } : {}),
     },
   })

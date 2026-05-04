@@ -1,4 +1,7 @@
 import { prisma } from "@/lib/db"
+import type { Prisma } from "@/app/generated/prisma/client"
+
+export type DbExecutor = typeof prisma | Prisma.TransactionClient
 
 export interface SchedulingPrefs {
   asapDays: number
@@ -146,4 +149,28 @@ export function urgencyToSortOrder(urgency: string): number {
     default:
       return 99
   }
+}
+
+/**
+ * Recompute a slot's usedMinutes and taskCount from the live set of assigned
+ * tasks. Pass a transaction client to keep the recompute atomic with the
+ * surrounding assign/unassign write.
+ */
+export async function recomputeSlotUsage(
+  slotId: string,
+  prefs: SchedulingPrefs,
+  client: DbExecutor = prisma
+): Promise<void> {
+  const tasks = await client.task.findMany({
+    where: { timeSlotId: slotId },
+    select: { effortSize: true, effortMinutes: true },
+  })
+  const usedMinutes = tasks.reduce(
+    (sum, t) => sum + resolveEffortMinutes(t, prefs),
+    0
+  )
+  await client.timeSlot.update({
+    where: { id: slotId },
+    data: { usedMinutes, taskCount: tasks.length },
+  })
 }
