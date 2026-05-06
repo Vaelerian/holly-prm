@@ -247,6 +247,32 @@ export default async function DashboardPage() {
             </section>
           )}
 
+          {data.openActionItems.length > 0 && (
+            <section>
+              <SectionHeader
+                title="Open action items"
+                subtitle={`${data.openActionItems.length} outstanding`}
+              />
+              <div className="space-y-2">
+                {data.openActionItems.slice(0, 10).map(item => (
+                  <ActionItemRow
+                    key={item.id}
+                    id={item.id}
+                    title={item.title}
+                    status={item.status}
+                    priority={item.priority}
+                    assignedTo={item.assignedTo}
+                    dueDate={item.dueDate ? item.dueDate.toISOString() : null}
+                    interactionId={item.interactionId}
+                    taskId={item.taskId}
+                    contactId={item.interaction?.contact?.id}
+                    taskProjectId={item.task?.projectId ?? undefined}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
+
           {data.scheduleAlerts && (data.scheduleAlerts as { taskId?: string; title?: string; reason?: string }[]).length > 0 && (
             <section>
               <SectionHeader title="Scheduling alerts" tone="danger" />

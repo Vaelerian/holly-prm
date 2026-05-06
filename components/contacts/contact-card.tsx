@@ -11,9 +11,10 @@ interface ContactCardProps {
   tags: string[]
   isShared?: boolean
   ownerName?: string | null
+  openActionItems?: number
 }
 
-export function ContactCard({ id, name, type, healthScore, lastInteraction, tags, isShared, ownerName }: ContactCardProps) {
+export function ContactCard({ id, name, type, healthScore, lastInteraction, tags, isShared, ownerName, openActionItems }: ContactCardProps) {
   const daysSince = lastInteraction
     ? Math.floor((Date.now() - new Date(lastInteraction).getTime()) / 86400000)
     : null
@@ -38,6 +39,14 @@ export function ContactCard({ id, name, type, healthScore, lastInteraction, tags
         <div className="flex flex-col items-end gap-1 flex-shrink-0">
           <HealthScoreBadge score={healthScore} />
           <span className="text-xs text-[#666688] capitalize">{type}</span>
+          {openActionItems !== undefined && openActionItems > 0 && (
+            <span
+              className="text-[10px] font-semibold rounded px-1.5 py-0.5 bg-[rgba(0,160,255,0.1)] border border-[rgba(0,160,255,0.25)] text-[#93c5fd]"
+              title={`${openActionItems} open action item${openActionItems === 1 ? "" : "s"}`}
+            >
+              {openActionItems} action{openActionItems === 1 ? "" : "s"}
+            </span>
+          )}
         </div>
       </div>
     </Link>

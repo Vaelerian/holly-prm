@@ -229,8 +229,8 @@ export default async function TasksPage({ searchParams }: PageProps) {
                             {/* Tasks indented under slot */}
                             <div className="space-y-1 pl-4 border-l border-[rgba(0,255,136,0.08)] ml-1">
                               {slotTasks.map(t => (
-                                <div key={t.id} className="flex items-center gap-2">
-                                  <span className="text-sm text-[#c0c0d0] truncate flex-1">
+                                <div key={t.id} className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                  <span className="text-sm text-[#c0c0d0] flex-1 min-w-0 break-words">
                                     {t.isMilestone && <span className="text-[#a855f7] mr-1">★</span>}
                                     {t.title}
                                   </span>
@@ -264,9 +264,9 @@ export default async function TasksPage({ searchParams }: PageProps) {
               <h2 className="text-sm font-semibold text-[#ff4444] mb-2">Alerts</h2>
               <div className="space-y-1.5 ml-2">
                 {alertTasks.map(t => (
-                  <div key={t.id} className="flex items-center gap-2">
+                  <div key={t.id} className="flex flex-wrap items-center gap-x-2 gap-y-1">
                     <span className="w-2 h-2 rounded-full flex-shrink-0 bg-[#ff4444]" />
-                    <span className="text-sm text-[#c0c0d0] truncate flex-1">{t.title}</span>
+                    <span className="text-sm text-[#c0c0d0] flex-1 min-w-0 break-words">{t.title}</span>
                     <TaskScheduleButton taskId={t.id} importance={t.importance} scheduleState={t.scheduleState} />
                     <Link href={`/tasks/${t.id}/edit`} className="text-xs text-[#666688] hover:text-[#00ff88]">Edit</Link>
                   </div>
@@ -281,12 +281,12 @@ export default async function TasksPage({ searchParams }: PageProps) {
               <h2 className="text-sm font-semibold text-[#666688] mb-2">Unscheduled</h2>
               <div className="space-y-1.5 ml-2">
                 {unscheduledTasks.map(t => (
-                  <div key={t.id} className="flex items-center gap-2">
+                  <div key={t.id} className="flex flex-wrap items-center gap-x-2 gap-y-1">
                     <span
                       className="w-2 h-2 rounded-full flex-shrink-0"
                       style={{ backgroundColor: t.role?.colour ?? roleColourById[t.roleId ?? ""] ?? "#666688" }}
                     />
-                    <span className="text-sm text-[#c0c0d0] truncate flex-1">{t.title}</span>
+                    <span className="text-sm text-[#c0c0d0] flex-1 min-w-0 break-words">{t.title}</span>
                     {t.effortSize && t.effortSize !== "undefined_size" && (
                       <span className="text-[10px] text-[#444466] flex-shrink-0">{t.effortSize}</span>
                     )}
@@ -318,12 +318,12 @@ export default async function TasksPage({ searchParams }: PageProps) {
                           <p className="text-xs text-[#666688] mb-1">{projectTitle}</p>
                           <div className="space-y-2">
                             {projectTasks.map(t => (
-                              <div key={t.id} className="flex items-center gap-2">
+                              <div key={t.id} className="flex flex-wrap items-center gap-x-2 gap-y-1">
                                 <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: roleColourMap[roleName] ?? "#666688" }} />
                                 {t.importance !== "undefined_imp" && (
                                   <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${SCHEDULE_STATE_COLORS[t.scheduleState] ?? "bg-[#666688]"}`} title={t.scheduleState} />
                                 )}
-                                <div className="flex-1">
+                                <div className="flex-1 min-w-0 basis-full sm:basis-auto">
                                   <TaskRow
                                     id={t.id}
                                     title={t.title}

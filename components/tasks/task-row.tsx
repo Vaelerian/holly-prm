@@ -72,7 +72,7 @@ export function TaskRow({ id, title, status: initialStatus, priority, assignedTo
   }
 
   return (
-    <div className={`flex items-center gap-3 bg-[#111125] border border-[rgba(0,255,136,0.15)] rounded-lg px-4 py-2.5 ${isMilestone ? "border-l-4 border-l-purple-400" : ""}`}>
+    <div className={`flex flex-wrap items-center gap-x-3 gap-y-1.5 bg-[#111125] border border-[rgba(0,255,136,0.15)] rounded-lg px-4 py-2.5 ${isMilestone ? "border-l-4 border-l-purple-400" : ""}`}>
       <button
         onClick={cycleStatus}
         disabled={saving || status === "cancelled"}
@@ -83,11 +83,11 @@ export function TaskRow({ id, title, status: initialStatus, priority, assignedTo
           {status.replace("_", " ")}
         </Badge>
       </button>
-      <span className={`flex-1 text-sm ${status === "done" ? "line-through text-[#666688]" : "text-[#c0c0d0]"} ${isMilestone ? "font-semibold" : ""}`}>
+      <span className={`flex-1 min-w-0 text-sm break-words ${status === "done" ? "line-through text-[#666688]" : "text-[#c0c0d0]"} ${isMilestone ? "font-semibold" : ""}`}>
         {isMilestone && <span className="mr-1">★</span>}
         {title}
       </span>
-      <div className="flex items-center gap-2 flex-shrink-0">
+      <div className="flex items-center flex-wrap gap-x-2 gap-y-1 ml-auto">
         {isUnschedulable && importance !== undefined && (
           <Link
             href={`/tasks/${id}/edit`}

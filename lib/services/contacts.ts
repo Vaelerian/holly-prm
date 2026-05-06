@@ -33,10 +33,26 @@ export async function listContacts(opts: ListContactsOptions) {
     filters.push({ interactionFreqDays: { not: null } })
     filters.push({ OR: [{ healthScore: { lt: 100 } }, { lastInteraction: null }] })
   }
-  return prisma.contact.findMany({
+  const contacts = await prisma.contact.findMany({
     where: filters.length === 1 ? accessClause : { AND: filters },
     orderBy: { name: "asc" },
-    include: { user: { select: { id: true, name: true } } },
+    include: {
+      user: { select: { id: true, name: true } },
+      interactions: {
+        select: {
+          _count: { select: { actionItems: { where: { status: "todo" } } } },
+        },
+      },
+    },
+  })
+  // Sum the open action items across all interactions for each contact so
+  // the contact list can show a single count without N+1 queries.
+  return contacts.map(c => {
+    const openActionItems = c.interactions.reduce(
+      (sum, i) => sum + i._count.actionItems,
+      0
+    )
+    return Object.assign(c, { openActionItems })
   })
 }
 

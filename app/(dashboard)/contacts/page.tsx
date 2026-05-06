@@ -60,6 +60,7 @@ export default async function ContactsPage({ searchParams }: PageProps) {
               tags={c.tags}
               isShared={c.userId !== userId}
               ownerName={c.userId !== userId ? (c.user?.name ?? null) : null}
+              openActionItems={c.openActionItems}
             />
           ))}
         </div>

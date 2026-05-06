@@ -45,6 +45,14 @@ export async function getBriefing(userId: string) {
       where: { userId, status: "todo" },
       orderBy: [{ priority: "desc" }, { dueDate: "asc" }],
       take: 20,
+      include: {
+        interaction: {
+          select: { id: true, contact: { select: { id: true, name: true } } },
+        },
+        task: {
+          select: { id: true, title: true, projectId: true },
+        },
+      },
     }),
     prisma.project.count({
       where: { userId, status: { in: ["planning", "active"] } },
