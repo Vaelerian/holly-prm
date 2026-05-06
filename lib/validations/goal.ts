@@ -27,6 +27,7 @@ export const UpdateGoalSchema = z
     name: z.string().min(1).max(100).optional(),
     description: z.string().optional(),
     goalType: z.enum(["ongoing", "completable"]).optional(),
+    status: z.enum(["active", "completed", "archived"]).optional(),
     targetDate: z.string().date().nullable().optional(),
     roleId: z.string().uuid().optional(),
   })

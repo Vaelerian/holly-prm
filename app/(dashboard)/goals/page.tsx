@@ -33,6 +33,7 @@ export default function GoalsPage() {
   const [showAdd, setShowAdd] = useState(false)
   const [addRoleId, setAddRoleId] = useState("")
   const [addName, setAddName] = useState("")
+  const [addDescription, setAddDescription] = useState("")
   const [addType, setAddType] = useState<"ongoing" | "completable">("ongoing")
   const [addTargetDate, setAddTargetDate] = useState("")
   const [adding, setAdding] = useState(false)
@@ -40,6 +41,9 @@ export default function GoalsPage() {
   // Edit goal state
   const [editId, setEditId] = useState<string | null>(null)
   const [editName, setEditName] = useState("")
+  const [editDescription, setEditDescription] = useState("")
+  const [editRoleId, setEditRoleId] = useState("")
+  const [editStatus, setEditStatus] = useState<"active" | "completed" | "archived">("active")
   const [editType, setEditType] = useState<"ongoing" | "completable">("ongoing")
   const [editTargetDate, setEditTargetDate] = useState("")
 
@@ -74,6 +78,7 @@ export default function GoalsPage() {
     setShowAdd(true)
     setAddRoleId(roles[0]?.id ?? "")
     setAddName("")
+    setAddDescription("")
     setAddType("ongoing")
     setAddTargetDate("")
     setError(null)
@@ -91,6 +96,7 @@ export default function GoalsPage() {
       const body: Record<string, unknown> = {
         roleId: addRoleId,
         name: addName.trim(),
+        description: addDescription.trim(),
         goalType: addType,
         targetDate: addType === "completable" ? addTargetDate : null,
       }
@@ -114,6 +120,9 @@ export default function GoalsPage() {
   function startEdit(goal: GoalData) {
     setEditId(goal.id)
     setEditName(goal.name)
+    setEditDescription(goal.description ?? "")
+    setEditRoleId(goal.roleId)
+    setEditStatus((goal.status as "active" | "completed" | "archived") ?? "active")
     setEditType(goal.goalType)
     setEditTargetDate(goal.targetDate ? goal.targetDate.slice(0, 10) : "")
     setError(null)
@@ -127,8 +136,13 @@ export default function GoalsPage() {
     }
     const body: Record<string, unknown> = {
       name: editName.trim(),
+      description: editDescription.trim(),
       goalType: editType,
+      status: editStatus,
       targetDate: editType === "completable" ? editTargetDate : null,
+    }
+    if (editRoleId && editRoleId !== goal.roleId) {
+      body.roleId = editRoleId
     }
     const res = await fetch(`/api/v1/goals/${goal.id}`, {
       method: "PUT",
@@ -205,6 +219,16 @@ export default function GoalsPage() {
             onKeyDown={e => { if (e.key === "Enter") handleAdd() }}
           />
           <div>
+            <p className="text-xs text-[#666688] mb-1">Description (optional)</p>
+            <textarea
+              value={addDescription}
+              onChange={e => setAddDescription(e.target.value)}
+              placeholder="What does this goal mean to you?"
+              rows={2}
+              className="w-full bg-[#0a0a1a] border border-[rgba(0,255,136,0.15)] rounded text-[#c0c0d0] text-sm px-3 py-2 resize-y placeholder:text-[#444466]"
+            />
+          </div>
+          <div>
             <p className="text-xs text-[#666688] mb-1">Type</p>
             <select
               value={addType}
@@ -263,7 +287,40 @@ export default function GoalsPage() {
                         value={editName}
                         onChange={e => setEditName(e.target.value)}
                         onKeyDown={e => { if (e.key === "Enter") handleSaveEdit(goal) }}
+                        disabled={goal.isDefault}
                       />
+                      <textarea
+                        value={editDescription}
+                        onChange={e => setEditDescription(e.target.value)}
+                        placeholder="Description (optional)"
+                        rows={2}
+                        className="w-full bg-[#0a0a1a] border border-[rgba(0,255,136,0.15)] rounded text-[#c0c0d0] text-sm px-3 py-2 resize-y placeholder:text-[#444466]"
+                      />
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        <div>
+                          <p className="text-xs text-[#666688] mb-1">Role</p>
+                          <select
+                            value={editRoleId}
+                            onChange={e => setEditRoleId(e.target.value)}
+                            className="w-full bg-[#0a0a1a] border border-[rgba(0,255,136,0.15)] rounded text-[#c0c0d0] text-sm px-3 py-2"
+                            disabled={goal.isDefault}
+                          >
+                            {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <p className="text-xs text-[#666688] mb-1">Status</p>
+                          <select
+                            value={editStatus}
+                            onChange={e => setEditStatus(e.target.value as "active" | "completed" | "archived")}
+                            className="w-full bg-[#0a0a1a] border border-[rgba(0,255,136,0.15)] rounded text-[#c0c0d0] text-sm px-3 py-2"
+                          >
+                            <option value="active">Active</option>
+                            <option value="completed">Completed</option>
+                            <option value="archived">Archived</option>
+                          </select>
+                        </div>
+                      </div>
                       <select
                         value={editType}
                         onChange={e => setEditType(e.target.value as "ongoing" | "completable")}
@@ -279,6 +336,11 @@ export default function GoalsPage() {
                           onChange={e => setEditTargetDate(e.target.value)}
                           className="w-full border border-[rgba(0,255,136,0.15)] rounded-lg px-3 py-2 text-sm bg-[#0a0a1a] text-[#c0c0d0]"
                         />
+                      )}
+                      {editRoleId !== goal.roleId && goal._count.projects + goal._count.tasks > 0 && (
+                        <p className="text-xs text-amber-300">
+                          Moving this goal will reassign {goal._count.projects} project{goal._count.projects !== 1 ? "s" : ""} and {goal._count.tasks} task{goal._count.tasks !== 1 ? "s" : ""} to the new role.
+                        </p>
                       )}
                       <div className="flex gap-2">
                         <Button onClick={() => handleSaveEdit(goal)}>Save</Button>
@@ -335,17 +397,15 @@ export default function GoalsPage() {
                             className="text-xs text-[#00ff88] hover:text-[#00cc6f]"
                           >Complete</button>
                         )}
+                        <button
+                          onClick={() => startEdit(goal)}
+                          className="text-xs text-[#666688] hover:text-[#00ff88]"
+                        >Edit</button>
                         {!goal.isDefault && (
-                          <>
-                            <button
-                              onClick={() => startEdit(goal)}
-                              className="text-xs text-[#666688] hover:text-[#00ff88]"
-                            >Edit</button>
-                            <button
-                              onClick={() => setDeleteId(goal.id)}
-                              className="text-xs text-[#666688] hover:text-red-400"
-                            >Delete</button>
-                          </>
+                          <button
+                            onClick={() => setDeleteId(goal.id)}
+                            className="text-xs text-[#666688] hover:text-red-400"
+                          >Delete</button>
                         )}
                       </div>
                     </div>

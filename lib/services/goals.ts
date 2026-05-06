@@ -42,8 +42,11 @@ export async function updateGoal(id: string, data: UpdateGoalInput, userId: stri
   const existing = await prisma.goal.findFirst({ where: { id, userId } })
   if (!existing) return null
 
-  if (existing.isDefault && data.name !== undefined) {
+  if (existing.isDefault && data.name !== undefined && data.name !== existing.name) {
     throw new Error("Cannot rename the default goal")
+  }
+  if (existing.isDefault && data.roleId !== undefined && data.roleId !== existing.roleId) {
+    throw new Error("Cannot move the default goal to another role")
   }
 
   const updateData: Record<string, unknown> = { ...data }
