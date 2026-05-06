@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import type { ResolvedTimeSlot } from "@/lib/services/repeat-expand"
+import { ActionItemPopover } from "@/components/action-items/action-item-popover"
 
 export type CalendarItemType = "task" | "project" | "follow_up" | "milestone" | "action_item" | "google_event"
 
@@ -69,6 +70,20 @@ function addDays(date: Date, days: number): Date {
 function toDateStr(date: Date): string {
   return date.toLocaleDateString("en-CA")
 }
+
+/** Mon=0 ... Sun=6 — used to align week and month grids on Monday. */
+function mondayOffset(date: Date): number {
+  return (date.getDay() + 6) % 7
+}
+
+/** Start-of-week Date (UTC midnight irrelevant; uses local fields). */
+function startOfWeekMonday(date: Date): Date {
+  const d = new Date(date)
+  d.setDate(d.getDate() - mondayOffset(d))
+  return d
+}
+
+const DAY_HEADERS_MON = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
 function minutesToTime(m: number): string {
   return `${Math.floor(m / 60).toString().padStart(2, "0")}:${(m % 60).toString().padStart(2, "0")}`
@@ -663,17 +678,19 @@ function MonthView({
   setCurrentDate,
   timeSlots = [],
   roles = [],
+  onActionItemClick,
 }: {
   items: CalendarItem[]
   currentDate: Date
   setCurrentDate: (d: Date) => void
   timeSlots?: ResolvedTimeSlot[]
   roles?: RoleOption[]
+  onActionItemClick?: (id: string, title: string) => void
 }) {
   const year = currentDate.getFullYear()
   const month = currentDate.getMonth()
   const firstDay = new Date(year, month, 1)
-  const startOffset = firstDay.getDay() // 0=Sun
+  const startOffset = mondayOffset(firstDay) // 0=Mon
   const daysInMonth = new Date(year, month + 1, 0).getDate()
   const cells: Array<Date | null> = [...Array(startOffset).fill(null)]
   for (let d = 1; d <= daysInMonth; d++) cells.push(new Date(year, month, d))
@@ -707,7 +724,7 @@ function MonthView({
         <button onClick={() => setCurrentDate(new Date(year, month + 1, 1))} className="text-[#666688] hover:text-[#c0c0d0] px-2 py-1 text-sm">Next &#8250;</button>
       </div>
       <div className="grid grid-cols-7 gap-px bg-[rgba(0,255,136,0.08)] rounded-lg overflow-hidden">
-        {["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map(d => (
+        {DAY_HEADERS_MON.map(d => (
           <div key={d} className="bg-[#111125] px-1 py-1 text-xs font-semibold text-[#666688] text-center">{d}</div>
         ))}
         {cells.map((day, i) => {
@@ -721,19 +738,35 @@ function MonthView({
                 <>
                   <span className={`text-xs ${isToday ? "text-[#00ff88] font-bold" : "text-[#666688]"}`}>{day.getDate()}</span>
                   <div className="mt-1 space-y-0.5">
-                    {dayItems.slice(0, 3).map(item => (
-                      item.href ? (
-                        <Link key={item.id} href={item.href} className="block truncate text-xs text-[#c0c0d0] hover:text-[#00ff88]">
-                          <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1 ${TYPE_COLORS[item.type]}`} />
-                          {item.title}
-                        </Link>
-                      ) : (
+                    {dayItems.slice(0, 3).map(item => {
+                      const dot = <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1 ${TYPE_COLORS[item.type]}`} />
+                      if (item.type === "action_item") {
+                        return (
+                          <button
+                            key={item.id}
+                            onClick={e => { e.stopPropagation(); onActionItemClick?.(item.id, item.title) }}
+                            className="block w-full text-left truncate text-xs text-[#c0c0d0] hover:text-[#00ff88]"
+                          >
+                            {dot}
+                            {item.title}
+                          </button>
+                        )
+                      }
+                      if (item.href) {
+                        return (
+                          <Link key={item.id} href={item.href} className="block truncate text-xs text-[#c0c0d0] hover:text-[#00ff88]">
+                            {dot}
+                            {item.title}
+                          </Link>
+                        )
+                      }
+                      return (
                         <div key={item.id} className="truncate text-xs text-[#c0c0d0]">
-                          <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1 ${TYPE_COLORS[item.type]}`} />
+                          {dot}
                           {item.title}
                         </div>
                       )
-                    ))}
+                    })}
                     {dayItems.length > 3 && <div className="text-xs text-[#444466]">+{dayItems.length - 3} more</div>}
                   </div>
                   {/* Capacity indicators */}
@@ -767,6 +800,7 @@ function WeekView({
   timeSlots = [],
   roles = [],
   onSlotClick,
+  onActionItemClick,
 }: {
   items: CalendarItem[]
   currentDate: Date
@@ -774,10 +808,10 @@ function WeekView({
   timeSlots?: ResolvedTimeSlot[]
   roles?: RoleOption[]
   onSlotClick?: (slot: ResolvedTimeSlot) => void
+  onActionItemClick?: (id: string, title: string) => void
 }) {
-  // Start of week = Sunday
-  const weekStart = new Date(currentDate)
-  weekStart.setDate(currentDate.getDate() - currentDate.getDay())
+  // Start of week = Monday
+  const weekStart = startOfWeekMonday(currentDate)
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
   const weekLabel = `${weekStart.toLocaleDateString("en-GB", { day: "numeric", month: "short" })} - ${addDays(weekStart, 6).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}`
   const todayStr = toDateStr(new Date())
@@ -810,34 +844,62 @@ function WeekView({
         <button onClick={() => setCurrentDate(addDays(currentDate, 7))} className="text-[#666688] hover:text-[#c0c0d0] px-2 py-1 text-sm">Next &#8250;</button>
       </div>
 
-      {/* All-day header */}
+      {/* Date header row (consistent height across columns) */}
       <div className="grid grid-cols-[48px_repeat(7,1fr)] gap-px bg-[rgba(0,255,136,0.08)] rounded-t-lg overflow-hidden">
-        <div className="bg-[#111125] px-1 py-1 text-xs text-[#444466]">All day</div>
+        <div className="bg-[#111125]" />
+        {days.map(day => {
+          const dateStr = toDateStr(day)
+          const isToday = dateStr === todayStr
+          return (
+            <div
+              key={dateStr}
+              className={`bg-[#111125] px-2 py-1.5 text-xs font-semibold ${isToday ? "text-[#00ff88] bg-[rgba(0,255,136,0.04)]" : "text-[#666688]"}`}
+            >
+              {day.toLocaleDateString("en-GB", { weekday: "short", day: "numeric" })}
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Spacer between header and all-day items */}
+      <div className="h-1.5" />
+
+      {/* All-day items row */}
+      <div className="grid grid-cols-[48px_repeat(7,1fr)] gap-px bg-[rgba(0,255,136,0.08)] overflow-hidden">
+        <div className="bg-[#111125] px-2 py-1 text-[10px] text-[#444466] flex items-center">All day</div>
         {days.map(day => {
           const dateStr = toDateStr(day)
           const isToday = dateStr === todayStr
           const dayItems = itemsByDate.get(dateStr) ?? []
           return (
-            <div key={dateStr} className={`bg-[#111125] px-1 py-1 min-h-[40px] ${isToday ? "bg-[rgba(0,255,136,0.03)]" : ""}`}>
-              <div className={`text-xs font-semibold mb-1 ${isToday ? "text-[#00ff88]" : "text-[#666688]"}`}>
-                {day.toLocaleDateString("en-GB", { weekday: "short", day: "numeric" })}
-              </div>
-              <div className="space-y-0.5">
-                {dayItems.slice(0, 2).map(item => (
-                  item.href ? (
-                    <Link key={item.id} href={item.href} className="block truncate text-[10px] text-[#c0c0d0] hover:text-[#00ff88]">
-                      <span className={`inline-block w-1 h-1 rounded-full mr-0.5 ${TYPE_COLORS[item.type]}`} />
-                      {item.title}
-                    </Link>
-                  ) : (
-                    <div key={item.id} className="truncate text-[10px] text-[#c0c0d0]">
-                      <span className={`inline-block w-1 h-1 rounded-full mr-0.5 ${TYPE_COLORS[item.type]}`} />
-                      {item.title}
-                    </div>
+            <div key={dateStr} className={`bg-[#111125] px-1 py-1 min-h-[28px] space-y-0.5 ${isToday ? "bg-[rgba(0,255,136,0.03)]" : ""}`}>
+              {dayItems.slice(0, 3).map(item => {
+                const dot = <span className={`inline-block w-1 h-1 rounded-full mr-0.5 ${TYPE_COLORS[item.type]}`} />
+                if (item.type === "action_item") {
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => onActionItemClick?.(item.id, item.title)}
+                      className="block w-full text-left truncate text-[10px] text-[#c0c0d0] hover:text-[#00ff88]"
+                    >
+                      {dot}{item.title}
+                    </button>
                   )
-                ))}
-                {dayItems.length > 2 && <div className="text-[10px] text-[#444466]">+{dayItems.length - 2}</div>}
-              </div>
+                }
+                if (item.href) {
+                  return (
+                    <Link key={item.id} href={item.href} className="block truncate text-[10px] text-[#c0c0d0] hover:text-[#00ff88]">
+                      {dot}{item.title}
+                    </Link>
+                  )
+                }
+                return (
+                  <div key={item.id} className="truncate text-[10px] text-[#c0c0d0]">
+                    {dot}{item.title}
+                  </div>
+                )
+              })}
+              {dayItems.length > 3 && <div className="text-[10px] text-[#444466]">+{dayItems.length - 3}</div>}
             </div>
           )
         })}
@@ -1087,10 +1149,12 @@ function AgendaView({
   items,
   timeSlots = [],
   roles = [],
+  onActionItemClick,
 }: {
   items: CalendarItem[]
   timeSlots?: ResolvedTimeSlot[]
   roles?: RoleOption[]
+  onActionItemClick?: (id: string, title: string) => void
 }) {
   const today = toDateStr(new Date())
   const upcoming = items
@@ -1156,7 +1220,14 @@ function AgendaView({
               {dateItems.map(item => (
                 <div key={item.id} className="bg-[#111125] border border-[rgba(0,255,136,0.1)] rounded-lg px-3 py-2 flex items-center gap-2">
                   <span className={`flex-shrink-0 w-2 h-2 rounded-full ${TYPE_COLORS[item.type]}`} />
-                  {item.href ? (
+                  {item.type === "action_item" ? (
+                    <button
+                      onClick={() => onActionItemClick?.(item.id, item.title)}
+                      className="text-sm text-[#c0c0d0] hover:text-[#00ff88] truncate text-left flex-1"
+                    >
+                      {item.title}
+                    </button>
+                  ) : item.href ? (
                     <Link href={item.href} className="text-sm text-[#c0c0d0] hover:text-[#00ff88] truncate">{item.title}</Link>
                   ) : (
                     <span className="text-sm text-[#c0c0d0] truncate">{item.title}</span>
@@ -1182,6 +1253,7 @@ export function CalendarView({ items, filters, timeSlots = [], initialRoles = []
   const [selectedSlot, setSelectedSlot] = useState<ResolvedTimeSlot | null>(null)
   const [weeksToShow, setWeeksToShow] = useState<1 | 2 | 3>(2)
   const [roles, setRoles] = useState<RoleOption[]>(initialRoles)
+  const [actionPopover, setActionPopover] = useState<{ id: string; title: string } | null>(null)
   // Already populated from the server when initialRoles is non-empty so we
   // skip the lazy refetch in that case.
   const [rolesLoaded, setRolesLoaded] = useState(initialRoles.length > 0)
@@ -1305,6 +1377,7 @@ export function CalendarView({ items, filters, timeSlots = [], initialRoles = []
           setCurrentDate={setCurrentDate}
           timeSlots={timeSlots}
           roles={roles}
+          onActionItemClick={(id, title) => setActionPopover({ id, title })}
         />
       )}
       {view === "week" && (
@@ -1315,6 +1388,7 @@ export function CalendarView({ items, filters, timeSlots = [], initialRoles = []
           timeSlots={timeSlots}
           roles={roles}
           onSlotClick={handleSlotClick}
+          onActionItemClick={(id, title) => setActionPopover({ id, title })}
         />
       )}
       {view === "roles" && (
@@ -1333,6 +1407,16 @@ export function CalendarView({ items, filters, timeSlots = [], initialRoles = []
           items={filtered}
           timeSlots={timeSlots}
           roles={roles}
+          onActionItemClick={(id, title) => setActionPopover({ id, title })}
+        />
+      )}
+
+      {actionPopover && (
+        <ActionItemPopover
+          actionId={actionPopover.id}
+          initialTitle={actionPopover.title}
+          open
+          onClose={() => setActionPopover(null)}
         />
       )}
     </div>

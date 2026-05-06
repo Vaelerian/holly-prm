@@ -12,7 +12,13 @@ export async function listActionItems(opts: { assignedTo?: Actor; status?: strin
 }
 
 export async function getActionItem(id: string, userId: string) {
-  return prisma.actionItem.findFirst({ where: { id, userId } })
+  return prisma.actionItem.findFirst({
+    where: { id, userId },
+    include: {
+      interaction: { select: { id: true, contactId: true, contact: { select: { id: true, name: true } } } },
+      task: { select: { id: true, title: true, projectId: true } },
+    },
+  })
 }
 
 export async function createActionItem(data: CreateActionItemInput, actor: Actor, userId: string) {

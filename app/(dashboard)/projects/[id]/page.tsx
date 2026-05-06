@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db"
 import { Badge } from "@/components/ui/badge"
 import { TaskRow } from "@/components/tasks/task-row"
 import { AddTaskForm } from "@/components/tasks/add-task-form"
+import { ActionItemRow } from "@/components/action-items/action-item-row"
 import { DeleteProjectButton } from "@/components/projects/delete-project-button"
 import { ProjectMembers } from "@/components/projects/project-members"
 import { auth } from "@/lib/auth"
@@ -108,16 +109,18 @@ export default async function ProjectDetailPage({ params }: PageProps) {
           <h2 className="text-xs font-semibold text-[#666688] uppercase tracking-wide mb-3">Action items</h2>
           <div className="space-y-2">
             {actionItems.map(item => (
-              <div key={item.id} className="flex items-center justify-between bg-[#111125] border border-[rgba(0,255,136,0.15)] rounded-lg px-4 py-2.5">
-                <div>
-                  <p className="text-sm text-[#c0c0d0]">{item.title}</p>
-                  {item.task && <p className="text-xs text-[#666688]">Task: {item.task.title}</p>}
-                </div>
-                <div className="flex items-center gap-2">
-                  {item.dueDate && <span className="text-xs text-[#666688]">{new Date(item.dueDate).toLocaleDateString("en-GB")}</span>}
-                  <Badge>{item.assignedTo}</Badge>
-                </div>
-              </div>
+              <ActionItemRow
+                key={item.id}
+                id={item.id}
+                title={item.title}
+                status={item.status}
+                priority={item.priority}
+                assignedTo={item.assignedTo}
+                dueDate={item.dueDate ? item.dueDate.toISOString() : null}
+                interactionId={item.interactionId}
+                taskId={item.taskId}
+                taskProjectId={id}
+              />
             ))}
           </div>
         </section>
