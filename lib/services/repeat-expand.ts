@@ -33,6 +33,10 @@ export interface AssignedTaskInfo {
   effortSize: string
   scheduleState: string
   projectId: string | null
+  /** Task's own role id. Lets the UI show the task's role colour even when
+   *  the task has been packed into a slot belonging to a different role
+   *  via two-pass scheduling. */
+  roleId: string
 }
 
 export interface ResolvedTimeSlot {

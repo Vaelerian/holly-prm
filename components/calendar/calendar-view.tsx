@@ -94,22 +94,16 @@ function timeToMinutes(t: string): number {
   return h * 60 + m
 }
 
-/** Build a map of roleId -> colour from time slots (slots carry roleId but not colour).
- *  We'll fetch roles separately for the form, but for display we use a fallback palette. */
-const ROLE_FALLBACK_COLORS = [
-  "#6366F1", "#EC4899", "#F59E0B", "#10B981", "#3B82F6",
-  "#8B5CF6", "#EF4444", "#14B8A6", "#F97316", "#06B6D4",
-]
+/** Look up a role's colour by id. Returns a neutral grey when the role isn't
+ *  in the supplied list — the previous hash-based fallback could land on a
+ *  colour that happened to match another role and made it look like task
+ *  colours had been mixed up.
+ */
+const UNKNOWN_ROLE_COLOR = "#666688"
 
 function getRoleColor(roleId: string, roles: RoleOption[]): string {
   const role = roles.find(r => r.id === roleId)
-  if (role) return role.colour
-  // Deterministic fallback based on roleId hash
-  let hash = 0
-  for (let i = 0; i < roleId.length; i++) {
-    hash = ((hash << 5) - hash + roleId.charCodeAt(i)) | 0
-  }
-  return ROLE_FALLBACK_COLORS[Math.abs(hash) % ROLE_FALLBACK_COLORS.length]
+  return role ? role.colour : UNKNOWN_ROLE_COLOR
 }
 
 // ─── Capacity bar component ───
@@ -978,16 +972,20 @@ function WeekView({
                         )}
                         {height > 48 && slot.assignedTasks && slot.assignedTasks.length > 0 && (
                           <div className="mt-0.5 space-y-px">
-                            {slot.assignedTasks.slice(0, 3).map(t => (
-                              <Link
-                                key={t.id}
-                                href={t.projectId ? `/projects/${t.projectId}` : `/tasks?view=schedule`}
-                                className="block text-[10px] text-[#c0c0d0] hover:text-[#00ff88] truncate mt-0.5"
-                                onClick={e => e.stopPropagation()}
-                              >
-                                {t.scheduleState === "fixed" ? "F" : "~"} {t.title}
-                              </Link>
-                            ))}
+                            {slot.assignedTasks.slice(0, 3).map(t => {
+                              const taskRoleColour = getRoleColor(t.roleId, roles)
+                              return (
+                                <Link
+                                  key={t.id}
+                                  href={t.projectId ? `/projects/${t.projectId}` : `/tasks?view=schedule`}
+                                  className="flex items-center gap-1 text-[10px] text-[#c0c0d0] hover:text-[#00ff88] truncate mt-0.5"
+                                  onClick={e => e.stopPropagation()}
+                                >
+                                  <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: taskRoleColour }} />
+                                  <span className="truncate">{t.scheduleState === "fixed" ? "F" : "~"} {t.title}</span>
+                                </Link>
+                              )
+                            })}
                             {slot.assignedTasks.length > 3 && (
                               <div className="text-[8px] text-[#444466]">+{slot.assignedTasks.length - 3} more</div>
                             )}

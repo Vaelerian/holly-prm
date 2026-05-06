@@ -228,8 +228,16 @@ export default async function TasksPage({ searchParams }: PageProps) {
                             </div>
                             {/* Tasks indented under slot */}
                             <div className="space-y-1 pl-4 border-l border-[rgba(0,255,136,0.08)] ml-1">
-                              {slotTasks.map(t => (
+                              {slotTasks.map(t => {
+                                const taskRoleColour = roleColourById[t.roleId] ?? "#666688"
+                                const inForeignSlot = t.roleId !== slot.roleId
+                                return (
                                 <div key={t.id} className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                  <span
+                                    className="w-2 h-2 rounded-full flex-shrink-0"
+                                    style={{ backgroundColor: taskRoleColour }}
+                                    title={inForeignSlot ? `Task role does not match slot role` : undefined}
+                                  />
                                   <span className="text-sm text-[#c0c0d0] flex-1 min-w-0 break-words">
                                     {t.isMilestone && <span className="text-[#a855f7] mr-1">★</span>}
                                     {t.title}
@@ -246,7 +254,8 @@ export default async function TasksPage({ searchParams }: PageProps) {
                                   <TaskScheduleButton taskId={t.id} importance={t.importance} scheduleState={t.scheduleState} />
                                   <Link href={`/tasks/${t.id}/edit`} className="text-xs text-[#666688] hover:text-[#00ff88]">Edit</Link>
                                 </div>
-                              ))}
+                                )
+                              })}
                             </div>
                           </div>
                         )
