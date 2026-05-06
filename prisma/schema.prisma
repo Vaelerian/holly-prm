@@ -196,17 +196,21 @@ model User {
 }
 
 model Role {
-  id          String   @id @default(uuid())
-  name        String
-  description String   @default("")
-  colour      String   @default("#6366F1")
-  icon        String   @default("")
-  isDefault   Boolean  @default(false)
-  sortOrder   Int      @default(0)
-  userId      String?
-  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                  String   @id @default(uuid())
+  name                String
+  description         String   @default("")
+  colour              String   @default("#6366F1")
+  icon                String   @default("")
+  isDefault           Boolean  @default(false)
+  sortOrder           Int      @default(0)
+  // When true, scheduling will allow tasks belonging to OTHER roles to fall
+  // back into this role's slots once their own role's slots are full. Off by
+  // default so work-only slots stay protected from non-work tasks.
+  allowFallbackTasks  Boolean  @default(false)
+  userId              String?
+  user                User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
   goals          Goal[]
   projects       Project[] @relation("ProjectRole")

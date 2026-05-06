@@ -90,20 +90,31 @@ async function materialiseSlot(slot: ResolvedTimeSlot, userId: string): Promise<
 /**
  * Find the first slot with enough remaining capacity. Two-pass:
  *   1. role-matched slots (preferred)
- *   2. any slot with capacity (fallback when no role-matched slot fits)
+ *   2. slots whose role is opted in via Role.allowFallbackTasks
  *
- * Slots are already ordered by date asc / startMinutes asc.
+ * Slots are already ordered by date asc / startMinutes asc. Roles that have
+ * not opted in protect their time from cross-role overflow.
  */
 function pickSlot(
   slots: ResolvedTimeSlot[],
   roleId: string,
-  effortMinutes: number
+  effortMinutes: number,
+  fallbackRoleIds: Set<string>
 ): ResolvedTimeSlot | null {
   const fits = (s: ResolvedTimeSlot) => s.capacityMinutes - s.usedMinutes >= effortMinutes
   const matchingRole = slots.find(s => s.roleId === roleId && fits(s))
   if (matchingRole) return matchingRole
-  const anyRole = slots.find(s => fits(s))
-  return anyRole ?? null
+  if (fallbackRoleIds.size === 0) return null
+  return slots.find(s => fallbackRoleIds.has(s.roleId) && fits(s)) ?? null
+}
+
+/** Fetch the user's roles that are opted in to receive fallback tasks. */
+async function getFallbackRoleIds(userId: string): Promise<Set<string>> {
+  const rows = await prisma.role.findMany({
+    where: { userId, allowFallbackTasks: true },
+    select: { id: true },
+  })
+  return new Set(rows.map(r => r.id))
 }
 
 async function unassignFromSlot(taskId: string, slotId: string, prefs: SchedulingPrefs): Promise<void> {
@@ -175,8 +186,11 @@ export async function scheduleTask(taskId: string, userId: string): Promise<Sche
   )
 
   const { startDate, endDate } = dateRangeFromUrgency(task.urgency, task.dueDate, prefs)
-  const slots = await listTimeSlotsForRange(userId, startDate, endDate)
-  const candidate = pickSlot(slots, task.roleId, effortMins)
+  const [slots, fallbackRoleIds] = await Promise.all([
+    listTimeSlotsForRange(userId, startDate, endDate),
+    getFallbackRoleIds(userId),
+  ])
+  const candidate = pickSlot(slots, task.roleId, effortMins, fallbackRoleIds)
 
   if (!candidate) {
     await prisma.task.update({
@@ -227,8 +241,11 @@ export async function suggestDate(taskId: string, userId: string): Promise<Sugge
   )
 
   const { startDate, endDate } = dateRangeFromUrgency(task.urgency, task.dueDate, prefs)
-  const slots = await listTimeSlotsForRange(userId, startDate, endDate)
-  const candidate = pickSlot(slots, task.roleId, effortMins)
+  const [slots, fallbackRoleIds] = await Promise.all([
+    listTimeSlotsForRange(userId, startDate, endDate),
+    getFallbackRoleIds(userId),
+  ])
+  const candidate = pickSlot(slots, task.roleId, effortMins, fallbackRoleIds)
 
   if (!candidate) {
     return { found: false, reason: `No slot with enough capacity between ${startDate} and ${endDate}` }
@@ -304,11 +321,12 @@ export async function rescheduleAll(userId: string, scope: RescheduleScope = {})
 
   const scheduled: string[] = []
   const alerts: string[] = []
+  const fallbackRoleIds = await getFallbackRoleIds(userId)
 
   for (const { task, effectiveImportance, effortMins } of sorted) {
     const { startDate, endDate } = dateRangeFromUrgency(task.urgency, task.dueDate, prefs)
     const slots = await listTimeSlotsForRange(userId, startDate, endDate)
-    const candidate = pickSlot(slots, task.roleId, effortMins)
+    const candidate = pickSlot(slots, task.roleId, effortMins, fallbackRoleIds)
 
     if (!candidate) {
       await prisma.task.update({

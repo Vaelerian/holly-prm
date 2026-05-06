@@ -11,6 +11,7 @@ interface RoleData {
   colour: string
   icon: string
   isDefault: boolean
+  allowFallbackTasks: boolean
   _count: { goals: number }
 }
 
@@ -53,12 +54,14 @@ export default function SettingsPage() {
   const [addingRole, setAddingRole] = useState(false)
   const [newRoleName, setNewRoleName] = useState("")
   const [newRoleColour, setNewRoleColour] = useState("#6366F1")
+  const [newRoleAllowFallback, setNewRoleAllowFallback] = useState(false)
   const [savingRole, setSavingRole] = useState(false)
 
   // Edit role inline
   const [editingRoleId, setEditingRoleId] = useState<string | null>(null)
   const [editRoleName, setEditRoleName] = useState("")
   const [editRoleColour, setEditRoleColour] = useState("")
+  const [editRoleAllowFallback, setEditRoleAllowFallback] = useState(false)
 
   // Delete role
   const [deletingRoleId, setDeletingRoleId] = useState<string | null>(null)
@@ -85,11 +88,16 @@ export default function SettingsPage() {
       const res = await fetch("/api/v1/roles", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newRoleName.trim(), colour: newRoleColour }),
+        body: JSON.stringify({
+          name: newRoleName.trim(),
+          colour: newRoleColour,
+          allowFallbackTasks: newRoleAllowFallback,
+        }),
       })
       if (res.ok) {
         setNewRoleName("")
         setNewRoleColour("#6366F1")
+        setNewRoleAllowFallback(false)
         setAddingRole(false)
         await loadRoles()
       }
@@ -102,12 +110,25 @@ export default function SettingsPage() {
     const res = await fetch(`/api/v1/roles/${id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: editRoleName.trim(), colour: editRoleColour }),
+      body: JSON.stringify({
+        name: editRoleName.trim(),
+        colour: editRoleColour,
+        allowFallbackTasks: editRoleAllowFallback,
+      }),
     })
     if (res.ok) {
       setEditingRoleId(null)
       await loadRoles()
     }
+  }
+
+  async function toggleRoleFallback(role: RoleData) {
+    const res = await fetch(`/api/v1/roles/${role.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ allowFallbackTasks: !role.allowFallbackTasks }),
+    })
+    if (res.ok) await loadRoles()
   }
 
   async function handleDeleteRole(id: string) {
@@ -397,6 +418,15 @@ export default function SettingsPage() {
                     className="w-10 h-10 rounded border border-[rgba(0,255,136,0.15)] bg-transparent cursor-pointer"
                   />
                 </div>
+                <label className="flex items-center gap-2 text-xs text-[#c0c0d0] cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={newRoleAllowFallback}
+                    onChange={e => setNewRoleAllowFallback(e.target.checked)}
+                    className="accent-[#00ff88]"
+                  />
+                  Allow tasks from other roles to schedule into this role&rsquo;s slots when their own slots are full
+                </label>
                 <div className="flex gap-2">
                   <Button onClick={handleAddRole} disabled={savingRole || !newRoleName.trim()}>
                     {savingRole ? "Adding..." : "Add"}
@@ -424,6 +454,15 @@ export default function SettingsPage() {
                         className="w-10 h-10 rounded border border-[rgba(0,255,136,0.15)] bg-transparent cursor-pointer"
                       />
                     </div>
+                    <label className="flex items-center gap-2 text-xs text-[#c0c0d0] cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={editRoleAllowFallback}
+                        onChange={e => setEditRoleAllowFallback(e.target.checked)}
+                        className="accent-[#00ff88]"
+                      />
+                      Allow tasks from other roles to schedule into this role&rsquo;s slots when their own slots are full
+                    </label>
                     <div className="flex gap-2">
                       <Button onClick={() => handleSaveRole(role.id)}>Save</Button>
                       <button onClick={() => setEditingRoleId(null)} className="text-sm text-[#666688] hover:text-[#c0c0d0]">Cancel</button>
@@ -448,18 +487,44 @@ export default function SettingsPage() {
                     </div>
                   </div>
                 ) : (
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between flex-wrap gap-y-1">
                     <div className="flex items-center gap-2 flex-1 min-w-0">
                       <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: role.colour }} />
                       <span className="text-sm font-medium text-[#c0c0d0] truncate">{role.name}</span>
                       {role.isDefault && <span className="text-xs text-[#666688]">(Default)</span>}
                       <span className="text-xs text-[#666688]">{role._count.goals} goal{role._count.goals !== 1 ? "s" : ""}</span>
+                      <span
+                        className={`text-[10px] font-semibold rounded px-1.5 py-0.5 ${
+                          role.allowFallbackTasks
+                            ? "bg-[rgba(0,255,136,0.1)] text-[#00ff88] border border-[rgba(0,255,136,0.25)]"
+                            : "bg-[rgba(99,102,241,0.1)] text-[#818cf8] border border-[rgba(99,102,241,0.25)]"
+                        }`}
+                        title={
+                          role.allowFallbackTasks
+                            ? "Open: tasks from other roles can fall back into this role's slots"
+                            : "Protected: only this role's tasks can use its slots"
+                        }
+                      >
+                        {role.allowFallbackTasks ? "Open" : "Protected"}
+                      </span>
                     </div>
                     <div className="flex gap-2 shrink-0">
+                      <button
+                        onClick={() => toggleRoleFallback(role)}
+                        className="text-xs text-[#666688] hover:text-[#00ff88]"
+                        title="Toggle whether other roles' tasks can fall back into this role's slots"
+                      >
+                        {role.allowFallbackTasks ? "Make protected" : "Make open"}
+                      </button>
                       {!role.isDefault && (
                         <>
                           <button
-                            onClick={() => { setEditingRoleId(role.id); setEditRoleName(role.name); setEditRoleColour(role.colour) }}
+                            onClick={() => {
+                              setEditingRoleId(role.id)
+                              setEditRoleName(role.name)
+                              setEditRoleColour(role.colour)
+                              setEditRoleAllowFallback(role.allowFallbackTasks)
+                            }}
                             className="text-xs text-[#666688] hover:text-[#00ff88]"
                           >Edit</button>
                           <button

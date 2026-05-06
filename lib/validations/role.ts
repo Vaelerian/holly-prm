@@ -5,6 +5,7 @@ export const CreateRoleSchema = z.object({
   description: z.string().default(""),
   colour: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Must be a hex colour").default("#6366F1"),
   icon: z.string().default(""),
+  allowFallbackTasks: z.boolean().default(false),
 })
 
 export const UpdateRoleSchema = CreateRoleSchema.partial()
