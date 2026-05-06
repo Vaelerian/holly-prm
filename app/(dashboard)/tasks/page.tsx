@@ -1,3 +1,4 @@
+import Link from "next/link"
 import { listTasks } from "@/lib/services/tasks"
 import { listRoles } from "@/lib/services/roles"
 import { TaskRow } from "@/components/tasks/task-row"
@@ -243,6 +244,7 @@ export default async function TasksPage({ searchParams }: PageProps) {
                                     dueDate={t.dueDate ? t.dueDate.toISOString() : null}
                                   />
                                   <TaskScheduleButton taskId={t.id} importance={t.importance} scheduleState={t.scheduleState} />
+                                  <Link href={`/tasks/${t.id}/edit`} className="text-xs text-[#666688] hover:text-[#00ff88]">Edit</Link>
                                 </div>
                               ))}
                             </div>
@@ -266,6 +268,7 @@ export default async function TasksPage({ searchParams }: PageProps) {
                     <span className="w-2 h-2 rounded-full flex-shrink-0 bg-[#ff4444]" />
                     <span className="text-sm text-[#c0c0d0] truncate flex-1">{t.title}</span>
                     <TaskScheduleButton taskId={t.id} importance={t.importance} scheduleState={t.scheduleState} />
+                    <Link href={`/tasks/${t.id}/edit`} className="text-xs text-[#666688] hover:text-[#00ff88]">Edit</Link>
                   </div>
                 ))}
               </div>
@@ -289,6 +292,7 @@ export default async function TasksPage({ searchParams }: PageProps) {
                     )}
                     <FloatBadge slotDate={null} dueDate={t.dueDate ? t.dueDate.toISOString() : null} />
                     <TaskScheduleButton taskId={t.id} importance={t.importance} scheduleState={t.scheduleState} />
+                    <Link href={`/tasks/${t.id}/edit`} className="text-xs text-[#666688] hover:text-[#00ff88]">Edit</Link>
                   </div>
                 ))}
               </div>

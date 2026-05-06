@@ -148,24 +148,37 @@ export async function updateTask(id: string, data: UpdateTaskInput, actor: Actor
   })
   if (!existing) return null
 
-  // If goalId is changing, derive new roleId
   const updateData: Record<string, unknown> = {
     ...data,
     dueDate: data.dueDate !== undefined ? (data.dueDate ? new Date(data.dueDate) : null) : undefined,
   }
 
-  if (data.goalId && data.goalId !== existing.goalId) {
+  // Resolve the goal/project pair after the patch is applied so we can
+  // validate role-derivation and project-goal alignment in one place.
+  const newGoalId = data.goalId ?? existing.goalId
+  const newProjectId = data.projectId !== undefined ? data.projectId : existing.projectId
+
+  if (data.goalId !== undefined && data.goalId !== existing.goalId) {
     const goal = await prisma.goal.findFirst({ where: { id: data.goalId, userId } })
     if (!goal) return null
     updateData.roleId = goal.roleId
+  }
 
-    // If task has a project, validate the goal matches
-    if (existing.projectId) {
-      const project = await prisma.project.findFirst({ where: { id: existing.projectId } })
-      if (project && project.goalId && project.goalId !== data.goalId) {
-        return null
-      }
-    }
+  if (newProjectId) {
+    const project = await prisma.project.findFirst({
+      where: {
+        id: newProjectId,
+        OR: [
+          { userId },
+          { members: { some: { userId } } },
+          { visibility: "shared" },
+        ],
+      },
+    })
+    if (!project) return null
+    // Project's goal must line up with the task's goal so the project
+    // dashboard never shows a task that belongs to a different goal.
+    if (project.goalId !== newGoalId) return null
   }
 
   const task = await prisma.task.update({

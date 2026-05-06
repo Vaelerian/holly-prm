@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
 
 interface TaskRowProps {
@@ -83,6 +84,13 @@ export function TaskRow({ id, title, status: initialStatus, priority, assignedTo
         {dueDate && (
           <span className="text-xs text-[#666688]">{new Date(dueDate).toLocaleDateString("en-GB")}</span>
         )}
+        <Link
+          href={`/tasks/${id}/edit`}
+          className="text-xs text-[#666688] hover:text-[#00ff88]"
+          title="Edit task"
+        >
+          Edit
+        </Link>
       </div>
     </div>
   )

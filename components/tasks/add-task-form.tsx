@@ -19,15 +19,17 @@ export function AddTaskForm({ projectId, goalId: propGoalId, roleId: propRoleId,
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [title, setTitle] = useState("")
+  const [description, setDescription] = useState("")
+  const [dueDate, setDueDate] = useState("")
   const [assignedTo, setAssignedTo] = useState<"ian" | "holly">("ian")
   const [assignedToUserId, setAssignedToUserId] = useState<string>("")
   const [priority, setPriority] = useState("medium")
   const [isMilestone, setIsMilestone] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [showScheduling, setShowScheduling] = useState(false)
-  const [importance, setImportance] = useState("")
-  const [urgency, setUrgency] = useState("")
-  const [effortSize, setEffortSize] = useState("")
+  const [showScheduling, setShowScheduling] = useState(true)
+  const [importance, setImportance] = useState("step")
+  const [urgency, setUrgency] = useState("soon")
+  const [effortSize, setEffortSize] = useState("hour")
   const [effortMinutes, setEffortMinutes] = useState("")
   const [users, setUsers] = useState<UserOption[]>([])
 
@@ -121,6 +123,8 @@ export function AddTaskForm({ projectId, goalId: propGoalId, roleId: propRoleId,
         priority,
         isMilestone,
       }
+      if (description.trim()) body.description = description.trim()
+      if (dueDate) body.dueDate = dueDate
       if (assignedToUserId) body.assignedToUserId = assignedToUserId
       if (importance) body.importance = importance
       if (urgency) body.urgency = urgency
@@ -146,6 +150,9 @@ export function AddTaskForm({ projectId, goalId: propGoalId, roleId: propRoleId,
       })
       if (res.ok) {
         setTitle("")
+        setDescription("")
+        setDueDate("")
+        setEffortMinutes("")
         setOpen(false)
         router.refresh()
       }
@@ -204,7 +211,23 @@ export function AddTaskForm({ projectId, goalId: propGoalId, roleId: propRoleId,
         className="w-full border border-[rgba(0,255,136,0.2)] rounded-lg px-3 py-2 text-sm bg-[#0a0a1a] text-[#c0c0d0] focus:outline-none focus:ring-2 focus:ring-[#00ff88]"
         onKeyDown={e => { if (e.key === "Enter") handleAdd() }}
       />
-      <div className="flex items-center gap-3">
+      <textarea
+        value={description}
+        onChange={e => setDescription(e.target.value)}
+        placeholder="Description (optional)"
+        rows={2}
+        className="w-full border border-[rgba(0,255,136,0.2)] rounded-lg px-3 py-2 text-sm bg-[#0a0a1a] text-[#c0c0d0] resize-y placeholder:text-[#444466]"
+      />
+      <div className="flex items-center gap-3 flex-wrap">
+        <label className="flex items-center gap-1 text-xs text-[#666688]">
+          Due
+          <input
+            type="date"
+            value={dueDate}
+            onChange={e => setDueDate(e.target.value)}
+            className="border border-[rgba(0,255,136,0.2)] rounded-lg px-2 py-1 text-sm bg-[#0a0a1a] text-[#c0c0d0]"
+          />
+        </label>
         <select value={assignedTo} onChange={e => setAssignedTo(e.target.value as "ian" | "holly")} className="border border-[rgba(0,255,136,0.2)] rounded-lg px-2 py-1 text-sm bg-[#0a0a1a] text-[#c0c0d0]">
           <option value="ian">Ian</option>
           <option value="holly">Holly</option>
