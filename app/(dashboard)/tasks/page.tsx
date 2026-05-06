@@ -333,6 +333,9 @@ export default async function TasksPage({ searchParams }: PageProps) {
                                     assignedToUser={t.assignedToUser}
                                     dueDate={t.dueDate ? t.dueDate.toISOString() : null}
                                     isMilestone={t.isMilestone}
+                                    importance={t.importance}
+                                    effortSize={t.effortSize}
+                                    effortMinutes={t.effortMinutes}
                                   />
                                 </div>
                                 <FloatBadge

@@ -13,6 +13,9 @@ interface TaskRowProps {
   assignedToUser?: { id: string; name: string } | null
   dueDate: string | null
   isMilestone: boolean
+  importance?: string
+  effortSize?: string
+  effortMinutes?: number | null
   onStatusChange?: (id: string, newStatus: string) => void
 }
 
@@ -37,9 +40,18 @@ const priorityVariant: Record<string, "default" | "success" | "warning" | "dange
   critical: "danger",
 }
 
-export function TaskRow({ id, title, status: initialStatus, priority, assignedTo, assignedToUser, dueDate, isMilestone, onStatusChange }: TaskRowProps) {
+export function TaskRow({ id, title, status: initialStatus, priority, assignedTo, assignedToUser, dueDate, isMilestone, importance, effortSize, effortMinutes, onStatusChange }: TaskRowProps) {
   const [status, setStatus] = useState(initialStatus)
   const [saving, setSaving] = useState(false)
+
+  const importanceMissing = importance === "undefined_imp"
+  const effortMissing = (effortSize === "undefined_size" || effortSize === undefined) && (effortMinutes == null)
+  const isUnschedulable = importanceMissing || effortMissing
+  const unschedulableReason = importanceMissing
+    ? "Set importance to enable scheduling"
+    : effortMissing
+      ? "Set effort size or custom minutes to enable scheduling"
+      : ""
 
   async function cycleStatus() {
     const next = STATUS_CYCLE[status] ?? "todo"
@@ -76,6 +88,16 @@ export function TaskRow({ id, title, status: initialStatus, priority, assignedTo
         {title}
       </span>
       <div className="flex items-center gap-2 flex-shrink-0">
+        {isUnschedulable && importance !== undefined && (
+          <Link
+            href={`/tasks/${id}/edit`}
+            title={unschedulableReason}
+            className="text-amber-300 hover:text-amber-200 text-xs"
+            aria-label={unschedulableReason}
+          >
+            ⚠
+          </Link>
+        )}
         <Badge variant={priorityVariant[priority] ?? "default"}>{priority}</Badge>
         <Badge variant="default">{assignedTo}</Badge>
         {assignedToUser && (

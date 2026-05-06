@@ -120,6 +120,12 @@ export function TaskEditForm({ task }: TaskEditFormProps) {
     setSaving(true)
     try {
       const customMinutes = effortMinutes.trim() === "" ? null : Number(effortMinutes)
+      const hasCustomMinutes = customMinutes !== null && Number.isFinite(customMinutes) && customMinutes >= 0
+      // Backfill scheduling fields with sensible defaults when the user hasn't
+      // touched them. Keeps every saved task schedulable by the engine.
+      const finalImportance = importance === "undefined_imp" ? "step" : importance
+      const finalUrgency = urgency === "undefined_urg" ? "soon" : urgency
+      const finalEffortSize = (effortSize === "undefined_size" && !hasCustomMinutes) ? "hour" : effortSize
       const body: Record<string, unknown> = {
         title: title.trim(),
         description,
@@ -129,10 +135,10 @@ export function TaskEditForm({ task }: TaskEditFormProps) {
         assignedToUserId: assignedToUserId || null,
         dueDate: dueDate || null,
         isMilestone,
-        importance,
-        urgency,
-        effortSize,
-        effortMinutes: customMinutes !== null && Number.isFinite(customMinutes) && customMinutes >= 0 ? customMinutes : null,
+        importance: finalImportance,
+        urgency: finalUrgency,
+        effortSize: finalEffortSize,
+        effortMinutes: hasCustomMinutes ? customMinutes : null,
         goalId,
         projectId: projectId || null,
       }
@@ -325,7 +331,7 @@ export function TaskEditForm({ task }: TaskEditFormProps) {
           </div>
         </div>
         <p className="text-xs text-[#666688] mt-2">
-          A task is only schedulable when importance is set. Custom minutes override the effort size.
+          Saving with any field left as &quot;Undefined&quot; backfills sensible defaults (step / soon / hour) so the task is always schedulable. Custom minutes override the effort size.
         </p>
       </div>
 
