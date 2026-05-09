@@ -58,11 +58,15 @@ describe("listProjects", () => {
     expect(mockPrisma.project.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
-          OR: [
-            { userId: "user-1" },
-            { members: { some: { userId: "user-1" } } },
-            { visibility: "shared" },
-          ],
+          AND: expect.arrayContaining([
+            {
+              OR: [
+                { userId: "user-1" },
+                { members: { some: { userId: "user-1" } } },
+                { visibility: "shared" },
+              ],
+            },
+          ]),
         }),
       })
     )

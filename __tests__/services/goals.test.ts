@@ -69,7 +69,10 @@ describe("completeGoal", () => {
 
     expect(mockPrisma.goal.update).toHaveBeenCalledWith({
       where: { id: "g1" },
-      data: { status: "completed" },
+      data: expect.objectContaining({
+        status: "completed",
+        completedAt: expect.any(Date),
+      }),
     })
     expect(result).toEqual(updated)
   })

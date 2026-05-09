@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db"
 import { Actor } from "@/app/generated/prisma/client"
 import { upsertCalendarEvent, deleteCalendarEvent } from "@/lib/services/calendar-sync"
 import { getOrCreateDefaultGoal } from "@/lib/services/goals"
+import { startOfWeekMonday } from "@/lib/week"
 import type { CreateTaskInput, UpdateTaskInput } from "@/lib/validations/task"
 
 interface ListTasksOptions {
@@ -13,6 +14,7 @@ interface ListTasksOptions {
   milestoneOnly?: boolean
   includeSlot?: boolean
   userId: string
+  completed?: boolean
 }
 
 export async function listTasks(opts: ListTasksOptions) {
@@ -42,9 +44,20 @@ export async function listTasks(opts: ListTasksOptions) {
   if (opts.assignedTo) where.assignedTo = opts.assignedTo
   if (opts.milestoneOnly) where.isMilestone = true
 
+  // Hide tasks completed before this week (kept visible the week they're
+  // done so the user sees their wins). The Completed page passes
+  // completed: true to flip the filter and show only finished items.
+  const weekFilter = opts.completed
+    ? { completedAt: { not: null } }
+    : { OR: [{ completedAt: null }, { completedAt: { gte: startOfWeekMonday() } }] }
+  where.AND = [
+    ...(Array.isArray(where.AND) ? (where.AND as unknown[]) : []),
+    weekFilter,
+  ]
+
   return prisma.task.findMany({
     where,
-    orderBy: { createdAt: "asc" },
+    orderBy: opts.completed ? { completedAt: "desc" } : { createdAt: "asc" },
     include: {
       project: { select: { id: true, title: true } },
       goal: { select: { id: true, name: true } },
@@ -151,6 +164,13 @@ export async function updateTask(id: string, data: UpdateTaskInput, actor: Actor
   const updateData: Record<string, unknown> = {
     ...data,
     dueDate: data.dueDate !== undefined ? (data.dueDate ? new Date(data.dueDate) : null) : undefined,
+  }
+  if (data.status !== undefined && data.status !== existing.status) {
+    if (data.status === "done") {
+      updateData.completedAt = new Date()
+    } else if (existing.status === "done") {
+      updateData.completedAt = null
+    }
   }
 
   // Resolve the goal/project pair after the patch is applied so we can

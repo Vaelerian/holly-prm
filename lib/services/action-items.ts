@@ -2,13 +2,26 @@ import { prisma } from "@/lib/db"
 import { Actor } from "@/app/generated/prisma/client"
 import { publishSseEvent } from "@/lib/sse-events"
 import { upsertCalendarEvent } from "@/lib/services/calendar-sync"
+import { startOfWeekMonday } from "@/lib/week"
 import type { CreateActionItemInput, UpdateActionItemInput } from "@/lib/validations/action-item"
 
-export async function listActionItems(opts: { assignedTo?: Actor; status?: string; userId: string }) {
+export async function listActionItems(opts: { assignedTo?: Actor; status?: string; userId: string; completed?: boolean }) {
   const where: Record<string, unknown> = { userId: opts.userId }
   if (opts.assignedTo) where.assignedTo = opts.assignedTo
   if (opts.status) where.status = opts.status
-  return prisma.actionItem.findMany({ where, orderBy: [{ priority: "desc" }, { dueDate: "asc" }] })
+  // Hide actions completed before this week so the active list stays tidy;
+  // pass completed: true to drive the Completed page in the opposite mode.
+  if (opts.completed) {
+    where.completedAt = { not: null }
+  } else {
+    where.OR = [{ completedAt: null }, { completedAt: { gte: startOfWeekMonday() } }]
+  }
+  return prisma.actionItem.findMany({
+    where,
+    orderBy: opts.completed
+      ? [{ completedAt: "desc" }]
+      : [{ priority: "desc" }, { dueDate: "asc" }],
+  })
 }
 
 export async function getActionItem(id: string, userId: string) {
@@ -45,7 +58,15 @@ export async function updateActionItem(id: string, data: UpdateActionItemInput, 
   const existing = await prisma.actionItem.findFirst({ where: { id, userId } })
   if (!existing) return null
   const before = existing
-  const item = await prisma.actionItem.update({ where: { id, userId }, data })
+  const updateData: Record<string, unknown> = { ...data }
+  if (data.status !== undefined && data.status !== existing.status) {
+    if (data.status === "done") {
+      updateData.completedAt = new Date()
+    } else if (existing.status === "done") {
+      updateData.completedAt = null
+    }
+  }
+  const item = await prisma.actionItem.update({ where: { id, userId }, data: updateData })
   await prisma.auditLog.create({
     data: { entity: "ActionItem", entityId: id, action: "update", actor, userId, diff: { before, after: item } },
   })

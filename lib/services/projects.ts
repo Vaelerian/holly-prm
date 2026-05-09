@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db"
 import { Actor, ProjectStatus } from "@/app/generated/prisma/client"
 import { upsertCalendarEvent, deleteCalendarEvent } from "@/lib/services/calendar-sync"
 import { getOrCreateDefaultGoal } from "@/lib/services/goals"
+import { startOfWeekMonday } from "@/lib/week"
 import type { CreateProjectInput, UpdateProjectInput } from "@/lib/validations/project"
 
 interface ListProjectsOptions {
@@ -9,14 +10,23 @@ interface ListProjectsOptions {
   roleId?: string
   goalId?: string
   userId: string
+  completed?: boolean
 }
 
 export async function listProjects(opts: ListProjectsOptions) {
+  const completedClause = opts.completed
+    ? { completedAt: { not: null } }
+    : { OR: [{ completedAt: null }, { completedAt: { gte: startOfWeekMonday() } }] }
   const where: Record<string, unknown> = {
-    OR: [
-      { userId: opts.userId },
-      { members: { some: { userId: opts.userId } } },
-      { visibility: "shared" },
+    AND: [
+      {
+        OR: [
+          { userId: opts.userId },
+          { members: { some: { userId: opts.userId } } },
+          { visibility: "shared" },
+        ],
+      },
+      completedClause,
     ],
   }
   if (opts.status) where.status = opts.status as ProjectStatus
@@ -25,7 +35,7 @@ export async function listProjects(opts: ListProjectsOptions) {
 
   return prisma.project.findMany({
     where,
-    orderBy: { createdAt: "desc" },
+    orderBy: opts.completed ? { completedAt: "desc" } : { createdAt: "desc" },
     include: {
       _count: { select: { tasks: true } },
       tasks: { select: { status: true, isMilestone: true } },
@@ -100,6 +110,13 @@ export async function updateProject(id: string, data: UpdateProjectInput, actor:
   const updateData: Record<string, unknown> = {
     ...data,
     targetDate: data.targetDate !== undefined ? (data.targetDate ? new Date(data.targetDate) : null) : undefined,
+  }
+  if (data.status !== undefined && data.status !== existing.status) {
+    if (data.status === "done") {
+      updateData.completedAt = new Date()
+    } else if (existing.status === "done") {
+      updateData.completedAt = null
+    }
   }
 
   // If goalId is changing, derive new roleId
