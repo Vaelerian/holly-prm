@@ -230,6 +230,7 @@ model Goal {
   goalType    GoalType   @default(ongoing)
   status      GoalStatus @default(active)
   targetDate  DateTime?
+  completedAt DateTime?
   isDefault   Boolean    @default(false)
   sortOrder   Int        @default(0)
   userId      String?
@@ -241,6 +242,7 @@ model Goal {
   tasks    Task[]    @relation("TaskGoal")
 
   @@unique([roleId, name])
+  @@index([completedAt])
 }
 
 model ProjectMember {
@@ -323,12 +325,14 @@ model ActionItem {
   priority      Priority     @default(medium)
   assignedTo    Actor
   dueDate       DateTime?
+  completedAt   DateTime?
   createdAt     DateTime     @default(now())
   userId        String?
   user          User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([interactionId])
   @@index([status, assignedTo])
+  @@index([completedAt])
 }
 
 model Project {
@@ -339,6 +343,7 @@ model Project {
   status      ProjectStatus   @default(planning)
   priority    Priority        @default(medium)
   targetDate  DateTime?
+  completedAt DateTime?
   notes             String            @default("")
   projectImportance ProjectImportance @default(same)
   visibility        ProjectVisibility @default(personal)
@@ -354,6 +359,8 @@ model Project {
   members             ProjectMember[]
   linkedContacts      Contact[]      @relation("ContactProject")
   linkedInteractions  Interaction[]  @relation("InteractionProject")
+
+  @@index([completedAt])
 }
 
 model Task {
@@ -368,6 +375,7 @@ model Task {
   assignedToUserId String?
   assignedToUser   User?    @relation("TaskAssignee", fields: [assignedToUserId], references: [id], onDelete: SetNull)
   dueDate     DateTime?
+  completedAt DateTime?
   isMilestone Boolean      @default(false)
   roleId      String
   role        Role         @relation("TaskRole", fields: [roleId], references: [id], onDelete: SetNull)
@@ -382,6 +390,8 @@ model Task {
   scheduleState ScheduleState @default(unscheduled)
   timeSlotId    String?
   timeSlot      TimeSlot?     @relation(fields: [timeSlotId], references: [id], onDelete: SetNull)
+
+  @@index([completedAt])
 }
 
 model AuditLog {

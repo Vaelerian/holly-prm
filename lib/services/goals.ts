@@ -1,15 +1,24 @@
 import { prisma } from "@/lib/db"
+import { startOfWeekMonday } from "@/lib/week"
 import type { CreateGoalInput, UpdateGoalInput } from "@/lib/validations/goal"
 
-export async function listGoals(userId: string, roleId?: string) {
+export async function listGoals(userId: string, roleId?: string, opts?: { completed?: boolean }) {
   const where: Record<string, unknown> = { userId }
   if (roleId) where.roleId = roleId
+  if (opts?.completed) {
+    where.completedAt = { not: null }
+  } else {
+    where.OR = [{ completedAt: null }, { completedAt: { gte: startOfWeekMonday() } }]
+  }
 
   return prisma.goal.findMany({
     where,
-    orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+    orderBy: opts?.completed
+      ? [{ completedAt: "desc" }]
+      : [{ sortOrder: "asc" }, { name: "asc" }],
     include: {
       _count: { select: { projects: true, tasks: true } },
+      role: { select: { id: true, name: true, colour: true } },
     },
   })
 }
@@ -52,6 +61,13 @@ export async function updateGoal(id: string, data: UpdateGoalInput, userId: stri
   const updateData: Record<string, unknown> = { ...data }
   if (data.targetDate !== undefined) {
     updateData.targetDate = data.targetDate ? new Date(data.targetDate) : null
+  }
+  if (data.status !== undefined && data.status !== existing.status) {
+    if (data.status === "completed") {
+      updateData.completedAt = new Date()
+    } else if (existing.status === "completed") {
+      updateData.completedAt = null
+    }
   }
 
   const updated = await prisma.goal.update({
@@ -110,7 +126,7 @@ export async function completeGoal(id: string, userId: string) {
 
   return prisma.goal.update({
     where: { id },
-    data: { status: "completed" },
+    data: { status: "completed", completedAt: new Date() },
   })
 }
 
