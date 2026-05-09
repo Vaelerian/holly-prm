@@ -221,6 +221,22 @@ The system automatically escalates task urgency as due dates approach. A task se
 
 ---
 
+## Completed
+
+The Completed page lists every goal, project, task and action item that has been finished. Items appear here automatically the moment their status flips to done (or completed for a goal). They are grouped by the week they were finished, with the most recent week first.
+
+### How completion affects the active lists
+
+To stop the Goals, Projects, Tasks and Action Item lists growing unmanageable, items completed in earlier weeks are hidden from those active lists. Items completed during the current week are kept on both the active list and the Completed page so you can see your wins at a glance, and they roll off the active list automatically when the week boundary passes (Monday 00:00 in the server's local time).
+
+If you reopen a completed item by changing its status back to active, in progress or todo, the completion date is cleared and the item returns to the relevant active list immediately.
+
+### Cancelled items
+
+Cancelled items are not treated as completed. They remain on their normal active list with a cancelled status. If you want them out of sight, set them to done or delete them.
+
+---
+
 ## Calendar
 
 The Calendar page shows three views:

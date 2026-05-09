@@ -227,6 +227,10 @@ You will now get pushes for overdue contacts and due follow-ups (as long as the 
 
 On mobile browsers use "Add to Home Screen" from the browser menu. On desktop Chrome/Edge look for the install icon in the address bar. The app will then launch full-screen like a native app.
 
+### Step 13: Review the Completed page
+
+Once you start finishing things, the Completed page (in the main nav) will show every goal, project, task and action you have ticked off, grouped by week. Items completed during the current week stay on both the active list and the Completed page; items completed in earlier weeks roll off the active lists automatically so they do not pile up. There is nothing to configure, but it is worth knowing where to look for finished items if you want to revisit, reopen, or just enjoy the view.
+
 ### User checklist
 
 | Done | Task |
